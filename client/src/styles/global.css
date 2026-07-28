@@ -112,14 +112,16 @@ p {
 }
 
 .brand img {
-  height: 52px;
+  height: 48px;
   width: auto;
+  object-fit: contain;
 }
 
 .brand--mark img {
-  height: 52px;
-  width: 52px;
+  height: 44px;
+  width: 44px;
   object-fit: contain;
+  border-radius: 10px;
 }
 
 .nav {
@@ -207,11 +209,11 @@ p {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(105deg, rgba(248, 244, 242, 0.92) 0%, rgba(248, 244, 242, 0.72) 38%, rgba(248, 244, 242, 0.18) 62%, transparent 78%),
-    linear-gradient(0deg, rgba(47, 63, 58, 0.28) 0%, transparent 42%),
-    url('/logos/atlas-agency.png') right 8% center / min(52vw, 620px) auto no-repeat,
-    radial-gradient(900px 500px at 85% 30%, rgba(158, 192, 207, 0.28), transparent 55%),
-    linear-gradient(165deg, #f8f4f2 0%, #eef4f3 55%, #f3eef1 100%);
+    linear-gradient(115deg, rgba(248, 244, 242, 0.94) 0%, rgba(248, 244, 242, 0.78) 42%, rgba(248, 244, 242, 0.35) 68%, transparent 85%),
+    linear-gradient(0deg, rgba(16, 28, 48, 0.18) 0%, transparent 45%),
+    radial-gradient(700px 480px at 82% 40%, rgba(201, 169, 98, 0.18), transparent 60%),
+    radial-gradient(600px 420px at 90% 20%, rgba(16, 38, 67, 0.12), transparent 55%),
+    linear-gradient(165deg, #f7f4f1 0%, #eef2f6 55%, #f3eef1 100%);
   animation: softDrift 18s ease-in-out infinite alternate;
 }
 
@@ -231,9 +233,26 @@ p {
 }
 
 .hero__brand img {
-  height: 72px;
+  height: clamp(120px, 22vw, 200px);
   width: auto;
-  filter: drop-shadow(0 8px 20px rgba(74, 99, 92, 0.12));
+  filter: drop-shadow(0 10px 28px rgba(16, 38, 67, 0.12));
+}
+
+.hero__visual {
+  position: absolute;
+  right: max(1rem, 4vw);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(42vw, 420px);
+  z-index: 1;
+  pointer-events: none;
+  animation: riseIn 1s ease both;
+}
+
+.hero__visual img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 18px 40px rgba(16, 38, 67, 0.15));
 }
 
 .hero h1 {
@@ -828,11 +847,17 @@ th {
 }
 
 @media (max-width: 960px) {
-  .hero__bg {
-    background:
-      linear-gradient(180deg, rgba(248, 244, 242, 0.55) 0%, rgba(248, 244, 242, 0.88) 48%, #f8f4f2 100%),
-      url('/logos/atlas-agency.png') center top / min(70vw, 360px) auto no-repeat,
-      linear-gradient(165deg, #f8f4f2 0%, #eef4f3 55%, #f3eef1 100%);
+  .hero__visual {
+    position: relative;
+    right: auto;
+    top: auto;
+    transform: none;
+    width: min(70vw, 280px);
+    margin: 1.5rem auto 0;
+  }
+
+  .hero {
+    align-items: start;
   }
 
   .stats-row,
