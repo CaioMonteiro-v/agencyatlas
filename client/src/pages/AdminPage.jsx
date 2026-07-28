@@ -24,6 +24,10 @@ export default function AdminPage() {
     municipality_id: '',
     phone: '',
   });
+  const [coordForm, setCoordForm] = useState({
+    municipality_id: '',
+    coordinator_name: '',
+  });
 
   async function refresh() {
     const [s, m] = await Promise.all([api.getAgencySummary(), api.getMunicipalities()]);
@@ -71,6 +75,24 @@ export default function AdminPage() {
     }
   }
 
+  async function saveCoordinator(e) {
+    e.preventDefault();
+    if (!coordForm.municipality_id) {
+      setToast('Selecione o município');
+      return;
+    }
+    try {
+      await api.updateMunicipality(coordForm.municipality_id, {
+        coordinator_name: coordForm.coordinator_name,
+      });
+      setToast('Coordenador atualizado');
+      setCoordForm({ municipality_id: '', coordinator_name: '' });
+      await refresh();
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
   return (
     <>
       <Header />
@@ -78,7 +100,7 @@ export default function AdminPage() {
         <div className="section__head">
           <p className="eyebrow">Administração</p>
           <h1>Gestão Atlas Agency</h1>
-          <p>Crie campanhas e lideranças com a mesma delicadeza da experiência pública.</p>
+          <p>Crie campanhas, lideranças e coordenadores municipais com dados reais.</p>
         </div>
 
         <div className="layout-split">
@@ -156,6 +178,45 @@ export default function AdminPage() {
             </form>
           </section>
         </div>
+
+        <section className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
+          <h3>Coordenador geral do município</h3>
+          <p>Defina quem é o coordenador de cada cidade (aparece no mapa ao clicar no município).</p>
+          <form className="form-grid" onSubmit={saveCoordinator} style={{ marginTop: '0.75rem' }}>
+            <label>
+              Município
+              <select
+                className="select"
+                value={coordForm.municipality_id}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const muni = municipalities.find((m) => String(m.id) === id);
+                  setCoordForm({
+                    municipality_id: id,
+                    coordinator_name: muni?.coordinator_name || '',
+                  });
+                }}
+              >
+                <option value="">Selecionar</option>
+                {municipalities.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.coordinator_name ? ` — ${m.coordinator_name}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nome do coordenador
+              <input
+                className="input"
+                value={coordForm.coordinator_name}
+                onChange={(e) => setCoordForm({ ...coordForm, coordinator_name: e.target.value })}
+                placeholder="Ex.: Colíder — Ogeda"
+              />
+            </label>
+            <button className="btn btn-primary" type="submit">Salvar coordenador</button>
+          </form>
+        </section>
 
         <section className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
           <h3>Campanhas</h3>

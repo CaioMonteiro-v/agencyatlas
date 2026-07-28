@@ -46,4 +46,6 @@ export const api = {
   updateMissionProgress: (slug, id, body) =>
     request(`/api/campaigns/${slug}/missions/${id}/progress`, { method: 'PATCH', body: JSON.stringify(body) }),
   getMunicipalities: () => request('/api/municipalities'),
+  updateMunicipality: (id, body) =>
+    request(`/api/municipalities/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 };

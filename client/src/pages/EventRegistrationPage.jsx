@@ -14,7 +14,7 @@ export default function EventRegistrationPage() {
     full_name: '',
     email: '',
     phone: '',
-    connect_whatsapp: true,
+    want_whatsapp: false,
   });
 
   useEffect(() => {
@@ -43,13 +43,16 @@ export default function EventRegistrationPage() {
       return;
     }
     try {
-      const res = await api.registerEvent(eventSlug, form);
+      const res = await api.registerEvent(eventSlug, {
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone,
+        connect_whatsapp: form.want_whatsapp,
+      });
       setWhatsappUrl(res.whatsapp_url || 'https://bit.ly/FalaFabio');
       setDone(true);
-      setToast('Inscrição registrada com carinho');
-      if (form.connect_whatsapp && form.phone) {
-        window.open(res.whatsapp_url || 'https://bit.ly/FalaFabio', '_blank');
-      }
+      setToast('Inscrição salva no sistema da campanha');
+      // NÃO abre WhatsApp automaticamente — só se a pessoa pedir no botão depois
     } catch (err) {
       setToast(err.message);
     }
@@ -73,15 +76,17 @@ export default function EventRegistrationPage() {
 
             {done ? (
               <div>
-                <h3>Obrigado por se inscrever</h3>
+                <h3>Inscrição confirmada</h3>
                 <p>
-                  Seus dados foram armazenados com segurança.
-                  {!form.connect_whatsapp && ' Você optou por não conectar o WhatsApp agora — nome e e-mail ficam disponíveis para a equipe.'}
+                  Seus dados foram salvos para a equipe da campanha acompanhar.
+                  Você não precisa falar no WhatsApp para a inscrição valer.
                 </p>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <a className="btn btn-whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer">
-                    Abrir WhatsApp · bit.ly/FalaFabio
-                  </a>
+                  {form.want_whatsapp && (
+                    <a className="btn btn-whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer">
+                      Quero falar no WhatsApp
+                    </a>
+                  )}
                   <Link className="btn btn-soft" to={`/campanha/${event.campaign_slug}`}>
                     Ir à campanha
                   </Link>
@@ -120,10 +125,10 @@ export default function EventRegistrationPage() {
                 <label className="check">
                   <input
                     type="checkbox"
-                    checked={form.connect_whatsapp}
-                    onChange={(e) => setForm({ ...form, connect_whatsapp: e.target.checked })}
+                    checked={form.want_whatsapp}
+                    onChange={(e) => setForm({ ...form, want_whatsapp: e.target.checked })}
                   />
-                  Conectar telefone ao WhatsApp (bit.ly/FalaFabio)
+                  Depois quero também um botão para falar no WhatsApp da campanha
                 </label>
                 <button className="btn btn-primary" type="submit">Confirmar inscrição</button>
               </form>

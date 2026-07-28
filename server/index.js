@@ -4,7 +4,7 @@ const path = require('path');
 const QRCode = require('qrcode');
 const { customAlphabet } = require('nanoid');
 const { getDb } = require('./db');
-const { seed } = require('./seed');
+const { seedProduction, seedDemo } = require('./seed');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -566,6 +566,17 @@ app.get('/api/municipalities', (_req, res) => {
   res.json(db.prepare('SELECT * FROM municipalities ORDER BY name').all());
 });
 
+app.patch('/api/municipalities/:id', (req, res) => {
+  const municipality = db.prepare('SELECT * FROM municipalities WHERE id = ?').get(req.params.id);
+  if (!municipality) return res.status(404).json({ error: 'Município não encontrado' });
+
+  const coordinator_name = req.body.coordinator_name ?? municipality.coordinator_name;
+  db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?')
+    .run(coordinator_name || null, municipality.id);
+
+  res.json(db.prepare('SELECT * FROM municipalities WHERE id = ?').get(municipality.id));
+});
+
 /* ---------- Production static ---------- */
 const clientDist = path.join(__dirname, '../client/dist');
 app.use(express.static(clientDist));
@@ -579,7 +590,10 @@ app.get('*', (req, res, next) => {
 
 async function start() {
   db = await getDb();
-  seed(db);
+  seedProduction(db);
+  if (process.env.SEED_DEMO === 'true') {
+    seedDemo(db);
+  }
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Atlas Agency API em http://0.0.0.0:${PORT}`);
   });

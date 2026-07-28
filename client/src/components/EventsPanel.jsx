@@ -26,6 +26,9 @@ export default function EventsPanel({ campaignSlug }) {
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [publicBase, setPublicBase] = useState(defaultPublicBase);
+  const [attendeesFor, setAttendeesFor] = useState(null);
+  const [attendees, setAttendees] = useState([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -87,6 +90,20 @@ export default function EventsPanel({ campaignSlug }) {
       load(publicBase);
     } catch (err) {
       setToast(err.message);
+    }
+  }
+
+  async function viewAttendees(event) {
+    setAttendeesFor(event);
+    setLoadingAttendees(true);
+    try {
+      const res = await api.getEventAttendees(campaignSlug, event.id);
+      setAttendees(res.attendees || []);
+    } catch (err) {
+      setToast(err.message);
+      setAttendees([]);
+    } finally {
+      setLoadingAttendees(false);
     }
   }
 
@@ -180,6 +197,9 @@ export default function EventsPanel({ campaignSlug }) {
                 <Link className="btn btn-soft btn-sm" to={`/evento/${event.slug}`}>
                   Página de inscrição
                 </Link>
+                <button type="button" className="btn btn-accent btn-sm" onClick={() => viewAttendees(event)}>
+                  Ver inscritos ({event.attendees || 0})
+                </button>
                 {qr && (
                   <button type="button" className="btn btn-soft btn-sm" onClick={() => copy(qr.url)}>
                     Copiar link
@@ -190,6 +210,54 @@ export default function EventsPanel({ campaignSlug }) {
           );
         })}
       </div>
+
+      {attendeesFor && (
+        <div className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div>
+              <p className="eyebrow">Inscrições do QR Code</p>
+              <h3>{attendeesFor.name}</h3>
+              <p>Aqui aparecem as pessoas que preencheram o formulário do evento.</p>
+            </div>
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => setAttendeesFor(null)}>
+              Fechar
+            </button>
+          </div>
+
+          {loadingAttendees && <EmptyState>Carregando inscritos…</EmptyState>}
+
+          {!loadingAttendees && (
+            <div className="table-wrap" style={{ marginTop: '0.85rem' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>E-mail</th>
+                    <th>Telefone</th>
+                    <th>WhatsApp?</th>
+                    <th>Quando</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendees.map((person) => (
+                    <tr key={person.id}>
+                      <td>{person.full_name}</td>
+                      <td>{person.email || '—'}</td>
+                      <td>{person.phone || '—'}</td>
+                      <td>{person.connect_whatsapp ? 'Sim' : 'Não'}</td>
+                      <td>{person.created_at}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loadingAttendees && !attendees.length && (
+            <EmptyState>Nenhuma inscrição ainda neste evento.</EmptyState>
+          )}
+        </div>
+      )}
 
       {!events.length && <EmptyState>Nenhum evento cadastrado.</EmptyState>}
       <Toast message={toast} onClose={() => setToast('')} />
