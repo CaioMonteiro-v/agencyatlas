@@ -1,29 +1,14 @@
+const path = require('path');
+const fs = require('fs');
 const { customAlphabet } = require('nanoid');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 
-const municipalities = [
-  { name: 'Cuiabá', ibge_code: '5103403', lat: -15.601, lng: -56.0979, coordinator_name: null, coordinator_photo: null },
-  { name: 'Várzea Grande', ibge_code: '5108402', lat: -15.6467, lng: -56.1326, coordinator_name: null, coordinator_photo: null },
-  { name: 'Rondonópolis', ibge_code: '5107602', lat: -16.4673, lng: -54.6372, coordinator_name: null, coordinator_photo: null },
-  { name: 'Sinop', ibge_code: '5107909', lat: -11.8609, lng: -55.5091, coordinator_name: null, coordinator_photo: null },
-  { name: 'Tangará da Serra', ibge_code: '5107958', lat: -14.6229, lng: -57.4934, coordinator_name: null, coordinator_photo: null },
-  { name: 'Cáceres', ibge_code: '5102504', lat: -16.0764, lng: -57.6818, coordinator_name: null, coordinator_photo: null },
-  { name: 'Sorriso', ibge_code: '5107925', lat: -12.5425, lng: -55.7211, coordinator_name: null, coordinator_photo: null },
-  { name: 'Lucas do Rio Verde', ibge_code: '5105259', lat: -13.0588, lng: -55.9042, coordinator_name: null, coordinator_photo: null },
-  { name: 'Barra do Garças', ibge_code: '5101803', lat: -15.8903, lng: -52.2567, coordinator_name: null, coordinator_photo: null },
-  { name: 'Primavera do Leste', ibge_code: '5107040', lat: -15.5566, lng: -54.2969, coordinator_name: null, coordinator_photo: null },
-  { name: 'Colíder', ibge_code: '5103205', lat: -10.8136, lng: -55.4608, coordinator_name: null, coordinator_photo: null },
-  { name: 'Alta Floresta', ibge_code: '5100250', lat: -9.8665, lng: -56.0862, coordinator_name: null, coordinator_photo: null },
-  { name: 'Pontes e Lacerda', ibge_code: '5106752', lat: -15.2262, lng: -59.3352, coordinator_name: null, coordinator_photo: null },
-  { name: 'Nova Mutum', ibge_code: '5106224', lat: -13.8373, lng: -56.0743, coordinator_name: null, coordinator_photo: null },
-  { name: 'Campo Verde', ibge_code: '5102678', lat: -15.5452, lng: -55.1623, coordinator_name: null, coordinator_photo: null },
-  { name: 'Guarantã do Norte', ibge_code: '5104104', lat: -9.9621, lng: -54.9121, coordinator_name: null, coordinator_photo: null },
-  { name: 'Juína', ibge_code: '5105150', lat: -11.3728, lng: -58.7483, coordinator_name: null, coordinator_photo: null },
-  { name: 'Água Boa', ibge_code: '5100201', lat: -14.051, lng: -52.1601, coordinator_name: null, coordinator_photo: null },
-  { name: 'Peixoto de Azevedo', ibge_code: '5106505', lat: -10.23, lng: -54.9792, coordinator_name: null, coordinator_photo: null },
-  { name: 'Confresa', ibge_code: '5103353', lat: -10.6437, lng: -51.5699, coordinator_name: null, coordinator_photo: null },
-];
+function loadMunicipalities() {
+  const file = path.join(__dirname, 'data', 'mt-municipalities.json');
+  const raw = fs.readFileSync(file, 'utf8');
+  return JSON.parse(raw);
+}
 
 const leaderDefs = [
   { name: 'Mariana Lopes', type: 'politica', muni: 'Cuiabá', status: 'ativo' },
@@ -93,16 +78,45 @@ function ensureBaseCampaign(db) {
   return db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
 }
 
+/** Insere/atualiza os 142 municípios de MT sem apagar coordenadores já cadastrados */
 function seedMunicipalities(db) {
-  const count = db.prepare('SELECT COUNT(*) as c FROM municipalities').get().c;
-  if (count > 0) return;
+  const municipalities = loadMunicipalities();
+  const insert = db.prepare(`
+    INSERT INTO municipalities (name, ibge_code, lat, lng, coordinator_name, coordinator_photo)
+    VALUES (@name, @ibge_code, @lat, @lng, @coordinator_name, @coordinator_photo)
+    ON CONFLICT(name) DO UPDATE SET
+      ibge_code = excluded.ibge_code,
+      lat = excluded.lat,
+      lng = excluded.lng
+  `);
 
-  const insertMuni = db.prepare(`
+  // sql.js may not support ON CONFLICT the same way - use check-then-insert
+  const findByName = db.prepare('SELECT id FROM municipalities WHERE name = ?');
+  const findByIbge = db.prepare('SELECT id FROM municipalities WHERE ibge_code = ?');
+  const insertSimple = db.prepare(`
     INSERT INTO municipalities (name, ibge_code, lat, lng, coordinator_name, coordinator_photo)
     VALUES (@name, @ibge_code, @lat, @lng, @coordinator_name, @coordinator_photo)
   `);
-  for (const m of municipalities) insertMuni.run(m);
-  console.log(`Municípios base criados: ${municipalities.length}`);
+  const updateCoords = db.prepare(`
+    UPDATE municipalities SET ibge_code = ?, lat = ?, lng = ? WHERE id = ?
+  `);
+
+  let created = 0;
+  let updated = 0;
+  for (const m of municipalities) {
+    const existing = findByName.get(m.name) || (m.ibge_code ? findByIbge.get(m.ibge_code) : null);
+    if (existing) {
+      updateCoords.run(m.ibge_code, m.lat, m.lng, existing.id);
+      updated += 1;
+    } else {
+      insertSimple.run(m);
+      created += 1;
+    }
+  }
+
+  const total = db.prepare('SELECT COUNT(*) as c FROM municipalities').get().c;
+  console.log(`Municípios MT: ${total} (novos: ${created}, atualizados: ${updated})`);
+  return total;
 }
 
 function seedDemo(db) {
@@ -119,8 +133,8 @@ function seedDemo(db) {
 
   const munis = db.prepare('SELECT * FROM municipalities').all();
   const muniIds = Object.fromEntries(munis.map((m) => [m.name, m.id]));
+  const municipalities = loadMunicipalities();
 
-  // Demo coordinators
   const demoCoords = {
     Cuiabá: 'Ana Paula Ribeiro',
     Colíder: 'Ogeda',
@@ -204,7 +218,7 @@ function seed(db) {
 function seedProduction(db) {
   ensureBaseCampaign(db);
   seedMunicipalities(db);
-  console.log('Base pronta (campanha + municípios). Sem nomes fake — alimente pelo /admin.');
+  console.log('Base pronta (campanha + 142 municípios). Sem nomes fake — alimente pelo /admin.');
 }
 
-module.exports = { seed, seedProduction, seedDemo, seedMunicipalities };
+module.exports = { seed, seedProduction, seedDemo, seedMunicipalities, loadMunicipalities };

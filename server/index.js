@@ -150,8 +150,7 @@ app.get('/api/campaigns/:slug/heatmap', (req, res) => {
     FROM municipalities m
     LEFT JOIN registrations r ON r.municipality_id = m.id AND r.campaign_id = ?
     GROUP BY m.id
-    HAVING registrations_count > 0 OR m.coordinator_name IS NOT NULL
-    ORDER BY registrations_count DESC
+    ORDER BY registrations_count DESC, m.name ASC
   `).all(campaign.id);
 
   res.json({ points, municipalities });
@@ -564,6 +563,12 @@ app.patch('/api/campaigns/:slug/missions/:id/progress', (req, res) => {
 /* ---------- Municipalities list ---------- */
 app.get('/api/municipalities', (_req, res) => {
   res.json(db.prepare('SELECT * FROM municipalities ORDER BY name').all());
+});
+
+app.post('/api/municipalities/sync', (_req, res) => {
+  const { seedMunicipalities } = require('./seed');
+  const total = seedMunicipalities(db);
+  res.json({ ok: true, total });
 });
 
 app.patch('/api/municipalities/:id', (req, res) => {
