@@ -11,7 +11,9 @@
     "start": "NODE_ENV=production node server/index.js",
     "seed": "node -e \"require('./server/db').getDb().then(db => require('./server/seed').seed(db))\"",
     "logos:sync": "node scripts/sync-logos.js",
-    "install:all": "npm install && npm install --prefix client"
+    "install:all": "npm install && npm install --prefix client",
+    "docker:build": "docker build -t atlas-agency .",
+    "docker:run": "docker run --rm -p 3000:3000 atlas-agency"
   },
   "dependencies": {
     "cors": "^2.8.5",

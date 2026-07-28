@@ -28,16 +28,17 @@ npm run build
 npm start
 ```
 
-## Hospedagem gratuita + alimentar dados
+## Hospedagem
 
-Guia completo em **[DEPLOY.md](./DEPLOY.md)**.
+Guia completo: **[DEPLOY.md](./DEPLOY.md)**
 
-Resumo rápido (Render):
-1. Conta em [render.com](https://render.com) → conectar GitHub
-2. New Web Service no repo `agencyatlas`
-3. Build: `npm run install:all && npm run build`
-4. Start: `npm start`
-5. Alimentar em `/admin` e na aba Mobilização da campanha
+Recomendado agora: **Koyeb com Docker** (mais estável que Railway/Render Node).
+
+```bash
+# validar localmente
+docker build -t atlas-agency .
+docker run --rm -p 3000:3000 atlas-agency
+```
 
 ## Funcionalidades
 
