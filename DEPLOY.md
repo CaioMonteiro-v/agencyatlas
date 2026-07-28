@@ -9,13 +9,14 @@
 ### 2. Criar Web Service
 1. **New +** → **Web Service**
 2. Selecione o repositório `agencyatlas`
-3. Branch: `main` (ou `cursor/atlas-agency-platform-b8e1` enquanto o PR não mergear)
+3. Branch: `cursor/atlas-agency-platform-b8e1` (ou `main` depois do merge)
 4. Configure:
    - **Runtime:** Node
-   - **Build Command:** `npm run install:all && npm run build`
+   - **Build Command:** `npm install && npm run build`
    - **Start Command:** `npm start`
    - **Instance type:** Free
-5. Clique em **Create Web Service**
+5. Em Environment (opcional): `NODE_VERSION` = `20.18.1`
+6. Clique em **Create Web Service**
 
 Em alguns minutos você recebe uma URL tipo:
 `https://atlas-agency-xxxx.onrender.com`

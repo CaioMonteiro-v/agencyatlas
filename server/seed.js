@@ -1,5 +1,4 @@
 const { customAlphabet } = require('nanoid');
-const db = require('./db');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 
@@ -73,7 +72,7 @@ function daysAgo(n) {
   return d.toISOString().replace('T', ' ').slice(0, 19);
 }
 
-function seed() {
+function seed(db) {
   const existing = db.prepare('SELECT COUNT(*) as c FROM campaigns').get().c;
   if (existing > 0) {
     console.log('Banco já possui dados. Pulando seed.');
@@ -301,4 +300,4 @@ function seed() {
   console.log(`Lideranças: ${leaders.length}`);
 }
 
-seed();
+module.exports = { seed };

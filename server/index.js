@@ -3,9 +3,8 @@ const cors = require('cors');
 const path = require('path');
 const QRCode = require('qrcode');
 const { customAlphabet } = require('nanoid');
-const db = require('./db');
-
-require('./seed');
+const { getDb } = require('./db');
+const { seed } = require('./seed');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -14,6 +13,8 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use('/logos', express.static(path.join(__dirname, '../public/logos')));
+
+let db;
 
 function getCampaignBySlug(slug) {
   return db.prepare('SELECT * FROM campaigns WHERE slug = ?').get(slug);
@@ -576,6 +577,15 @@ app.get('*', (req, res, next) => {
   });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Atlas Agency API em http://0.0.0.0:${PORT}`);
+async function start() {
+  db = await getDb();
+  seed(db);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Atlas Agency API em http://0.0.0.0:${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('Falha ao iniciar servidor:', err);
+  process.exit(1);
 });

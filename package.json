@@ -7,19 +7,18 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node --watch server/index.js",
     "dev:client": "npm run dev --prefix client",
-    "build": "npm run build --prefix client",
+    "build": "npm install --prefix client && npm run build --prefix client",
     "start": "NODE_ENV=production node server/index.js",
-    "seed": "node server/seed.js",
+    "seed": "node -e \"require('./server/db').getDb().then(db => require('./server/seed').seed(db))\"",
     "logos:sync": "node scripts/sync-logos.js",
-    "install:all": "npm install && npm install --prefix client",
-    "postinstall": "npm install --prefix client"
+    "install:all": "npm install && npm install --prefix client"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "nanoid": "^3.3.8",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "sql.js": "^1.12.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

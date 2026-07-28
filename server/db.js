@@ -1,4 +1,4 @@
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,12 +8,108 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const dbPath = path.join(dataDir, 'atlas.db');
-const db = new Database(dbPath);
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+function persist(rawDb) {
+  const data = rawDb.export();
+  fs.writeFileSync(dbPath, Buffer.from(data));
+}
 
-function initSchema() {
+function toPositional(sql, params) {
+  if (
+    params.length === 1 &&
+    params[0] &&
+    typeof params[0] === 'object' &&
+    !Array.isArray(params[0])
+  ) {
+    const obj = params[0];
+    const values = [];
+    const positionalSql = sql.replace(/[@:$]([a-zA-Z_][\w]*)/g, (_, name) => {
+      values.push(obj[name]);
+      return '?';
+    });
+    return { sql: positionalSql, values };
+  }
+  return { sql, values: params };
+}
+
+function createApi(rawDb) {
+  let dirty = false;
+  let inTx = false;
+
+  function flush() {
+    if (!dirty || inTx) return;
+    persist(rawDb);
+    dirty = false;
+  }
+
+  function prepare(sql) {
+    return {
+      get(...params) {
+        const converted = toPositional(sql, params);
+        const stmt = rawDb.prepare(converted.sql);
+        try {
+          if (converted.values.length) stmt.bind(converted.values);
+          if (stmt.step()) return stmt.getAsObject();
+          return undefined;
+        } finally {
+          stmt.free();
+        }
+      },
+      all(...params) {
+        const converted = toPositional(sql, params);
+        const stmt = rawDb.prepare(converted.sql);
+        const rows = [];
+        try {
+          if (converted.values.length) stmt.bind(converted.values);
+          while (stmt.step()) rows.push(stmt.getAsObject());
+          return rows;
+        } finally {
+          stmt.free();
+        }
+      },
+      run(...params) {
+        const converted = toPositional(sql, params);
+        rawDb.run(converted.sql, converted.values.length ? converted.values : []);
+        dirty = true;
+        const idRes = rawDb.exec('SELECT last_insert_rowid() AS id');
+        const lastInsertRowid = idRes[0] ? idRes[0].values[0][0] : 0;
+        const changes = rawDb.getRowsModified();
+        flush();
+        return { lastInsertRowid, changes };
+      },
+    };
+  }
+
+  return {
+    prepare,
+    exec(sql) {
+      rawDb.exec(sql);
+      dirty = true;
+      flush();
+    },
+    pragma() {},
+    transaction(fn) {
+      return (...args) => {
+        rawDb.run('BEGIN');
+        inTx = true;
+        try {
+          const result = fn(...args);
+          rawDb.run('COMMIT');
+          inTx = false;
+          dirty = true;
+          flush();
+          return result;
+        } catch (err) {
+          try { rawDb.run('ROLLBACK'); } catch (_) { /* ignore */ }
+          inTx = false;
+          throw err;
+        }
+      };
+    },
+  };
+}
+
+function initSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,6 +226,37 @@ function initSchema() {
   `);
 }
 
-initSchema();
+let dbPromise;
 
-module.exports = db;
+function getDb() {
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
+      const SQL = await initSqlJs({
+        locateFile: () => wasmPath,
+      });
+
+      let rawDb;
+      if (fs.existsSync(dbPath)) {
+        try {
+          rawDb = new SQL.Database(fs.readFileSync(dbPath));
+          // sanity check
+          rawDb.exec('SELECT 1');
+        } catch (err) {
+          console.warn('Banco anterior incompatível. Recriando...', err.message);
+          rawDb = new SQL.Database();
+        }
+      } else {
+        rawDb = new SQL.Database();
+      }
+
+      const db = createApi(rawDb);
+      try { rawDb.run('PRAGMA foreign_keys = ON'); } catch (_) { /* ignore */ }
+      initSchema(db);
+      return db;
+    })();
+  }
+  return dbPromise;
+}
+
+module.exports = { getDb, dbPath };
