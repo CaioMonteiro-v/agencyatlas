@@ -81,3 +81,22 @@ npm run seed
 3. Abrir `/admin` e criar uma liderança de teste
 4. Copiar o link parametrizado e fazer 1 cadastro
 5. Confirmar que o ranking e o mapa atualizam
+
+---
+
+## QR Code — por que deu erro no outro celular?
+
+O QR grava uma URL completa. Se ela for `http://localhost:5173/...`, o celular tenta abrir **nele mesmo**, não no seu computador.
+
+### Como testar no celular (mesma Wi‑Fi)
+1. Descubra o IP do PC (`ipconfig` no Windows / `ip a` no Linux)
+2. No PC, rode `npm run dev` e abra no navegador: `http://SEU-IP:5173` (não use localhost)
+3. Em **Eventos**, no campo **URL pública dos QR Codes**, coloque `http://SEU-IP:5173`
+4. Clique **Atualizar QR Codes**
+5. Escaneie de novo
+
+### Em produção (Render)
+1. Coloque a URL do Render no campo **URL pública dos QR Codes**  
+   Ex.: `https://atlas-agency-xxxx.onrender.com`
+2. Atualize os QR Codes
+3. Qualquer celular (4G/Wi‑Fi) consegue abrir
