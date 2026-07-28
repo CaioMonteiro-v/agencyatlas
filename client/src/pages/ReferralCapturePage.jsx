@@ -31,7 +31,7 @@ export default function ReferralCapturePage() {
   return (
     <div className="public-page">
       <div className="public-card">
-        <img src="/logos/atlas-agency-horizontal.png" alt="Atlas Agency" style={{ height: 48, marginBottom: 12 }} />
+        <img src="/logos/atlas-agency.png" alt="Atlas Agency" style={{ height: 56, marginBottom: 12 }} />
         <p className="eyebrow">Convite rastreado</p>
         <h1 style={{ fontSize: '1.7rem' }}>{campaign?.name || 'Campanha Atlas'}</h1>
         <p>Você chegou por um link parametrizado de mobilização. Complete seu cadastro com carinho.</p>

@@ -23,7 +23,7 @@ export default function HomePage() {
           <div className="hero__bg" aria-hidden="true" />
           <div className="container hero__content">
             <div className="hero__brand">
-              <img src="/logos/atlas-agency-horizontal.png" alt="Atlas Agency" />
+              <img src="/logos/atlas-agency.png" alt="Atlas Agency" />
             </div>
             <h1>Atlas Agency</h1>
             <p className="hero__lead">
