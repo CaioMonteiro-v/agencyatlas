@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import CampaignLayout from './pages/CampaignLayout';
 import CampaignOverview from './pages/CampaignOverview';
 import MobilizationPage from './pages/MobilizationPage';
+import CoordinatorsPage from './pages/CoordinatorsPage';
 import UnderConstruction from './pages/UnderConstruction';
 import LeaderProfilePage from './pages/LeaderProfilePage';
 import EventRegistrationPage from './pages/EventRegistrationPage';
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/campanha/:slug" element={<CampaignLayout />}>
         <Route index element={<CampaignOverview />} />
         <Route path="mobilizacao" element={<MobilizationPage />} />
+        <Route path="coordenadores" element={<CoordinatorsPage />} />
         <Route path="midia" element={<UnderConstruction title="Mídia" />} />
         <Route path="conteudo" element={<UnderConstruction title="Conteúdo" />} />
       </Route>

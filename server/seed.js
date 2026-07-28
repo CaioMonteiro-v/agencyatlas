@@ -215,10 +215,59 @@ function seed(db) {
   seedDemo(db);
 }
 
+/** Migra nomes já salvos em municipalities.coordinator_name para a tabela coordinators. */
+function migrateLegacyCoordinators(db) {
+  const campaign = db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
+  if (!campaign) return;
+
+  const named = db.prepare(`
+    SELECT id, coordinator_name FROM municipalities
+    WHERE coordinator_name IS NOT NULL AND TRIM(coordinator_name) != ''
+  `).all();
+
+  const byName = new Map();
+  for (const row of named) {
+    const name = String(row.coordinator_name).trim();
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(row.id);
+  }
+
+  for (const [name, muniIds] of byName.entries()) {
+    let coord = db.prepare('SELECT * FROM coordinators WHERE campaign_id = ? AND name = ?')
+      .get(campaign.id, name);
+    if (!coord) {
+      const r = db.prepare('INSERT INTO coordinators (campaign_id, name) VALUES (?, ?)')
+        .run(campaign.id, name);
+      coord = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(r.lastInsertRowid);
+    }
+
+    const insertLink = db.prepare(`
+      INSERT OR IGNORE INTO coordinator_municipalities (coordinator_id, municipality_id)
+      VALUES (?, ?)
+    `);
+    for (const mid of muniIds) {
+      const owned = db.prepare(`
+        SELECT cm.coordinator_id FROM coordinator_municipalities cm
+        JOIN coordinators c ON c.id = cm.coordinator_id
+        WHERE cm.municipality_id = ? AND c.campaign_id = ?
+      `).get(mid, campaign.id);
+      if (!owned) insertLink.run(coord.id, mid);
+    }
+  }
+}
+
 function seedProduction(db) {
   ensureBaseCampaign(db);
   seedMunicipalities(db);
+  migrateLegacyCoordinators(db);
   console.log('Base pronta (campanha + 142 municípios). Sem nomes fake — alimente pelo /admin.');
 }
 
-module.exports = { seed, seedProduction, seedDemo, seedMunicipalities, loadMunicipalities };
+module.exports = {
+  seed,
+  seedProduction,
+  seedDemo,
+  seedMunicipalities,
+  loadMunicipalities,
+  migrateLegacyCoordinators,
+};

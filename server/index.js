@@ -589,6 +589,268 @@ app.patch('/api/campaigns/:slug/missions/:id/progress', (req, res) => {
   res.json(db.prepare('SELECT * FROM missions WHERE id = ?').get(mission.id));
 });
 
+/* ---------- Coordinators ---------- */
+function assessMunicipalityHealth(regs, leadersCount, avgRegs) {
+  if (regs === 0 && leadersCount === 0) {
+    return {
+      status: 'critical',
+      label: 'Sem movimento',
+      detail: 'Sem cadastros e sem lideranças neste município',
+    };
+  }
+  if (regs === 0) {
+    return {
+      status: 'critical',
+      label: 'Falha',
+      detail: 'Há liderança, mas nenhum cadastro recebido',
+    };
+  }
+  if (avgRegs > 0 && regs < avgRegs * 0.4) {
+    return {
+      status: 'attention',
+      label: 'Atenção',
+      detail: 'Recebendo abaixo da média da coordenação',
+    };
+  }
+  if (avgRegs > 0 && regs >= avgRegs * 1.2) {
+    return {
+      status: 'good',
+      label: 'Forte',
+      detail: 'Acima da média da coordenação',
+    };
+  }
+  return {
+    status: 'ok',
+    label: 'Tranquilo',
+    detail: 'Recebendo cadastros normalmente',
+  };
+}
+
+function buildCoordinatorDetail(campaign, coordinator) {
+  const munis = db.prepare(`
+    SELECT
+      m.*,
+      COALESCE((
+        SELECT COUNT(*) FROM registrations r
+        WHERE r.municipality_id = m.id AND r.campaign_id = ?
+      ), 0) AS registrations_count,
+      COALESCE((
+        SELECT COUNT(*) FROM leaders l
+        WHERE l.municipality_id = m.id AND l.campaign_id = ?
+      ), 0) AS leaders_count
+    FROM coordinator_municipalities cm
+    JOIN municipalities m ON m.id = cm.municipality_id
+    WHERE cm.coordinator_id = ?
+    ORDER BY registrations_count DESC, m.name ASC
+  `).all(campaign.id, campaign.id, coordinator.id);
+
+  const totalRegs = munis.reduce((s, m) => s + Number(m.registrations_count || 0), 0);
+  const avg = munis.length ? totalRegs / munis.length : 0;
+
+  const municipalities = munis.map((m) => {
+    const regs = Number(m.registrations_count || 0);
+    const leadersCount = Number(m.leaders_count || 0);
+    const health = assessMunicipalityHealth(regs, leadersCount, avg);
+    const share_pct = totalRegs > 0 ? Math.round((regs / totalRegs) * 1000) / 10 : 0;
+    return { ...m, registrations_count: regs, leaders_count: leadersCount, health, share_pct };
+  });
+
+  const critical = municipalities.filter((m) => m.health.status === 'critical').length;
+  const attention = municipalities.filter((m) => m.health.status === 'attention').length;
+  const ok = municipalities.filter((m) => m.health.status === 'ok' || m.health.status === 'good').length;
+
+  let health;
+  if (municipalities.length === 0) {
+    health = { status: 'empty', label: 'Sem municípios', detail: 'Vincule municípios a este coordenador' };
+  } else if (critical > 0) {
+    health = { status: 'critical', label: 'Com falhas', detail: `${critical} município(s) em falha` };
+  } else if (attention > 0) {
+    health = { status: 'attention', label: 'Atenção', detail: `${attention} município(s) abaixo da média` };
+  } else {
+    health = { status: 'good', label: 'Tranquilo', detail: 'Municípios recebendo normalmente' };
+  }
+
+  return {
+    ...coordinator,
+    municipalities,
+    totals: {
+      municipalities: municipalities.length,
+      registrations: totalRegs,
+      leaders: municipalities.reduce((s, m) => s + m.leaders_count, 0),
+      critical,
+      attention,
+      ok,
+    },
+    health,
+  };
+}
+
+function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds) {
+  const coord = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(coordinatorId, campaignId);
+  if (!coord) return null;
+
+  const ids = [...new Set((municipalityIds || []).map(Number).filter((n) => Number.isFinite(n) && n > 0))];
+  const prev = db.prepare('SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?')
+    .all(coordinatorId);
+
+  db.transaction(() => {
+    for (const p of prev) {
+      const m = db.prepare('SELECT coordinator_name FROM municipalities WHERE id = ?').get(p.municipality_id);
+      if (m && m.coordinator_name === coord.name) {
+        db.prepare('UPDATE municipalities SET coordinator_name = NULL WHERE id = ?').run(p.municipality_id);
+      }
+    }
+
+    db.prepare('DELETE FROM coordinator_municipalities WHERE coordinator_id = ?').run(coordinatorId);
+
+    for (const mid of ids) {
+      const exists = db.prepare('SELECT id FROM municipalities WHERE id = ?').get(mid);
+      if (!exists) continue;
+
+      const others = db.prepare(`
+        SELECT cm.coordinator_id
+        FROM coordinator_municipalities cm
+        JOIN coordinators c ON c.id = cm.coordinator_id
+        WHERE cm.municipality_id = ? AND c.campaign_id = ? AND cm.coordinator_id != ?
+      `).all(mid, campaignId, coordinatorId);
+
+      for (const o of others) {
+        db.prepare('DELETE FROM coordinator_municipalities WHERE coordinator_id = ? AND municipality_id = ?')
+          .run(o.coordinator_id, mid);
+      }
+
+      db.prepare('INSERT INTO coordinator_municipalities (coordinator_id, municipality_id) VALUES (?, ?)')
+        .run(coordinatorId, mid);
+      db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?').run(coord.name, mid);
+    }
+  })();
+
+  return coord;
+}
+
+app.get('/api/campaigns/:slug/coordinators', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const rows = db.prepare(`
+    SELECT * FROM coordinators WHERE campaign_id = ? ORDER BY name ASC
+  `).all(campaign.id);
+
+  const coordinators = rows.map((c) => buildCoordinatorDetail(campaign, c));
+  const summary = {
+    total: coordinators.length,
+    municipalities_assigned: coordinators.reduce((s, c) => s + c.totals.municipalities, 0),
+    registrations: coordinators.reduce((s, c) => s + c.totals.registrations, 0),
+    with_failures: coordinators.filter((c) => c.health.status === 'critical').length,
+  };
+
+  res.json({ coordinators, summary });
+});
+
+app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  res.json(buildCoordinatorDetail(campaign, coordinator));
+});
+
+app.post('/api/campaigns/:slug/coordinators', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const { name, phone, photo_url, notes, municipality_ids } = req.body;
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'Nome do coordenador é obrigatório' });
+  }
+
+  const result = db.prepare(`
+    INSERT INTO coordinators (campaign_id, name, phone, photo_url, notes)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    campaign.id,
+    String(name).trim(),
+    phone || null,
+    photo_url || null,
+    notes || null,
+  );
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(result.lastInsertRowid);
+  if (Array.isArray(municipality_ids) && municipality_ids.length) {
+    setCoordinatorMunicipalities(campaign.id, coordinator.id, municipality_ids);
+  }
+
+  res.status(201).json(buildCoordinatorDetail(campaign, coordinator));
+});
+
+app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const name = req.body.name != null ? String(req.body.name).trim() : coordinator.name;
+  if (!name) return res.status(400).json({ error: 'Nome inválido' });
+
+  const phone = req.body.phone !== undefined ? (req.body.phone || null) : coordinator.phone;
+  const photo_url = req.body.photo_url !== undefined ? (req.body.photo_url || null) : coordinator.photo_url;
+  const notes = req.body.notes !== undefined ? (req.body.notes || null) : coordinator.notes;
+
+  db.prepare(`
+    UPDATE coordinators SET name = ?, phone = ?, photo_url = ?, notes = ? WHERE id = ?
+  `).run(name, phone, photo_url, notes, coordinator.id);
+
+  if (name !== coordinator.name) {
+    db.prepare(`
+      UPDATE municipalities SET coordinator_name = ?
+      WHERE id IN (
+        SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
+      )
+    `).run(name, coordinator.id);
+  }
+
+  if (Array.isArray(req.body.municipality_ids)) {
+    setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids);
+  }
+
+  const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
+  res.json(buildCoordinatorDetail(campaign, updated));
+});
+
+app.put('/api/campaigns/:slug/coordinators/:id/municipalities', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const ok = setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids || []);
+  if (!ok) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
+  res.json(buildCoordinatorDetail(campaign, updated));
+});
+
+app.delete('/api/campaigns/:slug/coordinators/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  setCoordinatorMunicipalities(campaign.id, coordinator.id, []);
+  db.prepare('DELETE FROM coordinators WHERE id = ?').run(coordinator.id);
+  res.json({ ok: true });
+});
+
 /* ---------- Municipalities list ---------- */
 app.get('/api/municipalities', (_req, res) => {
   res.json(db.prepare('SELECT * FROM municipalities ORDER BY name').all());
@@ -607,6 +869,33 @@ app.patch('/api/municipalities/:id', (req, res) => {
   const coordinator_name = req.body.coordinator_name ?? municipality.coordinator_name;
   db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?')
     .run(coordinator_name || null, municipality.id);
+
+  // Keep coordinators table in sync when editing via legacy admin field
+  if (coordinator_name && String(coordinator_name).trim()) {
+    const campaign = db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get()
+      || db.prepare('SELECT * FROM campaigns ORDER BY id LIMIT 1').get();
+    if (campaign) {
+      const name = String(coordinator_name).trim();
+      let coord = db.prepare('SELECT * FROM coordinators WHERE campaign_id = ? AND name = ?')
+        .get(campaign.id, name);
+      if (!coord) {
+        const r = db.prepare(`
+          INSERT INTO coordinators (campaign_id, name) VALUES (?, ?)
+        `).run(campaign.id, name);
+        coord = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(r.lastInsertRowid);
+      }
+      setCoordinatorMunicipalities(
+        campaign.id,
+        coord.id,
+        [
+          ...db.prepare('SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?')
+            .all(coord.id)
+            .map((r) => r.municipality_id),
+          municipality.id,
+        ],
+      );
+    }
+  }
 
   res.json(db.prepare('SELECT * FROM municipalities WHERE id = ?').get(municipality.id));
 });

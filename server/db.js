@@ -218,11 +218,31 @@ function initSchema(db) {
       FOREIGN KEY (leader_id) REFERENCES leaders(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS coordinators (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT,
+      photo_url TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS coordinator_municipalities (
+      coordinator_id INTEGER NOT NULL,
+      municipality_id INTEGER NOT NULL,
+      PRIMARY KEY (coordinator_id, municipality_id),
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE CASCADE,
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
     CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
     CREATE INDEX IF NOT EXISTS idx_leaders_campaign ON leaders(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_leaders_code ON leaders(referral_code);
+    CREATE INDEX IF NOT EXISTS idx_coord_campaign ON coordinators(campaign_id);
   `);
 }
 

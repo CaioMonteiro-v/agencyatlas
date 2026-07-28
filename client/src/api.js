@@ -49,4 +49,17 @@ export const api = {
   getMunicipalities: () => request('/api/municipalities'),
   updateMunicipality: (id, body) =>
     request(`/api/municipalities/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  getCoordinators: (slug) => request(`/api/campaigns/${slug}/coordinators`),
+  getCoordinator: (slug, id) => request(`/api/campaigns/${slug}/coordinators/${id}`),
+  createCoordinator: (slug, body) =>
+    request(`/api/campaigns/${slug}/coordinators`, { method: 'POST', body: JSON.stringify(body) }),
+  updateCoordinator: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/coordinators/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  setCoordinatorMunicipalities: (slug, id, municipality_ids) =>
+    request(`/api/campaigns/${slug}/coordinators/${id}/municipalities`, {
+      method: 'PUT',
+      body: JSON.stringify({ municipality_ids }),
+    }),
+  deleteCoordinator: (slug, id) =>
+    request(`/api/campaigns/${slug}/coordinators/${id}`, { method: 'DELETE' }),
 };
