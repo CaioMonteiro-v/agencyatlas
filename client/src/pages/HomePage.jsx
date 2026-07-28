@@ -23,7 +23,7 @@ export default function HomePage() {
           <div className="hero__bg" aria-hidden="true" />
           <div className="container hero__content">
             <div className="hero__brand">
-              <img src="/logos/atlas-agency-horizontal.svg" alt="Atlas Agency" />
+              <img src="/logos/atlas-agency-horizontal.png" alt="Atlas Agency" />
             </div>
             <h1>Atlas Agency</h1>
             <p className="hero__lead">
@@ -105,7 +105,7 @@ export default function HomePage() {
             <div className="campaign-list">
               {(summary?.campaigns || []).map((campaign) => (
                 <Link key={campaign.id} to={`/campanha/${campaign.slug}`} className="campaign-row">
-                  <img src={campaign.logo_url || '/logos/atlas-agency.svg'} alt="" />
+                  <img src={campaign.logo_url || '/logos/atlas-agency.png'} alt="" />
                   <div>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: 4 }}>
                       <h3 style={{ margin: 0 }}>{campaign.name}</h3>

@@ -6,7 +6,7 @@ export default function Header({ compact = false }) {
       <div className="container site-header__inner">
         <Link to="/" className={`brand ${compact ? 'brand--mark' : ''}`}>
           <img
-            src={compact ? '/logos/atlas-agency.svg' : '/logos/atlas-agency-horizontal.svg'}
+            src={compact ? '/logos/atlas-agency-mark.png' : '/logos/atlas-agency-horizontal.png'}
             alt="Atlas Agency"
           />
         </Link>

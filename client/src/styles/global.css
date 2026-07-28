@@ -21,7 +21,7 @@
   --font-body: 'Manrope', system-ui, sans-serif;
   --max: 1180px;
   --header-h: 76px;
-  --campaign-accent: #2e6b8a;
+  --campaign-accent: #0033a0;
 }
 
 *,
@@ -112,13 +112,14 @@ p {
 }
 
 .brand img {
-  height: 42px;
+  height: 52px;
   width: auto;
 }
 
 .brand--mark img {
-  height: 48px;
-  width: 48px;
+  height: 52px;
+  width: 52px;
+  object-fit: contain;
 }
 
 .nav {
@@ -185,7 +186,7 @@ p {
 }
 
 .btn-accent {
-  background: linear-gradient(135deg, var(--campaign-accent), #4a8fa8);
+  background: linear-gradient(135deg, var(--campaign-accent), #1a4fd0);
   color: #fff;
 }
 
@@ -206,9 +207,11 @@ p {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(120deg, rgba(248, 244, 242, 0.55) 0%, rgba(248, 244, 242, 0.2) 42%, transparent 70%),
-    linear-gradient(0deg, rgba(47, 63, 58, 0.45) 0%, transparent 48%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%239EC0CF'/%3E%3Cstop offset='.5' stop-color='%238FB5A5'/%3E%3Cstop offset='1' stop-color='%23D9A7B0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='%23E9F1EF'/%3E%3Ccircle cx='1180' cy='280' r='260' fill='url(%23g)' opacity='.55'/%3E%3Ccircle cx='420' cy='620' r='320' fill='%23D9A7B0' opacity='.22'/%3E%3Cpath d='M0 620c180-80 320-40 480-70s280-90 420-40 260 90 420 50 200-70 280-40v380H0z' fill='%235F8A7A' opacity='.18'/%3E%3Cpath d='M0 700c200-60 340-20 500-50s260-80 400-30 240 70 400 40 220-50 300-20v220H0z' fill='%236A93A6' opacity='.16'/%3E%3C/svg%3E") center/cover no-repeat;
+    linear-gradient(105deg, rgba(248, 244, 242, 0.92) 0%, rgba(248, 244, 242, 0.72) 38%, rgba(248, 244, 242, 0.18) 62%, transparent 78%),
+    linear-gradient(0deg, rgba(47, 63, 58, 0.28) 0%, transparent 42%),
+    url('/logos/atlas-agency.png') right 8% center / min(52vw, 620px) auto no-repeat,
+    radial-gradient(900px 500px at 85% 30%, rgba(158, 192, 207, 0.28), transparent 55%),
+    linear-gradient(165deg, #f8f4f2 0%, #eef4f3 55%, #f3eef1 100%);
   animation: softDrift 18s ease-in-out infinite alternate;
 }
 
@@ -216,7 +219,7 @@ p {
   position: relative;
   z-index: 1;
   padding: 4.5rem 0 4rem;
-  max-width: 720px;
+  max-width: 640px;
   animation: riseIn 0.9s ease both;
 }
 
@@ -228,9 +231,9 @@ p {
 }
 
 .hero__brand img {
-  height: 64px;
+  height: 72px;
   width: auto;
-  filter: drop-shadow(0 8px 20px rgba(74, 99, 92, 0.15));
+  filter: drop-shadow(0 8px 20px rgba(74, 99, 92, 0.12));
 }
 
 .hero h1 {
@@ -339,8 +342,8 @@ p {
 }
 
 .campaign-row img {
-  width: 72px;
-  height: 48px;
+  width: 120px;
+  height: 72px;
   object-fit: contain;
 }
 
@@ -382,7 +385,7 @@ p {
 }
 
 .campaign-shell {
-  --campaign-accent: #2e6b8a;
+  --campaign-accent: #0033a0;
 }
 
 .campaign-top {
@@ -404,8 +407,10 @@ p {
 }
 
 .campaign-brand img {
-  height: 56px;
+  height: 72px;
   width: auto;
+  max-width: 220px;
+  object-fit: contain;
 }
 
 .tabs {
@@ -434,7 +439,7 @@ p {
 
 .tabs a.active,
 .tabs button.active {
-  background: linear-gradient(135deg, var(--campaign-accent), #4a8fa8);
+  background: linear-gradient(135deg, var(--campaign-accent), #1a4fd0);
   color: #fff;
 }
 
@@ -823,6 +828,13 @@ th {
 }
 
 @media (max-width: 960px) {
+  .hero__bg {
+    background:
+      linear-gradient(180deg, rgba(248, 244, 242, 0.55) 0%, rgba(248, 244, 242, 0.88) 48%, #f8f4f2 100%),
+      url('/logos/atlas-agency.png') center top / min(70vw, 360px) auto no-repeat,
+      linear-gradient(165deg, #f8f4f2 0%, #eef4f3 55%, #f3eef1 100%);
+  }
+
   .stats-row,
   .services,
   .layout-split {

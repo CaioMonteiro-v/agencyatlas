@@ -1,12 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" role="img" aria-label="Fabio Garcia">
-  <defs>
-    <linearGradient id="fg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2E6B8A"/>
-      <stop offset="100%" stop-color="#4A8FA8"/>
-    </linearGradient>
-  </defs>
-  <rect x="4" y="14" width="52" height="52" rx="14" fill="url(#fg)"/>
-  <text x="30" y="48" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#F5F9FB" font-weight="700">FG</text>
-  <text x="68" y="38" font-family="Georgia, serif" font-size="20" fill="#1E4A5C" font-weight="600">Fábio Garcia</text>
-  <text x="68" y="56" font-family="system-ui, sans-serif" font-size="11" fill="#5A8494" letter-spacing="1.5">MATO GROSSO</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" role="img" aria-label="Fábio Garcia Deputado Federal">
+  <style>
+    .fabio { font-family: Arial Black, Helvetica Neue, Helvetica, Arial, sans-serif; font-weight: 900; font-size: 168px; fill: #F5C400; letter-spacing: -6px; }
+    .garcia { font-family: Arial Black, Helvetica Neue, Helvetica, Arial, sans-serif; font-weight: 900; font-size: 168px; fill: #0033A0; letter-spacing: -4px; }
+    .sub { font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 44px; fill: #0033A0; letter-spacing: 20px; }
+  </style>
+
+  <text class="fabio" x="24" y="160">FABI</text>
+
+  <!-- O = bandeira + triângulo -->
+  <g transform="translate(700 22)">
+    <circle cx="90" cy="90" r="90" fill="#F5C400"/>
+    <circle cx="90" cy="90" r="70" fill="#009C3B"/>
+    <polygon points="90,28 152,90 90,152 28,90" fill="#FFDF00"/>
+    <circle cx="90" cy="90" r="34" fill="#002776"/>
+    <polygon points="90,68 94.2,81 108,81 96.8,89 101,102 90,94 79,102 83.2,89 72,81 85.8,81" fill="#FFFFFF"/>
+    <polygon points="90,22 158,90 90,158" fill="#FFFFFF"/>
+  </g>
+
+  <text class="garcia" x="24" y="330">GARCIA</text>
+  <text class="sub" x="30" y="410">DEPUTADO FEDERAL</text>
 </svg>

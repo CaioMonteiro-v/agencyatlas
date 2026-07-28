@@ -40,7 +40,7 @@ export default function CampaignLayout() {
       <div className="container campaign-top">
         <div className="campaign-top__row">
           <div className="campaign-brand">
-            <img src={campaign.logo_url || '/logos/fabio-garcia.svg'} alt={campaign.name} />
+            <img src={campaign.logo_url || '/logos/fabio-garcia.png'} alt={campaign.name} />
             <div>
               <p className="eyebrow" style={{ marginBottom: 4 }}>Campanha Atlas</p>
               <h1 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', marginBottom: 4 }}>{campaign.name}</h1>

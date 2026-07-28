@@ -163,7 +163,7 @@ export default function AdminPage() {
           <div className="campaign-list" style={{ marginTop: '0.85rem' }}>
             {(summary?.campaigns || []).map((campaign) => (
               <div className="campaign-row" key={campaign.id}>
-                <img src={campaign.logo_url || '/logos/atlas-agency.svg'} alt="" />
+                <img src={campaign.logo_url || '/logos/atlas-agency.png'} alt="" />
                 <div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <strong>{campaign.name}</strong>

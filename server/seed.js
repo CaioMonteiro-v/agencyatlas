@@ -92,8 +92,8 @@ function seed() {
     description: 'Mobilização digital e articulação territorial em Mato Grosso, com foco em escuta, presença e crescimento orgânico de apoiadores.',
     mission: 'Conectar lideranças, multiplicadores e comunidades em todo o estado com ferramentas claras de mobilização, acompanhamento e cuidado.',
     status: 'ativa',
-    accent_color: '#2E6B8A',
-    logo_url: '/logos/fabio-garcia.svg',
+    accent_color: '#0033A0',
+    logo_url: '/logos/fabio-garcia.png',
     whatsapp_url: 'https://bit.ly/FalaFabio',
   });
 
@@ -107,7 +107,7 @@ function seed() {
     mission: 'Formar uma geração de lideranças que mobilizam com empatia e responsabilidade.',
     status: 'planejamento',
     accent_color: '#8FB5A5',
-    logo_url: '/logos/atlas-agency.svg',
+    logo_url: '/logos/atlas-agency.png',
     whatsapp_url: 'https://bit.ly/FalaFabio',
   });
 
