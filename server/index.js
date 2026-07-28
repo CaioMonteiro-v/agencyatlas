@@ -566,6 +566,6 @@ app.get('*', (req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Atlas Agency API em http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Atlas Agency API em http://0.0.0.0:${PORT}`);
 });
