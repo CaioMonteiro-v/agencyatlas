@@ -33,7 +33,7 @@ export default function MobilizationPage() {
         <section className="panel panel-pad">
           <p className="eyebrow">Território</p>
           <h3>Mapa de calor interativo — Mato Grosso</h3>
-          <p>Clique em um município para ver coordenação, lideranças e concentração de cadastros.</p>
+          <p>Clique em um município para ver coordenação, lideranças e concentração de cadastros. O mapa inclui os <strong>142 municípios</strong> de Mato Grosso.</p>
           <HeatMapMT campaignSlug={campaign.slug} />
         </section>
 
