@@ -18,9 +18,22 @@ export default function EventRegistrationPage() {
   });
 
   useEffect(() => {
+    if (!eventSlug) {
+      setError('Evento inválido');
+      return;
+    }
     api.getEvent(eventSlug)
       .then(setEvent)
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        const msg = err.message || 'Erro ao carregar evento';
+        if (/failed to fetch|network|load failed/i.test(msg)) {
+          setError('Não foi possível conectar à API. Se você abriu pelo QR com localhost, use o IP da rede ou a URL do deploy.');
+        } else if (/não encontrado|404/i.test(msg)) {
+          setError('Evento não encontrado. Confira se o QR Code está atualizado.');
+        } else {
+          setError(msg);
+        }
+      });
   }, [eventSlug]);
 
   async function onSubmit(e) {

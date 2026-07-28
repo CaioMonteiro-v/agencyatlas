@@ -3,11 +3,29 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from './Ui';
 
+const PUBLIC_URL_KEY = 'atlas_public_base_url';
+
+function defaultPublicBase() {
+  const saved = localStorage.getItem(PUBLIC_URL_KEY);
+  if (saved) return saved.replace(/\/$/, '');
+  return window.location.origin;
+}
+
+function isLocalUrl(url) {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
 export default function EventsPanel({ campaignSlug }) {
   const [events, setEvents] = useState([]);
   const [qrMap, setQrMap] = useState({});
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [publicBase, setPublicBase] = useState(defaultPublicBase);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -17,11 +35,12 @@ export default function EventsPanel({ campaignSlug }) {
   });
   const [error, setError] = useState('');
 
-  async function load() {
+  async function load(base = publicBase) {
     try {
+      setError('');
       const list = await api.getEvents(campaignSlug);
       setEvents(list);
-      const origin = window.location.origin;
+      const origin = (base || window.location.origin).replace(/\/$/, '');
       const entries = await Promise.all(
         list.map(async (event) => {
           const qr = await api.getEventQr(event.slug, origin);
@@ -35,13 +54,27 @@ export default function EventsPanel({ campaignSlug }) {
   }
 
   useEffect(() => {
-    load();
+    load(publicBase);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignSlug]);
 
+  function applyPublicBase(e) {
+    e.preventDefault();
+    const cleaned = publicBase.trim().replace(/\/$/, '');
+    setPublicBase(cleaned);
+    localStorage.setItem(PUBLIC_URL_KEY, cleaned);
+    setToast('QR Codes regenerados com a nova URL');
+    load(cleaned);
+  }
+
   async function copy(text) {
-    await navigator.clipboard.writeText(text);
-    setToast('Link do evento copiado');
-    setTimeout(() => setToast(''), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setToast('Link do evento copiado');
+    } catch {
+      setToast(text);
+    }
+    setTimeout(() => setToast(''), 2500);
   }
 
   async function onCreate(e) {
@@ -51,11 +84,13 @@ export default function EventsPanel({ campaignSlug }) {
       setShowForm(false);
       setForm({ name: '', description: '', location: '', event_date: '', event_time: '' });
       setToast('Evento criado');
-      load();
+      load(publicBase);
     } catch (err) {
       setToast(err.message);
     }
   }
+
+  const localWarning = isLocalUrl(publicBase);
 
   return (
     <section className="panel panel-pad">
@@ -69,6 +104,26 @@ export default function EventsPanel({ campaignSlug }) {
           {showForm ? 'Fechar' : 'Novo evento'}
         </button>
       </div>
+
+      <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={applyPublicBase}>
+        <label>
+          URL pública dos QR Codes
+          <input
+            className="input"
+            value={publicBase}
+            onChange={(e) => setPublicBase(e.target.value)}
+            placeholder="https://seu-app.onrender.com ou http://SEU-IP:5173"
+          />
+        </label>
+        <p style={{ margin: 0, fontSize: '0.9rem', color: localWarning ? '#8a5a64' : 'var(--muted)' }}>
+          {localWarning
+            ? 'Atenção: URL com localhost NÃO funciona em outro celular. Use o IP da sua rede (ex: http://192.168.0.10:5173) ou a URL do Render depois do deploy.'
+            : 'Esta URL é gravada dentro do QR. Celulares precisam alcançar este endereço.'}
+        </p>
+        <button className="btn btn-soft btn-sm" type="submit" style={{ width: 'fit-content' }}>
+          Atualizar QR Codes
+        </button>
+      </form>
 
       {showForm && (
         <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={onCreate}>
@@ -118,6 +173,7 @@ export default function EventsPanel({ campaignSlug }) {
               {qr && (
                 <div className="qr-box">
                   <img src={qr.qrcode} alt={`QR Code ${event.name}`} />
+                  <code style={{ fontSize: '0.75rem', wordBreak: 'break-all', textAlign: 'center' }}>{qr.url}</code>
                 </div>
               )}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

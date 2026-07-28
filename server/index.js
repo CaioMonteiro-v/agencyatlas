@@ -431,7 +431,10 @@ app.get('/api/events/:slug/qrcode', async (req, res) => {
   const event = db.prepare('SELECT * FROM events WHERE slug = ?').get(req.params.slug);
   if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
 
-  const origin = req.query.origin || `${req.protocol}://${req.get('host')}`.replace(':3001', ':5173');
+  const envOrigin = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const queryOrigin = (req.query.origin || '').replace(/\/$/, '');
+  const hostOrigin = `${req.protocol}://${req.get('host')}`.replace(':3001', ':5173');
+  const origin = queryOrigin || envOrigin || hostOrigin;
   const url = `${origin}/evento/${event.slug}`;
 
   try {
@@ -440,7 +443,14 @@ app.get('/api/events/:slug/qrcode', async (req, res) => {
       margin: 2,
       color: { dark: '#2C3E3A', light: '#FFFFFF' },
     });
-    res.json({ url, qrcode: dataUrl, event });
+    res.json({
+      url,
+      qrcode: dataUrl,
+      event,
+      warning: /localhost|127\.0\.0\.1/.test(origin)
+        ? 'URL local: QR não funciona em outro celular. Defina PUBLIC_APP_URL ou a URL pública no painel.'
+        : null,
+    });
   } catch (err) {
     res.status(500).json({ error: 'Falha ao gerar QR Code', detail: err.message });
   }
