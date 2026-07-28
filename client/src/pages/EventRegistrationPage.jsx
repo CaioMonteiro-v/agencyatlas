@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 
@@ -9,12 +9,10 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
-  const [whatsappUrl, setWhatsappUrl] = useState('https://bit.ly/FalaFabio');
   const [form, setForm] = useState({
     full_name: '',
     email: '',
     phone: '',
-    want_whatsapp: false,
   });
 
   useEffect(() => {
@@ -27,7 +25,7 @@ export default function EventRegistrationPage() {
       .catch((err) => {
         const msg = err.message || 'Erro ao carregar evento';
         if (/failed to fetch|network|load failed/i.test(msg)) {
-          setError('Não foi possível conectar à API. Se você abriu pelo QR com localhost, use o IP da rede ou a URL do deploy.');
+          setError('Não foi possível conectar à API. Confira se a URL do QR está correta (não use localhost).');
         } else if (/não encontrado|404/i.test(msg)) {
           setError('Evento não encontrado. Confira se o QR Code está atualizado.');
         } else {
@@ -42,17 +40,19 @@ export default function EventRegistrationPage() {
       setToast('Nome completo é obrigatório');
       return;
     }
+    if (!form.phone.trim()) {
+      setToast('Telefone é obrigatório');
+      return;
+    }
     try {
-      const res = await api.registerEvent(eventSlug, {
+      await api.registerEvent(eventSlug, {
         full_name: form.full_name,
         email: form.email,
         phone: form.phone,
-        connect_whatsapp: form.want_whatsapp,
+        connect_whatsapp: false,
       });
-      setWhatsappUrl(res.whatsapp_url || 'https://bit.ly/FalaFabio');
       setDone(true);
-      setToast('Inscrição salva no sistema da campanha');
-      // NÃO abre WhatsApp automaticamente — só se a pessoa pedir no botão depois
+      setToast('Presença confirmada');
     } catch (err) {
       setToast(err.message);
     }
@@ -73,24 +73,17 @@ export default function EventRegistrationPage() {
               {event.location ? ` · ${event.location}` : ''}
             </p>
             <p>{event.description}</p>
+            <p style={{ fontSize: '0.92rem' }}>
+              Esta página é apenas para confirmar presença. Não há acesso ao painel da campanha.
+            </p>
 
             {done ? (
               <div>
-                <h3>Inscrição confirmada</h3>
+                <h3>Presença confirmada</h3>
                 <p>
-                  Seus dados foram salvos para a equipe da campanha acompanhar.
-                  Você não precisa falar no WhatsApp para a inscrição valer.
+                  Obrigado, {form.full_name.split(' ')[0]}! Seu cadastro foi registrado.
+                  Você já pode fechar esta página.
                 </p>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {form.want_whatsapp && (
-                    <a className="btn btn-whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer">
-                      Quero falar no WhatsApp
-                    </a>
-                  )}
-                  <Link className="btn btn-soft" to={`/campanha/${event.campaign_slug}`}>
-                    Ir à campanha
-                  </Link>
-                </div>
               </div>
             ) : (
               <form className="form-grid" onSubmit={onSubmit}>
@@ -104,6 +97,16 @@ export default function EventRegistrationPage() {
                   />
                 </label>
                 <label>
+                  Telefone *
+                  <input
+                    className="input"
+                    required
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    placeholder="(65) 9xxxx-xxxx"
+                  />
+                </label>
+                <label>
                   E-mail
                   <input
                     className="input"
@@ -113,24 +116,7 @@ export default function EventRegistrationPage() {
                     placeholder="Para comunicação e tráfego"
                   />
                 </label>
-                <label>
-                  Telefone
-                  <input
-                    className="input"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="(65) 9xxxx-xxxx"
-                  />
-                </label>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={form.want_whatsapp}
-                    onChange={(e) => setForm({ ...form, want_whatsapp: e.target.checked })}
-                  />
-                  Depois quero também um botão para falar no WhatsApp da campanha
-                </label>
-                <button className="btn btn-primary" type="submit">Confirmar inscrição</button>
+                <button className="btn btn-primary" type="submit">Confirmar presença</button>
               </form>
             )}
           </>

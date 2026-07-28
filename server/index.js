@@ -100,6 +100,20 @@ app.get('/api/campaigns/:slug', (req, res) => {
   res.json({ ...campaign, stats, recent_registrations: recent });
 });
 
+/** Dados públicos mínimos — sem ranking, cadastros ou painel */
+app.get('/api/campaigns/:slug/public', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  res.json({
+    slug: campaign.slug,
+    name: campaign.name,
+    candidate: campaign.candidate,
+    logo_url: campaign.logo_url,
+    accent_color: campaign.accent_color,
+    whatsapp_url: campaign.whatsapp_url,
+  });
+});
+
 app.post('/api/campaigns', (req, res) => {
   const { name, candidate, description, mission, accent_color, whatsapp_url, status } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -462,6 +476,7 @@ app.post('/api/events/:slug/registrations', (req, res) => {
 
   const { full_name, email, phone, connect_whatsapp } = req.body;
   if (!full_name) return res.status(400).json({ error: 'Nome completo é obrigatório' });
+  if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório' });
 
   const result = db.prepare(`
     INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp)
@@ -469,8 +484,22 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0);
 
   const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(event.campaign_id);
+
+  // Também entra no Registro de Cadastros da campanha (origem = evento)
+  const reg = db.prepare(`
+    INSERT INTO registrations (campaign_id, leader_id, municipality_id, full_name, phone, email, source, referral_code, lat, lng)
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL)
+  `).run(
+    event.campaign_id,
+    full_name,
+    phone,
+    email || null,
+    `evento/${event.slug}`
+  );
+
   res.status(201).json({
     registration: db.prepare('SELECT * FROM event_registrations WHERE id = ?').get(result.lastInsertRowid),
+    campaign_registration_id: reg.lastInsertRowid,
     whatsapp_url: campaign?.whatsapp_url || 'https://bit.ly/FalaFabio',
   });
 });

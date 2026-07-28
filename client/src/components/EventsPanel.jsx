@@ -115,7 +115,7 @@ export default function EventsPanel({ campaignSlug }) {
         <div>
           <p className="eyebrow">Presença</p>
           <h3>Eventos e QR Codes</h3>
-          <p>Gere QR Codes únicos para inscrição rápida em cada evento.</p>
+          <p>Gere QR Codes únicos para inscrição rápida em cada evento. As pessoas só veem o formulário e a confirmação — sem acesso ao painel. Os dados aparecem em <strong>Ver inscritos</strong> e também em <strong>Registro de cadastros</strong>.</p>
         </div>
         <button type="button" className="btn btn-accent btn-sm" onClick={() => setShowForm((v) => !v)}>
           {showForm ? 'Fechar' : 'Novo evento'}

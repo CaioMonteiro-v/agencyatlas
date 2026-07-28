@@ -21,6 +21,7 @@ export const api = {
   getAgencySummary: () => request('/api/agency/summary'),
   getCampaigns: () => request('/api/campaigns'),
   getCampaign: (slug) => request(`/api/campaigns/${slug}`),
+  getCampaignPublic: (slug) => request(`/api/campaigns/${slug}/public`),
   createCampaign: (body) => request('/api/campaigns', { method: 'POST', body: JSON.stringify(body) }),
   getHeatmap: (slug) => request(`/api/campaigns/${slug}/heatmap`),
   getMunicipality: (slug, id) => request(`/api/campaigns/${slug}/municipalities/${id}`),
