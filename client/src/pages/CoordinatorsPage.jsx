@@ -146,8 +146,9 @@ export default function CoordinatorsPage() {
         <p className="eyebrow">Coordenação territorial</p>
         <h2>Coordenadores</h2>
         <p>
-          Totais, expectativa de voto, alcance de conteúdo e alarmes por município.
-          Clique em um coordenador para abrir o painel completo.
+          Dois acompanhamentos separados: <strong>expectativa de voto</strong> (norte eleitoral —
+          quantos cadastros/público equivalem à meta) e <strong>comunicação</strong> (se o conteúdo
+          está sendo visto / comentado no município). Alarmes aparecem quando algum dos dois falha.
         </p>
         <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.55rem' }}>
           <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/relatorio`}>
@@ -179,7 +180,7 @@ export default function CoordinatorsPage() {
           <strong>
             {data.summary.vote_progress_pct != null ? `${data.summary.vote_progress_pct}%` : '—'}
           </strong>
-          <span>Expectativa de voto</span>
+          <span>Norte eleitoral (voto)</span>
         </div>
         <div className="stat">
           <strong className={data.summary.alarms > 0 ? 'stat-alarm' : undefined}>
@@ -348,7 +349,7 @@ export default function CoordinatorsPage() {
                         {editingMuni === m.id ? (
                           <form className="metrics-form" onSubmit={saveMetrics}>
                             <label>
-                              Expectativa de voto
+                              Expectativa de voto (norte)
                               <input
                                 className="input"
                                 type="number"
@@ -358,7 +359,7 @@ export default function CoordinatorsPage() {
                               />
                             </label>
                             <label>
-                              Meta de views
+                              Meta de views (comunicação)
                               <input
                                 className="input"
                                 type="number"
@@ -368,7 +369,7 @@ export default function CoordinatorsPage() {
                               />
                             </label>
                             <label>
-                              Views reais
+                              Views reais (comunicação)
                               <input
                                 className="input"
                                 type="number"
