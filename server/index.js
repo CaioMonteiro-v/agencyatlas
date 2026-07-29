@@ -5,6 +5,13 @@ const QRCode = require('qrcode');
 const { customAlphabet } = require('nanoid');
 const { getDb } = require('./db');
 const { seedProduction, seedDemo } = require('./seed');
+const {
+  buildCoordinatorDetail,
+  buildCampaignReport,
+  getThresholds,
+} = require('./analytics');
+const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
+const { runAssistant } = require('./assistant');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -590,101 +597,6 @@ app.patch('/api/campaigns/:slug/missions/:id/progress', (req, res) => {
 });
 
 /* ---------- Coordinators ---------- */
-function assessMunicipalityHealth(regs, leadersCount, avgRegs) {
-  if (regs === 0 && leadersCount === 0) {
-    return {
-      status: 'critical',
-      label: 'Sem movimento',
-      detail: 'Sem cadastros e sem lideranças neste município',
-    };
-  }
-  if (regs === 0) {
-    return {
-      status: 'critical',
-      label: 'Falha',
-      detail: 'Há liderança, mas nenhum cadastro recebido',
-    };
-  }
-  if (avgRegs > 0 && regs < avgRegs * 0.4) {
-    return {
-      status: 'attention',
-      label: 'Atenção',
-      detail: 'Recebendo abaixo da média da coordenação',
-    };
-  }
-  if (avgRegs > 0 && regs >= avgRegs * 1.2) {
-    return {
-      status: 'good',
-      label: 'Forte',
-      detail: 'Acima da média da coordenação',
-    };
-  }
-  return {
-    status: 'ok',
-    label: 'Tranquilo',
-    detail: 'Recebendo cadastros normalmente',
-  };
-}
-
-function buildCoordinatorDetail(campaign, coordinator) {
-  const munis = db.prepare(`
-    SELECT
-      m.*,
-      COALESCE((
-        SELECT COUNT(*) FROM registrations r
-        WHERE r.municipality_id = m.id AND r.campaign_id = ?
-      ), 0) AS registrations_count,
-      COALESCE((
-        SELECT COUNT(*) FROM leaders l
-        WHERE l.municipality_id = m.id AND l.campaign_id = ?
-      ), 0) AS leaders_count
-    FROM coordinator_municipalities cm
-    JOIN municipalities m ON m.id = cm.municipality_id
-    WHERE cm.coordinator_id = ?
-    ORDER BY registrations_count DESC, m.name ASC
-  `).all(campaign.id, campaign.id, coordinator.id);
-
-  const totalRegs = munis.reduce((s, m) => s + Number(m.registrations_count || 0), 0);
-  const avg = munis.length ? totalRegs / munis.length : 0;
-
-  const municipalities = munis.map((m) => {
-    const regs = Number(m.registrations_count || 0);
-    const leadersCount = Number(m.leaders_count || 0);
-    const health = assessMunicipalityHealth(regs, leadersCount, avg);
-    const share_pct = totalRegs > 0 ? Math.round((regs / totalRegs) * 1000) / 10 : 0;
-    return { ...m, registrations_count: regs, leaders_count: leadersCount, health, share_pct };
-  });
-
-  const critical = municipalities.filter((m) => m.health.status === 'critical').length;
-  const attention = municipalities.filter((m) => m.health.status === 'attention').length;
-  const ok = municipalities.filter((m) => m.health.status === 'ok' || m.health.status === 'good').length;
-
-  let health;
-  if (municipalities.length === 0) {
-    health = { status: 'empty', label: 'Sem municípios', detail: 'Vincule municípios a este coordenador' };
-  } else if (critical > 0) {
-    health = { status: 'critical', label: 'Com falhas', detail: `${critical} município(s) em falha` };
-  } else if (attention > 0) {
-    health = { status: 'attention', label: 'Atenção', detail: `${attention} município(s) abaixo da média` };
-  } else {
-    health = { status: 'good', label: 'Tranquilo', detail: 'Municípios recebendo normalmente' };
-  }
-
-  return {
-    ...coordinator,
-    municipalities,
-    totals: {
-      municipalities: municipalities.length,
-      registrations: totalRegs,
-      leaders: municipalities.reduce((s, m) => s + m.leaders_count, 0),
-      critical,
-      attention,
-      ok,
-    },
-    health,
-  };
-}
-
 function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds) {
   const coord = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
     .get(coordinatorId, campaignId);
@@ -693,6 +605,15 @@ function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds
   const ids = [...new Set((municipalityIds || []).map(Number).filter((n) => Number.isFinite(n) && n > 0))];
   const prev = db.prepare('SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?')
     .all(coordinatorId);
+
+  const prevMetrics = {};
+  for (const p of prev) {
+    const row = db.prepare(`
+      SELECT vote_expectation, content_views_expected, content_views_actual, ig_comments, ig_reach, last_meta_sync
+      FROM coordinator_municipalities WHERE coordinator_id = ? AND municipality_id = ?
+    `).get(coordinatorId, p.municipality_id);
+    if (row) prevMetrics[p.municipality_id] = row;
+  }
 
   db.transaction(() => {
     for (const p of prev) {
@@ -720,13 +641,32 @@ function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds
           .run(o.coordinator_id, mid);
       }
 
-      db.prepare('INSERT INTO coordinator_municipalities (coordinator_id, municipality_id) VALUES (?, ?)')
-        .run(coordinatorId, mid);
+      const keep = prevMetrics[mid] || {};
+      db.prepare(`
+        INSERT INTO coordinator_municipalities (
+          coordinator_id, municipality_id,
+          vote_expectation, content_views_expected, content_views_actual,
+          ig_comments, ig_reach, last_meta_sync
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        coordinatorId,
+        mid,
+        keep.vote_expectation || 0,
+        keep.content_views_expected || 0,
+        keep.content_views_actual || 0,
+        keep.ig_comments || 0,
+        keep.ig_reach || 0,
+        keep.last_meta_sync || null,
+      );
       db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?').run(coord.name, mid);
     }
   })();
 
   return coord;
+}
+
+function detailFor(campaign, coordinator) {
+  return buildCoordinatorDetail(db, campaign, coordinator, getThresholds(db, campaign.id));
 }
 
 app.get('/api/campaigns/:slug/coordinators', (req, res) => {
@@ -737,15 +677,26 @@ app.get('/api/campaigns/:slug/coordinators', (req, res) => {
     SELECT * FROM coordinators WHERE campaign_id = ? ORDER BY name ASC
   `).all(campaign.id);
 
-  const coordinators = rows.map((c) => buildCoordinatorDetail(campaign, c));
+  const coordinators = rows.map((c) => detailFor(campaign, c));
   const summary = {
     total: coordinators.length,
     municipalities_assigned: coordinators.reduce((s, c) => s + c.totals.municipalities, 0),
     registrations: coordinators.reduce((s, c) => s + c.totals.registrations, 0),
+    vote_expectation: coordinators.reduce((s, c) => s + c.totals.vote_expectation, 0),
+    content_views_expected: coordinators.reduce((s, c) => s + c.totals.content_views_expected, 0),
+    content_views_actual: coordinators.reduce((s, c) => s + c.totals.content_views_actual, 0),
+    ig_comments: coordinators.reduce((s, c) => s + c.totals.ig_comments, 0),
     with_failures: coordinators.filter((c) => c.health.status === 'critical').length,
+    alarms: coordinators.reduce((s, c) => s + c.totals.alarms, 0),
   };
+  summary.vote_progress_pct = summary.vote_expectation
+    ? Math.round((summary.registrations / summary.vote_expectation) * 1000) / 10
+    : null;
+  summary.content_progress_pct = summary.content_views_expected
+    ? Math.round((summary.content_views_actual / summary.content_views_expected) * 1000) / 10
+    : null;
 
-  res.json({ coordinators, summary });
+  res.json({ coordinators, summary, meta: metaStatus() });
 });
 
 app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
@@ -756,7 +707,7 @@ app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
     .get(req.params.id, campaign.id);
   if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
-  res.json(buildCoordinatorDetail(campaign, coordinator));
+  res.json(detailFor(campaign, coordinator));
 });
 
 app.post('/api/campaigns/:slug/coordinators', (req, res) => {
@@ -784,7 +735,7 @@ app.post('/api/campaigns/:slug/coordinators', (req, res) => {
     setCoordinatorMunicipalities(campaign.id, coordinator.id, municipality_ids);
   }
 
-  res.status(201).json(buildCoordinatorDetail(campaign, coordinator));
+  res.status(201).json(detailFor(campaign, coordinator));
 });
 
 app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
@@ -820,7 +771,7 @@ app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
   }
 
   const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
-  res.json(buildCoordinatorDetail(campaign, updated));
+  res.json(detailFor(campaign, updated));
 });
 
 app.put('/api/campaigns/:slug/coordinators/:id/municipalities', (req, res) => {
@@ -835,7 +786,58 @@ app.put('/api/campaigns/:slug/coordinators/:id/municipalities', (req, res) => {
   if (!ok) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
   const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
-  res.json(buildCoordinatorDetail(campaign, updated));
+  res.json(detailFor(campaign, updated));
+});
+
+app.patch('/api/campaigns/:slug/coordinators/:id/municipalities/:muniId/metrics', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const link = db.prepare(`
+    SELECT * FROM coordinator_municipalities
+    WHERE coordinator_id = ? AND municipality_id = ?
+  `).get(coordinator.id, req.params.muniId);
+  if (!link) return res.status(404).json({ error: 'Município não vinculado a este coordenador' });
+
+  const vote_expectation = req.body.vote_expectation !== undefined
+    ? Math.max(0, Number(req.body.vote_expectation) || 0)
+    : link.vote_expectation;
+  const content_views_expected = req.body.content_views_expected !== undefined
+    ? Math.max(0, Number(req.body.content_views_expected) || 0)
+    : link.content_views_expected;
+  const content_views_actual = req.body.content_views_actual !== undefined
+    ? Math.max(0, Number(req.body.content_views_actual) || 0)
+    : link.content_views_actual;
+  const ig_comments = req.body.ig_comments !== undefined
+    ? Math.max(0, Number(req.body.ig_comments) || 0)
+    : link.ig_comments;
+  const ig_reach = req.body.ig_reach !== undefined
+    ? Math.max(0, Number(req.body.ig_reach) || 0)
+    : link.ig_reach;
+
+  db.prepare(`
+    UPDATE coordinator_municipalities SET
+      vote_expectation = ?,
+      content_views_expected = ?,
+      content_views_actual = ?,
+      ig_comments = ?,
+      ig_reach = ?
+    WHERE coordinator_id = ? AND municipality_id = ?
+  `).run(
+    vote_expectation,
+    content_views_expected,
+    content_views_actual,
+    ig_comments,
+    ig_reach,
+    coordinator.id,
+    req.params.muniId,
+  );
+
+  res.json(detailFor(campaign, coordinator));
 });
 
 app.delete('/api/campaigns/:slug/coordinators/:id', (req, res) => {
@@ -849,6 +851,141 @@ app.delete('/api/campaigns/:slug/coordinators/:id', (req, res) => {
   setCoordinatorMunicipalities(campaign.id, coordinator.id, []);
   db.prepare('DELETE FROM coordinators WHERE id = ?').run(coordinator.id);
   res.json({ ok: true });
+});
+
+/* ---------- Relatório + Meta + Assistente ---------- */
+app.get('/api/campaigns/:slug/report', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  res.json({ ...buildCampaignReport(db, campaign), meta: metaStatus() });
+});
+
+app.post('/api/campaigns/:slug/assistant', async (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  try {
+    const report = buildCampaignReport(db, campaign);
+    const briefing = await runAssistant(report);
+    res.json({
+      generated_at: new Date().toISOString(),
+      ...briefing,
+      report_summary: report.summary,
+      alarms_count: report.alarms.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Falha na assistente' });
+  }
+});
+
+app.get('/api/campaigns/:slug/meta/status', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const cfg = db.prepare('SELECT * FROM campaign_meta_config WHERE campaign_id = ?').get(campaign.id);
+  res.json({ ...metaStatus(), config: cfg || null });
+});
+
+app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  try {
+    const snapshot = await fetchInstagramSnapshot();
+    if (!snapshot.ok) {
+      return res.status(400).json({
+        error: snapshot.error || 'Não foi possível sincronizar Instagram',
+        meta: metaStatus(),
+      });
+    }
+
+    const links = db.prepare(`
+      SELECT cm.* FROM coordinator_municipalities cm
+      JOIN coordinators c ON c.id = cm.coordinator_id
+      WHERE c.campaign_id = ?
+    `).all(campaign.id);
+
+    const distributed = distributeIgTotals(links, snapshot.totals);
+    const now = new Date().toISOString();
+    const update = db.prepare(`
+      UPDATE coordinator_municipalities SET
+        ig_comments = ?,
+        ig_reach = ?,
+        content_views_actual = CASE
+          WHEN ? > content_views_actual THEN ?
+          ELSE content_views_actual
+        END,
+        last_meta_sync = ?
+      WHERE coordinator_id = ? AND municipality_id = ?
+    `);
+
+    db.transaction(() => {
+      for (const d of distributed) {
+        update.run(
+          d.ig_comments,
+          d.ig_reach,
+          d.content_views_actual,
+          d.content_views_actual,
+          now,
+          d.coordinator_id,
+          d.municipality_id,
+        );
+      }
+    })();
+
+    res.json({
+      ok: true,
+      synced_at: now,
+      totals: snapshot.totals,
+      municipalities_updated: distributed.length,
+      media_sample: (snapshot.media || []).slice(0, 5).map((m) => ({
+        id: m.id,
+        caption: (m.caption || '').slice(0, 120),
+        comments_count: m.comments_count,
+        like_count: m.like_count,
+        permalink: m.permalink,
+      })),
+      meta: metaStatus(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar Meta' });
+  }
+});
+
+app.put('/api/campaigns/:slug/meta/config', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const ig_username = req.body.ig_username || null;
+  const ig_user_id = req.body.ig_user_id || null;
+  const content_views_threshold = req.body.content_views_threshold != null
+    ? Number(req.body.content_views_threshold)
+    : 0.5;
+  const vote_progress_threshold = req.body.vote_progress_threshold != null
+    ? Number(req.body.vote_progress_threshold)
+    : 0.15;
+  const notes = req.body.notes || null;
+
+  db.prepare(`
+    INSERT INTO campaign_meta_config (
+      campaign_id, ig_user_id, ig_username, content_views_threshold, vote_progress_threshold, notes, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(campaign_id) DO UPDATE SET
+      ig_user_id = excluded.ig_user_id,
+      ig_username = excluded.ig_username,
+      content_views_threshold = excluded.content_views_threshold,
+      vote_progress_threshold = excluded.vote_progress_threshold,
+      notes = excluded.notes,
+      updated_at = datetime('now')
+  `).run(
+    campaign.id,
+    ig_user_id,
+    ig_username,
+    content_views_threshold,
+    vote_progress_threshold,
+    notes,
+  );
+
+  res.json(db.prepare('SELECT * FROM campaign_meta_config WHERE campaign_id = ?').get(campaign.id));
 });
 
 /* ---------- Municipalities list ---------- */

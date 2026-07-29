@@ -269,8 +269,9 @@ export default function AdminPage() {
             <p className="eyebrow">Território</p>
             <h3 style={{ margin: 0 }}>Coordenadores (ex.: Ogeda, Jurandir, Barbara)</h3>
             <p style={{ margin: '0.35rem 0 0' }}>
-              Cadastre o coordenador e marque os municípios dele. Depois, no painel da campanha,
-              clique no nome para ver proporção e saúde de cada município.
+              Cadastre o coordenador e marque os municípios dele. Depois, na aba Coordenadores da campanha,
+              defina expectativa de voto e meta de conteúdo — o sistema gera alarmes e o Relatório monta
+              a chamada de atenção.
             </p>
           </div>
 

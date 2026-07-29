@@ -62,4 +62,15 @@ export const api = {
     }),
   deleteCoordinator: (slug, id) =>
     request(`/api/campaigns/${slug}/coordinators/${id}`, { method: 'DELETE' }),
+  updateCoordinatorMunicipalityMetrics: (slug, coordId, muniId, body) =>
+    request(`/api/campaigns/${slug}/coordinators/${coordId}/municipalities/${muniId}/metrics`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  getReport: (slug) => request(`/api/campaigns/${slug}/report`),
+  runAssistant: (slug) => request(`/api/campaigns/${slug}/assistant`, { method: 'POST', body: '{}' }),
+  getMetaStatus: (slug) => request(`/api/campaigns/${slug}/meta/status`),
+  syncMeta: (slug) => request(`/api/campaigns/${slug}/meta/sync`, { method: 'POST', body: '{}' }),
+  updateMetaConfig: (slug, body) =>
+    request(`/api/campaigns/${slug}/meta/config`, { method: 'PUT', body: JSON.stringify(body) }),
 };

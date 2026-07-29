@@ -71,3 +71,38 @@ Abra: http://localhost:3000
 
 - Admin: `/admin`
 - Mobilização: links, eventos/QR, missões, cadastros
+- Coordenadores: expectativa de voto, meta de conteúdo e alarmes
+- Relatório: briefing + folha de ligação + Atlas Assistente
+
+---
+
+## Integrações (opcional)
+
+### Meta / Instagram Graph API
+
+No painel da campanha (aba Coordenadores) existe o botão **Sincronizar Instagram (Meta)**.
+
+Variáveis de ambiente no Render / Docker:
+
+```bash
+META_ACCESS_TOKEN=EAAB...
+META_IG_USER_ID=17891...
+META_GRAPH_VERSION=v21.0
+```
+
+Sem essas variáveis o sistema funciona em **modo manual**: você informa views, reach e comentários por município na aba Coordenadores.
+
+> O Instagram não entrega geolocalização municipal nativa sem Ads. O sync distribui o engajamento da conta proporcionalmente às metas de views de cada município.
+
+### Atlas Assistente (IA)
+
+A aba **Relatório** gera um briefing local automaticamente.
+
+Para enriquecer com OpenAI:
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Sem a chave, a assistente local (regras) continua funcionando.

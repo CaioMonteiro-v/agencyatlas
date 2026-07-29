@@ -232,6 +232,12 @@ function initSchema(db) {
     CREATE TABLE IF NOT EXISTS coordinator_municipalities (
       coordinator_id INTEGER NOT NULL,
       municipality_id INTEGER NOT NULL,
+      vote_expectation INTEGER DEFAULT 0,
+      content_views_expected INTEGER DEFAULT 0,
+      content_views_actual INTEGER DEFAULT 0,
+      ig_comments INTEGER DEFAULT 0,
+      ig_reach INTEGER DEFAULT 0,
+      last_meta_sync TEXT,
       PRIMARY KEY (coordinator_id, municipality_id),
       FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE CASCADE,
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
@@ -273,6 +279,8 @@ function getDb() {
       const db = createApi(rawDb);
       try { rawDb.run('PRAGMA foreign_keys = ON'); } catch (_) { /* ignore */ }
       initSchema(db);
+      const { migrateAnalyticsSchema } = require('./migrate');
+      migrateAnalyticsSchema(db);
       return db;
     })();
   }

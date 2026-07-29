@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
-import { Avatar, EmptyState } from '../components/Ui';
+import { Avatar, EmptyState, Toast } from '../components/Ui';
 
 function HealthPill({ health }) {
   if (!health) return null;
@@ -12,12 +12,36 @@ function HealthPill({ health }) {
   );
 }
 
+function AlarmBanner({ alarms }) {
+  if (!alarms?.length) return null;
+  return (
+    <div className="alarm-stack">
+      {alarms.map((a, idx) => (
+        <div key={`${a.type}-${idx}`} className={`alarm-banner alarm-banner--${a.severity}`}>
+          <strong>{a.severity === 'critical' ? 'Alarme' : 'Atenção'}</strong>
+          <span>{a.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CoordinatorsPage() {
   const { campaign } = useOutletContext();
   const [data, setData] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
+  const [toast, setToast] = useState('');
+  const [editingMuni, setEditingMuni] = useState(null);
+  const [metricsForm, setMetricsForm] = useState({
+    vote_expectation: 0,
+    content_views_expected: 0,
+    content_views_actual: 0,
+    ig_comments: 0,
+    ig_reach: 0,
+  });
+  const [syncing, setSyncing] = useState(false);
 
   async function load() {
     const res = await api.getCoordinators(campaign.slug);
@@ -41,15 +65,64 @@ export default function CoordinatorsPage() {
     if (!selected) return [];
     if (filter === 'all') return selected.municipalities;
     if (filter === 'fail') {
-      return selected.municipalities.filter((m) => m.health.status === 'critical');
+      return selected.municipalities.filter((m) => m.alarm_level === 'critical');
     }
     if (filter === 'attention') {
-      return selected.municipalities.filter((m) => m.health.status === 'attention');
+      return selected.municipalities.filter((m) => m.alarm_level === 'attention');
+    }
+    if (filter === 'alarms') {
+      return selected.municipalities.filter((m) => m.alarms?.length);
     }
     return selected.municipalities.filter(
-      (m) => m.health.status === 'ok' || m.health.status === 'good',
+      (m) => m.alarm_level === 'ok' || m.alarm_level === 'good',
     );
   }, [selected, filter]);
+
+  function openMetrics(m) {
+    setEditingMuni(m.id);
+    setMetricsForm({
+      vote_expectation: m.vote_expectation || 0,
+      content_views_expected: m.content_views_expected || 0,
+      content_views_actual: m.content_views_actual || 0,
+      ig_comments: m.ig_comments || 0,
+      ig_reach: m.ig_reach || 0,
+    });
+  }
+
+  async function saveMetrics(e) {
+    e.preventDefault();
+    if (!selected || !editingMuni) return;
+    try {
+      const updated = await api.updateCoordinatorMunicipalityMetrics(
+        campaign.slug,
+        selected.id,
+        editingMuni,
+        metricsForm,
+      );
+      setData((prev) => ({
+        ...prev,
+        coordinators: prev.coordinators.map((c) => (c.id === updated.id ? updated : c)),
+      }));
+      setEditingMuni(null);
+      setToast('Metas e métricas atualizadas');
+      await load();
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  async function syncMeta() {
+    setSyncing(true);
+    try {
+      const res = await api.syncMeta(campaign.slug);
+      setToast(`Instagram sincronizado · ${res.municipalities_updated} municípios atualizados`);
+      await load();
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (error) {
     return (
@@ -73,9 +146,24 @@ export default function CoordinatorsPage() {
         <p className="eyebrow">Coordenação territorial</p>
         <h2>Coordenadores</h2>
         <p>
-          Clique em um coordenador para ver os municípios, a proporção de cadastros
-          e se a recepção está tranquila ou com falha.
+          Totais, expectativa de voto, alcance de conteúdo e alarmes por município.
+          Clique em um coordenador para abrir o painel completo.
         </p>
+        <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.55rem' }}>
+          <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/relatorio`}>
+            Abrir Relatório
+          </Link>
+          <button className="btn btn-accent btn-sm" type="button" disabled={syncing} onClick={syncMeta}>
+            {syncing ? 'Sincronizando…' : 'Sincronizar Instagram (Meta)'}
+          </button>
+        </div>
+        {data.meta && (
+          <p className="meta-hint">
+            Meta API: <strong>{data.meta.mode === 'live' ? 'conectada' : 'modo manual'}</strong>
+            {' — '}
+            {data.meta.hint}
+          </p>
+        )}
       </div>
 
       <div className="stats-row" style={{ marginBottom: '1.25rem' }}>
@@ -85,15 +173,19 @@ export default function CoordinatorsPage() {
         </div>
         <div className="stat">
           <strong>{data.summary.municipalities_assigned}</strong>
-          <span>Municípios vinculados</span>
+          <span>Municípios</span>
         </div>
         <div className="stat">
-          <strong>{data.summary.registrations}</strong>
-          <span>Cadastros na coordenação</span>
+          <strong>
+            {data.summary.vote_progress_pct != null ? `${data.summary.vote_progress_pct}%` : '—'}
+          </strong>
+          <span>Expectativa de voto</span>
         </div>
         <div className="stat">
-          <strong>{data.summary.with_failures}</strong>
-          <span>Com falhas</span>
+          <strong className={data.summary.alarms > 0 ? 'stat-alarm' : undefined}>
+            {data.summary.alarms || 0}
+          </strong>
+          <span>Alarmes ativos</span>
         </div>
       </div>
 
@@ -101,7 +193,7 @@ export default function CoordinatorsPage() {
         <section className="panel panel-pad">
           <EmptyState>
             Nenhum coordenador cadastrado ainda. Cadastre em{' '}
-            <a href="/admin">/admin</a> (ex.: Ogeda, Jurandir, Barbara) e vincule os municípios.
+            <a href="/admin">/admin</a> e defina expectativa de voto + meta de conteúdo.
           </EmptyState>
         </section>
       ) : (
@@ -114,19 +206,28 @@ export default function CoordinatorsPage() {
                 <button
                   key={coord.id}
                   type="button"
-                  className={`coord-card ${selectedId === coord.id ? 'is-active' : ''}`}
+                  className={`coord-card ${selectedId === coord.id ? 'is-active' : ''} ${
+                    coord.totals.alarms > 0 ? 'has-alarm' : ''
+                  }`}
                   onClick={() => {
                     setSelectedId(coord.id);
                     setFilter('all');
+                    setEditingMuni(null);
                   }}
                 >
                   <Avatar name={coord.name} photo={coord.photo_url} size={44} />
                   <div className="coord-card__body">
-                    <strong>{coord.name}</strong>
+                    <strong>
+                      {coord.name}
+                      {coord.totals.alarms > 0 && <span className="alarm-dot" title="Há alarmes" />}
+                    </strong>
                     <span>
-                      {coord.totals.municipalities} município{coord.totals.municipalities === 1 ? '' : 's'}
+                      {coord.totals.municipalities} mun.
                       {' · '}
-                      {coord.totals.registrations} cadastro{coord.totals.registrations === 1 ? '' : 's'}
+                      {coord.totals.registrations} cad.
+                      {coord.totals.vote_expectation
+                        ? ` · meta voto ${coord.totals.vote_progress_pct ?? 0}%`
+                        : ''}
                     </span>
                     <HealthPill health={coord.health} />
                   </div>
@@ -164,73 +265,148 @@ export default function CoordinatorsPage() {
                     <span>Cadastros</span>
                   </div>
                   <div>
-                    <strong>{selected.totals.leaders}</strong>
-                    <span>Lideranças</span>
+                    <strong>
+                      {selected.totals.vote_expectation
+                        ? `${selected.totals.vote_progress_pct ?? 0}%`
+                        : '—'}
+                    </strong>
+                    <span>Expectativa voto</span>
                   </div>
                   <div>
-                    <strong>{selected.totals.critical}</strong>
-                    <span>Em falha</span>
+                    <strong>
+                      {selected.totals.content_views_expected
+                        ? `${selected.totals.content_progress_pct ?? 0}%`
+                        : '—'}
+                    </strong>
+                    <span>Conteúdo visto</span>
+                  </div>
+                </div>
+
+                <div className="coord-mini-stats" style={{ marginTop: 0 }}>
+                  <div>
+                    <strong>{selected.totals.vote_expectation || 0}</strong>
+                    <span>Meta de votos</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.content_views_actual}/{selected.totals.content_views_expected || 0}</strong>
+                    <span>Views conteúdo</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.ig_comments || 0}</strong>
+                    <span>Comentários IG</span>
+                  </div>
+                  <div>
+                    <strong className={selected.totals.alarms ? 'stat-alarm' : undefined}>
+                      {selected.totals.alarms}
+                    </strong>
+                    <span>Alarmes</span>
                   </div>
                 </div>
 
                 <div className="coord-filters">
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-soft'}`}
-                    onClick={() => setFilter('all')}
-                  >
-                    Todos
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${filter === 'ok' ? 'btn-primary' : 'btn-soft'}`}
-                    onClick={() => setFilter('ok')}
-                  >
-                    Tranquilos
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${filter === 'attention' ? 'btn-primary' : 'btn-soft'}`}
-                    onClick={() => setFilter('attention')}
-                  >
-                    Atenção
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${filter === 'fail' ? 'btn-primary' : 'btn-soft'}`}
-                    onClick={() => setFilter('fail')}
-                  >
-                    Com falha
-                  </button>
+                  <button type="button" className={`btn btn-sm ${filter === 'all' ? 'btn-primary' : 'btn-soft'}`} onClick={() => setFilter('all')}>Todos</button>
+                  <button type="button" className={`btn btn-sm ${filter === 'alarms' ? 'btn-primary' : 'btn-soft'}`} onClick={() => setFilter('alarms')}>Com alarme</button>
+                  <button type="button" className={`btn btn-sm ${filter === 'ok' ? 'btn-primary' : 'btn-soft'}`} onClick={() => setFilter('ok')}>Tranquilos</button>
+                  <button type="button" className={`btn btn-sm ${filter === 'attention' ? 'btn-primary' : 'btn-soft'}`} onClick={() => setFilter('attention')}>Atenção</button>
+                  <button type="button" className={`btn btn-sm ${filter === 'fail' ? 'btn-primary' : 'btn-soft'}`} onClick={() => setFilter('fail')}>Crítico</button>
                 </div>
 
                 {!selected.municipalities.length ? (
-                  <EmptyState>
-                    Este coordenador ainda não tem municípios. Vincule em /admin.
-                  </EmptyState>
+                  <EmptyState>Este coordenador ainda não tem municípios. Vincule em /admin.</EmptyState>
                 ) : !filteredMunicipalities.length ? (
                   <EmptyState>Nenhum município neste filtro.</EmptyState>
                 ) : (
                   <div className="muni-health-list">
                     {filteredMunicipalities.map((m) => (
-                      <article key={m.id} className={`muni-health muni-health--${m.health.status}`}>
+                      <article key={m.id} className={`muni-health muni-health--${m.alarm_level || m.health.status}`}>
                         <div className="muni-health__top">
                           <div>
-                            <strong>{m.name}</strong>
+                            <strong>
+                              {m.name}
+                              {m.alarms?.length > 0 && <span className="alarm-dot" />}
+                            </strong>
                             <p>{m.health.detail}</p>
                           </div>
-                          <HealthPill health={m.health} />
+                          <HealthPill health={{ status: m.alarm_level || m.health.status, label: m.health.label }} />
                         </div>
+
+                        <AlarmBanner alarms={m.alarms} />
 
                         <div className="muni-health__meta">
                           <span>{m.registrations_count} cadastros</span>
                           <span>{m.leaders_count} lideranças</span>
                           <span>{m.share_pct}% da coordenação</span>
+                          <span>Voto: {m.vote_progress_pct != null ? `${m.vote_progress_pct}%` : 'sem meta'}</span>
+                          <span>Conteúdo: {m.content_progress_pct != null ? `${m.content_progress_pct}%` : 'sem meta'}</span>
+                          <span>IG: {m.ig_comments} coment. · {m.ig_reach} reach</span>
                         </div>
 
                         <div className="progress-bar" aria-hidden="true">
-                          <span style={{ width: `${Math.min(100, m.share_pct || 0)}%` }} />
+                          <span style={{ width: `${Math.min(100, m.content_progress_pct || m.share_pct || 0)}%` }} />
                         </div>
+
+                        {editingMuni === m.id ? (
+                          <form className="metrics-form" onSubmit={saveMetrics}>
+                            <label>
+                              Expectativa de voto
+                              <input
+                                className="input"
+                                type="number"
+                                min="0"
+                                value={metricsForm.vote_expectation}
+                                onChange={(e) => setMetricsForm({ ...metricsForm, vote_expectation: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label>
+                              Meta de views
+                              <input
+                                className="input"
+                                type="number"
+                                min="0"
+                                value={metricsForm.content_views_expected}
+                                onChange={(e) => setMetricsForm({ ...metricsForm, content_views_expected: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label>
+                              Views reais
+                              <input
+                                className="input"
+                                type="number"
+                                min="0"
+                                value={metricsForm.content_views_actual}
+                                onChange={(e) => setMetricsForm({ ...metricsForm, content_views_actual: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label>
+                              Comentários IG
+                              <input
+                                className="input"
+                                type="number"
+                                min="0"
+                                value={metricsForm.ig_comments}
+                                onChange={(e) => setMetricsForm({ ...metricsForm, ig_comments: Number(e.target.value) })}
+                              />
+                            </label>
+                            <label>
+                              Reach IG
+                              <input
+                                className="input"
+                                type="number"
+                                min="0"
+                                value={metricsForm.ig_reach}
+                                onChange={(e) => setMetricsForm({ ...metricsForm, ig_reach: Number(e.target.value) })}
+                              />
+                            </label>
+                            <div style={{ display: 'flex', gap: '0.45rem', gridColumn: '1 / -1' }}>
+                              <button className="btn btn-primary btn-sm" type="submit">Salvar metas</button>
+                              <button className="btn btn-soft btn-sm" type="button" onClick={() => setEditingMuni(null)}>Cancelar</button>
+                            </div>
+                          </form>
+                        ) : (
+                          <button className="btn btn-soft btn-sm" type="button" style={{ marginTop: '0.65rem' }} onClick={() => openMetrics(m)}>
+                            Editar expectativa / conteúdo / IG
+                          </button>
+                        )}
                       </article>
                     ))}
                   </div>
@@ -240,6 +416,7 @@ export default function CoordinatorsPage() {
           </section>
         </div>
       )}
+      <Toast message={toast} onClose={() => setToast('')} />
     </div>
   );
 }
