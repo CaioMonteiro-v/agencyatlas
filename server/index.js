@@ -46,7 +46,11 @@ function leaderScoreSql() {
 
 /* ---------- Agency / Dashboard ---------- */
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'atlas-agency' });
+  res.json({
+    ok: true,
+    service: 'atlas-agency',
+    database: db?.dialect || (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL ? 'postgres' : 'sqlite'),
+  });
 });
 
 app.get('/api/agency/summary', (_req, res) => {

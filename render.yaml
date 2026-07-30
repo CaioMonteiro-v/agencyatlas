@@ -12,3 +12,5 @@ services:
         value: production
       - key: NODE_VERSION
         value: "20.18.1"
+      - key: DATABASE_URL
+        sync: false

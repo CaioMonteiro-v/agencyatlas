@@ -38,10 +38,9 @@ export default function MobilizationPage() {
       </div>
 
       <div className="persist-banner" role="status">
-        <strong>Atenção (Render free):</strong> cadastros e eventos ficam em SQLite no servidor.
-        Em redeploy ou quando o serviço “dorme” e recria o disco, os dados podem sumir
-        (ex.: Bianca / eventos de ontem). Use <em>Baixar backup</em> com frequência e,
-        para produção, configure disco persistente no Render (plano pago) — veja DEPLOY.md.
+        <strong>Persistência:</strong> no Render free o SQLite pode apagar dados no redeploy.
+        Configure <code>DATABASE_URL</code> do <strong>Supabase</strong> (veja SUPABASE.md) para não perder
+        cadastros/eventos. Enquanto isso, use <em>Baixar backup</em> com frequência.
       </div>
 
       <div className="stack">

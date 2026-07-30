@@ -66,17 +66,25 @@ Abra: http://localhost:3000
 - App pode “dormir” sem acesso (cold start de 20–60s)
 - **Dados do SQLite RESETAM** quando o container é recriado (redeploy / sleep do free)
 - Por isso cadastros e eventos podem “sumir” (ex.: Bianca, eventos de ontem)
-- Mitigações:
-  1. Use **Baixar backup dos dados** na aba Mobilização com frequência
-  2. No Render (plano pago): adicione um **Persistent Disk** montado em `/app/server/data`
-  3. Para produção séria: Postgres (Neon) + plano pago
 
-### Disco persistente no Render (recomendado)
-1. Serviço `agencyatlas-1` → **Disks**
-2. Add Disk → mount path: `/app/server/data`
+### Solução recomendada: Supabase (Postgres)
+
+1. Crie um projeto em [https://supabase.com](https://supabase.com)
+2. Vá em **Project Settings → Database**
+3. Copie a **Connection string** (URI) — modo **Session** ou **URI**
+   - Ex.: `postgresql://postgres.[ref]:[SENHA]@aws-0-....supabase.com:5432/postgres`
+4. No Render → Environment, adicione:
+   - `DATABASE_URL` = essa URI
+5. **Manual Deploy**
+
+Com `DATABASE_URL` o Atlas usa Postgres/Supabase automaticamente. Os dados **não somem** no redeploy.
+
+Sem `DATABASE_URL`, continua SQLite local (só para desenvolvimento).
+
+### Alternativa: disco persistente no Render
+1. Serviço → **Disks** (plano pago)
+2. Mount path: `/app/server/data`
 3. Redeploy
-
-Sem disco, cada deploy novo começa banco “limpo” (só campanha + 142 municípios do seed).
 
 ## Alimentar o sistema
 

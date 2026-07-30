@@ -1,4 +1,5 @@
 function ensureColumn(db, table, column, definition) {
+  if (db.dialect === 'postgres') return;
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
   if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
@@ -6,13 +7,14 @@ function ensureColumn(db, table, column, definition) {
 }
 
 function migrateAnalyticsSchema(db) {
+  if (db.dialect === 'postgres') return;
+
   ensureColumn(db, 'coordinator_municipalities', 'vote_expectation', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'content_views_expected', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'content_views_actual', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'ig_comments', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'ig_reach', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'last_meta_sync', 'TEXT');
-
   ensureColumn(db, 'events', 'organizer_name', 'TEXT');
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');

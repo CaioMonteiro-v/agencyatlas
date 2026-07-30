@@ -1,6 +1,7 @@
 const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
+const { toPositional } = require('./sql-utils');
 
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
@@ -14,25 +15,7 @@ function persist(rawDb) {
   fs.writeFileSync(dbPath, Buffer.from(data));
 }
 
-function toPositional(sql, params) {
-  if (
-    params.length === 1 &&
-    params[0] &&
-    typeof params[0] === 'object' &&
-    !Array.isArray(params[0])
-  ) {
-    const obj = params[0];
-    const values = [];
-    const positionalSql = sql.replace(/[@:$]([a-zA-Z_][\w]*)/g, (_, name) => {
-      values.push(obj[name]);
-      return '?';
-    });
-    return { sql: positionalSql, values };
-  }
-  return { sql, values: params };
-}
-
-function createApi(rawDb) {
+function createSqlJsApi(rawDb) {
   let dirty = false;
   let inTx = false;
 
@@ -81,6 +64,7 @@ function createApi(rawDb) {
   }
 
   return {
+    dialect: 'sqlite',
     prepare,
     exec(sql) {
       rawDb.exec(sql);
@@ -109,7 +93,7 @@ function createApi(rawDb) {
   };
 }
 
-function initSchema(db) {
+function initSqliteSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -260,16 +244,22 @@ let dbPromise;
 function getDb() {
   if (!dbPromise) {
     dbPromise = (async () => {
+      const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+      if (databaseUrl) {
+        const { createPgDb } = require('./pg');
+        const db = createPgDb(databaseUrl);
+        db.initSchema();
+        console.log('Banco: Postgres/Supabase conectado via DATABASE_URL');
+        return db;
+      }
+
       const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm');
-      const SQL = await initSqlJs({
-        locateFile: () => wasmPath,
-      });
+      const SQL = await initSqlJs({ locateFile: () => wasmPath });
 
       let rawDb;
       if (fs.existsSync(dbPath)) {
         try {
           rawDb = new SQL.Database(fs.readFileSync(dbPath));
-          // sanity check
           rawDb.exec('SELECT 1');
         } catch (err) {
           console.warn('Banco anterior incompatível. Recriando...', err.message);
@@ -279,11 +269,12 @@ function getDb() {
         rawDb = new SQL.Database();
       }
 
-      const db = createApi(rawDb);
+      const db = createSqlJsApi(rawDb);
       try { rawDb.run('PRAGMA foreign_keys = ON'); } catch (_) { /* ignore */ }
-      initSchema(db);
+      initSqliteSchema(db);
       const { migrateAnalyticsSchema } = require('./migrate');
       migrateAnalyticsSchema(db);
+      console.log('Banco: SQLite local — configure DATABASE_URL (Supabase) para persistir em produção');
       return db;
     })();
   }
