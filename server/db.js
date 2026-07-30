@@ -165,8 +165,11 @@ function initSqliteSchema(db) {
       event_time TEXT,
       slug TEXT UNIQUE NOT NULL,
       organizer_name TEXT,
+      organizer_role TEXT DEFAULT 'mobilizer',
+      coordinator_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS event_registrations (
@@ -249,6 +252,8 @@ function getDb() {
         const { createPgDb } = require('./pg');
         const db = createPgDb(databaseUrl);
         db.initSchema();
+        const { migrateAnalyticsSchema } = require('./migrate');
+        migrateAnalyticsSchema(db);
         console.log('Banco: Postgres/Supabase conectado via DATABASE_URL');
         return db;
       }

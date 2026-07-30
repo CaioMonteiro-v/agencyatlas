@@ -20,8 +20,26 @@ function isLocalUrl(url) {
   }
 }
 
+function emptyForm() {
+  return {
+    name: '',
+    description: '',
+    location: '',
+    event_date: '',
+    event_time: '',
+    organizer_role: 'mobilizer',
+    organizer_name: '',
+    coordinator_id: '',
+  };
+}
+
+function roleLabel(role) {
+  return role === 'coordinator' ? 'Coordenador' : 'Mobilizador';
+}
+
 export default function EventsPanel({ campaignSlug }) {
   const [events, setEvents] = useState([]);
+  const [coordinators, setCoordinators] = useState([]);
   const [qrMap, setQrMap] = useState({});
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -29,21 +47,18 @@ export default function EventsPanel({ campaignSlug }) {
   const [attendeesFor, setAttendeesFor] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    location: '',
-    event_date: '',
-    event_time: '',
-    organizer_name: '',
-  });
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
 
   async function load(base = publicBase) {
     try {
       setError('');
-      const list = await api.getEvents(campaignSlug);
+      const [list, coordsRes] = await Promise.all([
+        api.getEvents(campaignSlug),
+        api.getCoordinators(campaignSlug).catch(() => ({ coordinators: [] })),
+      ]);
       setEvents(list);
+      setCoordinators(coordsRes?.coordinators || []);
       const origin = (base || window.location.origin).replace(/\/$/, '');
       const entries = await Promise.all(
         list.map(async (event) => {
@@ -81,19 +96,38 @@ export default function EventsPanel({ campaignSlug }) {
     setTimeout(() => setToast(''), 2500);
   }
 
+  function setRole(role) {
+    setForm((prev) => ({
+      ...prev,
+      organizer_role: role,
+      organizer_name: role === 'mobilizer' ? prev.organizer_name : '',
+      coordinator_id: role === 'coordinator' ? prev.coordinator_id : '',
+    }));
+  }
+
   async function onCreate(e) {
     e.preventDefault();
+    if (form.organizer_role === 'coordinator' && !form.coordinator_id) {
+      setToast('Selecione um coordenador cadastrado');
+      return;
+    }
+    if (form.organizer_role === 'mobilizer' && !form.organizer_name.trim()) {
+      setToast('Informe o nome do mobilizador');
+      return;
+    }
     try {
-      await api.createEvent(campaignSlug, form);
-      setShowForm(false);
-      setForm({
-        name: '',
-        description: '',
-        location: '',
-        event_date: '',
-        event_time: '',
-        organizer_name: '',
+      await api.createEvent(campaignSlug, {
+        name: form.name,
+        description: form.description,
+        location: form.location,
+        event_date: form.event_date,
+        event_time: form.event_time,
+        organizer_role: form.organizer_role,
+        organizer_name: form.organizer_name,
+        coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
       });
+      setShowForm(false);
+      setForm(emptyForm());
       setToast('Evento criado');
       load(publicBase);
     } catch (err) {
@@ -164,16 +198,67 @@ export default function EventsPanel({ campaignSlug }) {
             Local
             <input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           </label>
-          <label>
-            Organizador / coordenador responsável
-            <input
-              className="input"
-              required
-              value={form.organizer_name}
-              onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
-              placeholder="Ex.: Bianca Silvinio Magalhães"
-            />
-          </label>
+
+          <div>
+            <strong style={{ display: 'block', marginBottom: 8 }}>Tipo do responsável</strong>
+            <div className="chip-group">
+              <button
+                type="button"
+                className={`chip ${form.organizer_role === 'mobilizer' ? 'active' : ''}`}
+                onClick={() => setRole('mobilizer')}
+              >
+                Mobilizador
+              </button>
+              <button
+                type="button"
+                className={`chip ${form.organizer_role === 'coordinator' ? 'active' : ''}`}
+                onClick={() => setRole('coordinator')}
+              >
+                Coordenador
+              </button>
+            </div>
+            <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
+              {form.organizer_role === 'coordinator'
+                ? 'Coordenador precisa estar cadastrado no sistema (aba Admin / Coordenadores).'
+                : 'Mobilizador não precisa estar cadastrado — digite o nome livremente.'}
+            </p>
+          </div>
+
+          {form.organizer_role === 'mobilizer' ? (
+            <label>
+              Nome do mobilizador
+              <input
+                className="input"
+                required
+                value={form.organizer_name}
+                onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
+                placeholder="Ex.: Bianca Silvinio Magalhães"
+              />
+            </label>
+          ) : (
+            <label>
+              Coordenador responsável
+              <select
+                className="select"
+                required
+                value={form.coordinator_id}
+                onChange={(e) => setForm({ ...form, coordinator_id: e.target.value })}
+              >
+                <option value="">Selecione um coordenador cadastrado</option>
+                {coordinators.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {form.organizer_role === 'coordinator' && !coordinators.length && (
+            <p style={{ margin: 0, fontSize: '0.9rem', color: '#8a5a64' }}>
+              Nenhum coordenador cadastrado. Cadastre em{' '}
+              <Link to="/admin">Admin</Link> antes de vincular o evento.
+            </p>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <label>
               Data
@@ -204,7 +289,8 @@ export default function EventsPanel({ campaignSlug }) {
                 <p style={{ marginBottom: 0 }}>{event.location}</p>
                 {event.organizer_name && (
                   <p style={{ marginBottom: 0 }}>
-                    <strong>Organizador:</strong> {event.organizer_name}
+                    <strong>{roleLabel(event.organizer_role)}:</strong> {event.organizer_name}
+                    {event.organizer_role === 'coordinator' ? ' · vinculado' : ''}
                   </p>
                 )}
                 <p>{event.description}</p>

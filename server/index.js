@@ -463,14 +463,47 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const { name, description, location, event_date, event_time, organizer_name } = req.body;
+  const {
+    name,
+    description,
+    location,
+    event_date,
+    event_time,
+    organizer_name,
+    organizer_role,
+    coordinator_id,
+  } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Nome e data são obrigatórios' });
+
+  const role = organizer_role === 'coordinator' ? 'coordinator' : 'mobilizer';
+  let resolvedName = organizer_name ? String(organizer_name).trim() : '';
+  let resolvedCoordinatorId = null;
+
+  if (role === 'coordinator') {
+    const cid = Number(coordinator_id);
+    if (!cid) {
+      return res.status(400).json({ error: 'Selecione um coordenador cadastrado' });
+    }
+    const coord = db.prepare(
+      'SELECT id, name FROM coordinators WHERE id = ? AND campaign_id = ?'
+    ).get(cid, campaign.id);
+    if (!coord) {
+      return res.status(400).json({ error: 'Coordenador não encontrado nesta campanha' });
+    }
+    resolvedCoordinatorId = coord.id;
+    resolvedName = coord.name;
+  } else if (!resolvedName) {
+    return res.status(400).json({ error: 'Informe o nome do mobilizador' });
+  }
 
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
 
   const result = db.prepare(`
-    INSERT INTO events (campaign_id, name, description, location, event_date, event_time, slug, organizer_name)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO events (
+      campaign_id, name, description, location, event_date, event_time,
+      slug, organizer_name, organizer_role, coordinator_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     name,
@@ -479,7 +512,9 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     event_date,
     event_time || '',
     slug,
-    organizer_name ? String(organizer_name).trim() : null,
+    resolvedName,
+    role,
+    resolvedCoordinatorId,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid));

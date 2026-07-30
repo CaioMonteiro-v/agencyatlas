@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS events (
   event_time TEXT,
   slug TEXT UNIQUE NOT NULL,
   organizer_name TEXT,
+  organizer_role TEXT DEFAULT 'mobilizer',
+  coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
