@@ -28,16 +28,30 @@ URL final algo como:
 
 ---
 
-## Opção 2 — Render com Docker
+## Opção 2 — Render (Node)
 
-Se quiser continuar no Render:
+1. Web Service → repo `agencyatlas`
+2. **Branch: `cursor/atlas-agency-platform-b8e1`** (não use `main` antigo — lá o build quebra e falta o app atual)
+3. Build: `npm install && npm run build`
+4. Start: `npm start`
+5. Environment: `DATABASE_URL` (Supabase) + `NODE_VERSION=20.18.1`
+
+Se o log mostrar `Checking out commit ... in branch main`, troque em **Settings → Build & Deploy → Branch**.
+
+Runtime **Docker** também funciona (ver abaixo).
+
+---
+
+## Opção 2b — Render com Docker
+
+Se quiser continuar no Render com Docker:
 
 1. New Web Service → repo `agencyatlas`
 2. Runtime: **Docker**
 3. Branch: `cursor/atlas-agency-platform-b8e1`
 4. Dockerfile path: `./Dockerfile`
 5. Create Web Service
-
+6. Environment: `DATABASE_URL` (Supabase)
 ---
 
 ## Opção 3 — Fly.io
