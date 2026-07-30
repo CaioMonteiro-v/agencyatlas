@@ -75,7 +75,11 @@ Abra: http://localhost:3000
    - Ex.: `postgresql://postgres.[ref]:[SENHA]@aws-0-....supabase.com:5432/postgres`
 4. No Render → Environment, adicione:
    - `DATABASE_URL` = essa URI
-5. **Manual Deploy**
+5. **Prefira a connection string do pooler (Session)** se a Direct falhar:
+   - No Supabase → **Connect → Connection pooling → Session**
+   - Formato típico:
+     `postgresql://postgres.[PROJECT]:[SENHA]@aws-0-....pooler.supabase.com:5432/postgres`
+6. **Manual Deploy**
 
 Com `DATABASE_URL` o Atlas usa Postgres/Supabase automaticamente. Os dados **não somem** no redeploy.
 
