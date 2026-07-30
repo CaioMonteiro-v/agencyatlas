@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import HeatMapMT from '../components/HeatMapMT';
 import RankingPanel from '../components/RankingPanel';
@@ -8,6 +9,14 @@ import MissionsPanel from '../components/MissionsPanel';
 
 export default function MobilizationPage() {
   const { campaign } = useOutletContext();
+  const [dbKind, setDbKind] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((h) => setDbKind(h.database || 'unknown'))
+      .catch(() => setDbKind('unknown'));
+  }, []);
 
   function downloadBackup() {
     window.location.href = `/api/campaigns/${campaign.slug}/backup`;
@@ -37,11 +46,17 @@ export default function MobilizationPage() {
         </div>
       </div>
 
-      <div className="persist-banner" role="status">
-        <strong>Persistência:</strong> no Render free o SQLite pode apagar dados no redeploy.
-        Configure <code>DATABASE_URL</code> do <strong>Supabase</strong> (veja SUPABASE.md) para não perder
-        cadastros/eventos. Enquanto isso, use <em>Baixar backup</em> com frequência.
-      </div>
+      {dbKind === 'postgres' ? (
+        <div className="persist-banner persist-banner--ok" role="status">
+          <strong>Banco conectado:</strong> Supabase/Postgres ativo. Cadastros e eventos
+          permanecem após redeploy.
+        </div>
+      ) : dbKind === 'sqlite' ? (
+        <div className="persist-banner" role="status">
+          <strong>Persistência:</strong> usando SQLite local. No Render free os dados podem
+          sumir no redeploy. Configure <code>DATABASE_URL</code> do Supabase para corrigir.
+        </div>
+      ) : null}
 
       <div className="stack">
         <section className="panel panel-pad">

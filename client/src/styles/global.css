@@ -518,6 +518,12 @@ p {
   line-height: 1.45;
 }
 
+.persist-banner--ok {
+  border-color: rgba(110, 168, 130, 0.45);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.75), rgba(110, 168, 130, 0.14));
+  color: #2f6b45;
+}
+
 @media (max-width: 900px) {
   .map-toolbar {
     grid-template-columns: 1fr;
