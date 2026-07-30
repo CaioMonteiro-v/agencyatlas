@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node --watch server/index.js",
     "dev:client": "npm run dev --prefix client",
-    "build": "npm install --prefix client && npm run build --prefix client",
+    "build": "NPM_CONFIG_PRODUCTION=false npm install --prefix client && npm run build --prefix client",
     "start": "NODE_ENV=production node server/index.js",
     "seed": "node -e \"require('./server/db').getDb().then(db => require('./server/seed').seed(db))\"",
     "logos:sync": "node scripts/sync-logos.js",
