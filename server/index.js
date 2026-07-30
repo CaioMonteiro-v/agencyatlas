@@ -799,82 +799,97 @@ app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
 });
 
 app.post('/api/campaigns/:slug/coordinators', (req, res) => {
-  const campaign = getCampaignBySlug(req.params.slug);
-  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const { name, phone, photo_url, notes, municipality_ids } = req.body;
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ error: 'Nome do coordenador é obrigatório' });
+    const { name, phone, photo_url, notes, municipality_ids } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Nome do coordenador é obrigatório' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO coordinators (campaign_id, name, phone, photo_url, notes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      campaign.id,
+      String(name).trim(),
+      phone || null,
+      photo_url || null,
+      notes || null,
+    );
+
+    const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(result.lastInsertRowid);
+    if (Array.isArray(municipality_ids) && municipality_ids.length) {
+      setCoordinatorMunicipalities(campaign.id, coordinator.id, municipality_ids);
+    }
+
+    res.status(201).json(detailFor(campaign, coordinator));
+  } catch (err) {
+    console.error('POST coordinators:', err);
+    res.status(500).json({ error: err.message || 'Erro ao cadastrar coordenador' });
   }
-
-  const result = db.prepare(`
-    INSERT INTO coordinators (campaign_id, name, phone, photo_url, notes)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    campaign.id,
-    String(name).trim(),
-    phone || null,
-    photo_url || null,
-    notes || null,
-  );
-
-  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(result.lastInsertRowid);
-  if (Array.isArray(municipality_ids) && municipality_ids.length) {
-    setCoordinatorMunicipalities(campaign.id, coordinator.id, municipality_ids);
-  }
-
-  res.status(201).json(detailFor(campaign, coordinator));
 });
 
 app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
-  const campaign = getCampaignBySlug(req.params.slug);
-  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
-    .get(req.params.id, campaign.id);
-  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+    const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+      .get(req.params.id, campaign.id);
+    if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
-  const name = req.body.name != null ? String(req.body.name).trim() : coordinator.name;
-  if (!name) return res.status(400).json({ error: 'Nome inválido' });
+    const name = req.body.name != null ? String(req.body.name).trim() : coordinator.name;
+    if (!name) return res.status(400).json({ error: 'Nome inválido' });
 
-  const phone = req.body.phone !== undefined ? (req.body.phone || null) : coordinator.phone;
-  const photo_url = req.body.photo_url !== undefined ? (req.body.photo_url || null) : coordinator.photo_url;
-  const notes = req.body.notes !== undefined ? (req.body.notes || null) : coordinator.notes;
+    const phone = req.body.phone !== undefined ? (req.body.phone || null) : coordinator.phone;
+    const photo_url = req.body.photo_url !== undefined ? (req.body.photo_url || null) : coordinator.photo_url;
+    const notes = req.body.notes !== undefined ? (req.body.notes || null) : coordinator.notes;
 
-  db.prepare(`
-    UPDATE coordinators SET name = ?, phone = ?, photo_url = ?, notes = ? WHERE id = ?
-  `).run(name, phone, photo_url, notes, coordinator.id);
-
-  if (name !== coordinator.name) {
     db.prepare(`
-      UPDATE municipalities SET coordinator_name = ?
-      WHERE id IN (
-        SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
-      )
-    `).run(name, coordinator.id);
-  }
+      UPDATE coordinators SET name = ?, phone = ?, photo_url = ?, notes = ? WHERE id = ?
+    `).run(name, phone, photo_url, notes, coordinator.id);
 
-  if (Array.isArray(req.body.municipality_ids)) {
-    setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids);
-  }
+    if (name !== coordinator.name) {
+      db.prepare(`
+        UPDATE municipalities SET coordinator_name = ?
+        WHERE id IN (
+          SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
+        )
+      `).run(name, coordinator.id);
+    }
 
-  const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
-  res.json(detailFor(campaign, updated));
+    if (Array.isArray(req.body.municipality_ids)) {
+      setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids);
+    }
+
+    const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
+    res.json(detailFor(campaign, updated));
+  } catch (err) {
+    console.error('PATCH coordinators:', err);
+    res.status(500).json({ error: err.message || 'Erro ao atualizar coordenador' });
+  }
 });
 
 app.put('/api/campaigns/:slug/coordinators/:id/municipalities', (req, res) => {
-  const campaign = getCampaignBySlug(req.params.slug);
-  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
-    .get(req.params.id, campaign.id);
-  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+    const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+      .get(req.params.id, campaign.id);
+    if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
-  const ok = setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids || []);
-  if (!ok) return res.status(404).json({ error: 'Coordenador não encontrado' });
+    const ok = setCoordinatorMunicipalities(campaign.id, coordinator.id, req.body.municipality_ids || []);
+    if (!ok) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
-  const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
-  res.json(detailFor(campaign, updated));
+    const updated = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(coordinator.id);
+    res.json(detailFor(campaign, updated));
+  } catch (err) {
+    console.error('PUT coordinator municipalities:', err);
+    res.status(500).json({ error: err.message || 'Erro ao vincular municípios' });
+  }
 });
 
 app.patch('/api/campaigns/:slug/coordinators/:id/municipalities/:muniId/metrics', (req, res) => {
