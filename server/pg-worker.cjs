@@ -57,12 +57,15 @@ runAsWorker(async (msg) => {
     }
     case 'run': {
       let sql = msg.sql;
+      // Tabelas sem coluna `id` (ex.: coordinator_municipalities) quebram com RETURNING id.
+      // Preferimos RETURNING * e usamos id quando existir.
       if (/^\s*INSERT\s+/i.test(sql) && !/RETURNING/i.test(sql)) {
-        sql = `${sql.replace(/;\s*$/, '')} RETURNING id`;
+        sql = `${sql.replace(/;\s*$/, '')} RETURNING *`;
       }
       const res = await query(sql, msg.params || []);
+      const row = res.rows[0] || {};
       return {
-        lastInsertRowid: res.rows[0]?.id ?? 0,
+        lastInsertRowid: row.id ?? row.campaign_id ?? 0,
         changes: res.rowCount || 0,
       };
     }
