@@ -344,9 +344,12 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
   let where = 'WHERE r.campaign_id = ?';
   const params = [campaign.id];
   if (q) {
-    where += ' AND (r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ? OR l.name LIKE ? OR r.organizer_name LIKE ?)';
+    where += ` AND (
+      r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ?
+      OR l.name LIKE ? OR r.organizer_name LIKE ? OR r.mobilizer_name LIKE ?
+    )`;
     const like = `%${q}%`;
-    params.push(like, like, like, like, like);
+    params.push(like, like, like, like, like, like);
   }
 
   const total = db.prepare(`
@@ -362,7 +365,18 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
       l.name AS leader_name,
       l.type AS leader_type,
       m.name AS municipality_name,
-      (SELECT COUNT(*) FROM registrations r2 WHERE r2.leader_id = r.leader_id) AS mobilizer_total
+      COALESCE(NULLIF(r.mobilizer_name, ''), l.name) AS mobilizer_display,
+      CASE
+        WHEN r.mobilizer_name IS NOT NULL AND TRIM(r.mobilizer_name) != '' THEN (
+          SELECT COUNT(*) FROM registrations r2
+          WHERE r2.campaign_id = r.campaign_id
+            AND r2.mobilizer_name = r.mobilizer_name
+        )
+        WHEN r.leader_id IS NOT NULL THEN (
+          SELECT COUNT(*) FROM registrations r2 WHERE r2.leader_id = r.leader_id
+        )
+        ELSE 0
+      END AS mobilizer_total
     FROM registrations r
     LEFT JOIN leaders l ON l.id = r.leader_id
     LEFT JOIN municipalities m ON m.id = r.municipality_id
@@ -425,8 +439,11 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     : null;
 
   const result = db.prepare(`
-    INSERT INTO registrations (campaign_id, leader_id, municipality_id, full_name, phone, email, source, referral_code, lat, lng)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO registrations (
+      campaign_id, leader_id, municipality_id, full_name, phone, email,
+      source, referral_code, lat, lng, mobilizer_name
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     leader?.id || null,
@@ -437,7 +454,8 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     referral_code ? `link/${referral_code}` : 'direto',
     referral_code || null,
     muni ? muni.lat + (Math.random() - 0.5) * 0.06 : null,
-    muni ? muni.lng + (Math.random() - 0.5) * 0.06 : null
+    muni ? muni.lng + (Math.random() - 0.5) * 0.06 : null,
+    leader?.name || null,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid));
@@ -569,9 +587,10 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   if (!full_name) return res.status(400).json({ error: 'Nome completo é obrigatório' });
   if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório' });
 
-  const organizer = (organizer_name && String(organizer_name).trim())
-    || event.organizer_name
-    || null;
+  // Mobilizador = quem fechou o evento com a campanha (vem do evento)
+  const mobilizer = event.organizer_name ? String(event.organizer_name).trim() : null;
+  // Organiz./Coord. = critério do município (texto livre no formulário público)
+  const organizer = organizer_name ? String(organizer_name).trim() : null;
 
   const result = db.prepare(`
     INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name)
@@ -580,8 +599,11 @@ app.post('/api/events/:slug/registrations', (req, res) => {
 
   // Também entra no Registro de Cadastros da campanha (origem = evento)
   const reg = db.prepare(`
-    INSERT INTO registrations (campaign_id, leader_id, municipality_id, full_name, phone, email, source, referral_code, lat, lng, organizer_name)
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?)
+    INSERT INTO registrations (
+      campaign_id, leader_id, municipality_id, full_name, phone, email,
+      source, referral_code, lat, lng, organizer_name, mobilizer_name
+    )
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
   `).run(
     event.campaign_id,
     full_name,
@@ -589,6 +611,7 @@ app.post('/api/events/:slug/registrations', (req, res) => {
     email || null,
     `evento/${event.slug}`,
     organizer,
+    mobilizer,
   );
 
   res.status(201).json({
@@ -596,6 +619,7 @@ app.post('/api/events/:slug/registrations', (req, res) => {
     registration_id: reg.lastInsertRowid,
     ok: true,
     organizer_name: organizer,
+    mobilizer_name: mobilizer,
   });
 });
 

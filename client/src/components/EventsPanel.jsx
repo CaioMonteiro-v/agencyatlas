@@ -200,7 +200,9 @@ export default function EventsPanel({ campaignSlug }) {
           </label>
 
           <div>
-            <strong style={{ display: 'block', marginBottom: 8 }}>Tipo do responsável</strong>
+            <strong style={{ display: 'block', marginBottom: 8 }}>
+              Quem mobilizou este evento (fechado com a campanha)
+            </strong>
             <div className="chip-group">
               <button
                 type="button"
@@ -218,9 +220,8 @@ export default function EventsPanel({ campaignSlug }) {
               </button>
             </div>
             <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
-              {form.organizer_role === 'coordinator'
-                ? 'Coordenador precisa estar cadastrado no sistema (aba Admin / Coordenadores).'
-                : 'Mobilizador não precisa estar cadastrado — digite o nome livremente.'}
+              Esse nome vai para a coluna <strong>Mobilizador</strong> na Base — é o norte de quem está trazendo gente.
+              Organiz./Coord. do município a pessoa preenche na inscrição do QR.
             </p>
           </div>
 
@@ -237,7 +238,7 @@ export default function EventsPanel({ campaignSlug }) {
             </label>
           ) : (
             <label>
-              Coordenador responsável
+              Coordenador cadastrado (também conta como mobilizador do evento)
               <select
                 className="select"
                 required
@@ -289,7 +290,8 @@ export default function EventsPanel({ campaignSlug }) {
                 <p style={{ marginBottom: 0 }}>{event.location}</p>
                 {event.organizer_name && (
                   <p style={{ marginBottom: 0 }}>
-                    <strong>{roleLabel(event.organizer_role)}:</strong> {event.organizer_name}
+                    <strong>Mobilizador ({roleLabel(event.organizer_role).toLowerCase()}):</strong>{' '}
+                    {event.organizer_name}
                     {event.organizer_role === 'coordinator' ? ' · vinculado' : ''}
                   </p>
                 )}
@@ -343,7 +345,7 @@ export default function EventsPanel({ campaignSlug }) {
                     <th>Nome</th>
                     <th>E-mail</th>
                     <th>Telefone</th>
-                    <th>Organiz./Coord.</th>
+                    <th>Organiz. município</th>
                     <th>WhatsApp?</th>
                     <th>Quando</th>
                   </tr>

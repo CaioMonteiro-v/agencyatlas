@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   lat DOUBLE PRECISION,
   lng DOUBLE PRECISION,
   organizer_name TEXT,
+  mobilizer_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

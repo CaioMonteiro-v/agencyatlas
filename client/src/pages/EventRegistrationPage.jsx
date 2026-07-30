@@ -22,18 +22,13 @@ export default function EventRegistrationPage() {
       return;
     }
     api.getEvent(eventSlug)
-      .then((ev) => {
-        setEvent(ev);
-        if (ev.organizer_name) {
-          setForm((prev) => ({ ...prev, organizer_name: ev.organizer_name }));
-        }
-      })
+      .then((ev) => setEvent(ev))
       .catch((err) => {
         const msg = err.message || 'Erro ao carregar evento';
         if (/failed to fetch|network|load failed/i.test(msg)) {
           setError('Não foi possível conectar à API. Confira se a URL do QR está correta (não use localhost).');
         } else if (/não encontrado|404/i.test(msg)) {
-          setError('Evento não encontrado. Confira se o QR Code está atualizado — dados podem ter sido resetados no Render free.');
+          setError('Evento não encontrado. Confira se o QR Code está atualizado.');
         } else {
           setError(msg);
         }
@@ -48,10 +43,6 @@ export default function EventRegistrationPage() {
     }
     if (!form.phone.trim()) {
       setToast('Telefone é obrigatório');
-      return;
-    }
-    if (!form.organizer_name.trim()) {
-      setToast('Informe o coordenador ou organizador que está com você');
       return;
     }
     try {
@@ -69,6 +60,8 @@ export default function EventRegistrationPage() {
     }
   }
 
+  const mobilizerLabel = event?.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador';
+
   return (
     <div className="public-page">
       <div className="public-card">
@@ -84,7 +77,9 @@ export default function EventRegistrationPage() {
               {event.location ? ` · ${event.location}` : ''}
             </p>
             {event.organizer_name && (
-              <p><strong>Organizador do evento:</strong> {event.organizer_name}</p>
+              <p>
+                <strong>{mobilizerLabel} do evento:</strong> {event.organizer_name}
+              </p>
             )}
             <p>{event.description}</p>
             <p style={{ fontSize: '0.92rem' }}>
@@ -96,7 +91,8 @@ export default function EventRegistrationPage() {
                 <h3>Presença confirmada</h3>
                 <p>
                   Obrigado, {form.full_name.split(' ')[0]}! Seu cadastro foi registrado
-                  {form.organizer_name ? ` com ${form.organizer_name}` : ''}.
+                  {event.organizer_name ? ` com ${event.organizer_name}` : ''}
+                  {form.organizer_name.trim() ? ` · ref. local: ${form.organizer_name.trim()}` : ''}.
                   Você já pode fechar esta página.
                 </p>
               </div>
@@ -122,15 +118,18 @@ export default function EventRegistrationPage() {
                   />
                 </label>
                 <label>
-                  Coordenador / organizador que está com você *
+                  Organizador / coordenador do município
                   <input
                     className="input"
-                    required
                     value={form.organizer_name}
                     onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
-                    placeholder="Nome de quem está te cadastrando"
+                    placeholder="Nome de referência local (opcional)"
                   />
                 </label>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+                  Campo livre do município. O mobilizador do evento
+                  {event.organizer_name ? ` (${event.organizer_name})` : ''} já fica registrado automaticamente.
+                </p>
                 <label>
                   E-mail
                   <input

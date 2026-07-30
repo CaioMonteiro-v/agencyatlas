@@ -25,6 +25,33 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'events', 'coordinator_id', 'INTEGER');
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');
+  ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
+
+  // Backfill: mobilizador do evento → coluna correta; organizador municipal fica livre
+  try {
+    const rows = db.prepare(`
+      SELECT r.id, r.organizer_name, r.mobilizer_name, r.source, e.organizer_name AS event_mobilizer
+      FROM registrations r
+      JOIN events e ON r.source = ('evento/' || e.slug)
+      WHERE (r.mobilizer_name IS NULL OR r.mobilizer_name = '')
+        AND e.organizer_name IS NOT NULL
+        AND e.organizer_name != ''
+    `).all();
+    const upd = db.prepare(`
+      UPDATE registrations
+      SET mobilizer_name = ?,
+          organizer_name = CASE
+            WHEN organizer_name IS NOT NULL AND organizer_name = ? THEN NULL
+            ELSE organizer_name
+          END
+      WHERE id = ?
+    `);
+    for (const row of rows) {
+      upd.run(row.event_mobilizer, row.event_mobilizer, row.id);
+    }
+  } catch (err) {
+    console.warn('migrate mobilizer_name backfill:', err.message);
+  }
 
   if (db.dialect !== 'postgres') {
     db.exec(`

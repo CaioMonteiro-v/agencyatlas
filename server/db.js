@@ -149,6 +149,7 @@ function initSqliteSchema(db) {
       lat REAL,
       lng REAL,
       organizer_name TEXT,
+      mobilizer_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),
