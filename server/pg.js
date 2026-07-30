@@ -6,10 +6,13 @@ const callWorker = createSyncFn(path.join(__dirname, 'pg-worker.cjs'), {
 });
 
 function createPgDb(databaseUrl) {
-  let url = databaseUrl.trim();
-  if (!/[?&]sslmode=/.test(url)) {
-    url += (url.includes('?') ? '&' : '?') + 'sslmode=require';
-  }
+  let url = String(databaseUrl || '').trim();
+  // Remove sslmode da URI — o worker define ssl.rejectUnauthorized=false (Supabase/Render)
+  url = url
+    .replace(/[?&]sslmode=[^&]*/gi, '')
+    .replace(/[?&]uselibpqcompat=[^&]*/gi, '')
+    .replace(/\?&/, '?')
+    .replace(/[?&]$/, '');
 
   callWorker({ type: 'init', databaseUrl: url });
 

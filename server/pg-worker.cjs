@@ -26,6 +26,8 @@ runAsWorker(async (msg) => {
       if (pool) {
         try { await pool.end(); } catch (_) { /* ignore */ }
       }
+      // NODE_TLS / pg: Supabase pooler usa cadeia que falha com verify-full
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED || '0';
       pool = new Pool({
         connectionString: msg.databaseUrl,
         ssl: /localhost|127\.0\.0\.1/.test(msg.databaseUrl)
@@ -37,6 +39,7 @@ runAsWorker(async (msg) => {
       });
       // warm connection
       const c = await pool.connect();
+      await c.query('SELECT 1');
       c.release();
       return { ok: true };
     }
