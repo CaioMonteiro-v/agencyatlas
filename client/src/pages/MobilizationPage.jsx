@@ -9,6 +9,10 @@ import MissionsPanel from '../components/MissionsPanel';
 export default function MobilizationPage() {
   const { campaign } = useOutletContext();
 
+  function downloadBackup() {
+    window.location.href = `/api/campaigns/${campaign.slug}/backup`;
+  }
+
   return (
     <div className="container section" style={{ paddingTop: 0 }}>
       <div className="section__head">
@@ -18,22 +22,37 @@ export default function MobilizationPage() {
           Mapa de calor de Mato Grosso, ranking ao vivo, links rastreáveis, cadastros,
           eventos com QR Code e missões com impacto no ranking.
         </p>
-        <a
-          className="btn btn-whatsapp"
-          href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
-          target="_blank"
-          rel="noreferrer"
-          style={{ marginTop: '0.35rem' }}
-        >
-          Conversar no WhatsApp · <span style={{ textDecoration: 'underline' }}>bit.ly/FalaFabio</span>
-        </a>
+        <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.45rem' }}>
+          <a
+            className="btn btn-whatsapp"
+            href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Conversar no WhatsApp · <span style={{ textDecoration: 'underline' }}>bit.ly/FalaFabio</span>
+          </a>
+          <button className="btn btn-soft btn-sm" type="button" onClick={downloadBackup}>
+            Baixar backup dos dados
+          </button>
+        </div>
+      </div>
+
+      <div className="persist-banner" role="status">
+        <strong>Atenção (Render free):</strong> cadastros e eventos ficam em SQLite no servidor.
+        Em redeploy ou quando o serviço “dorme” e recria o disco, os dados podem sumir
+        (ex.: Bianca / eventos de ontem). Use <em>Baixar backup</em> com frequência e,
+        para produção, configure disco persistente no Render (plano pago) — veja DEPLOY.md.
       </div>
 
       <div className="stack">
         <section className="panel panel-pad">
           <p className="eyebrow">Território</p>
           <h3>Mapa de calor interativo — Mato Grosso</h3>
-          <p>Clique em um município para ver coordenação, lideranças e concentração de cadastros. O mapa inclui os <strong>142 municípios</strong> de Mato Grosso.</p>
+          <p>
+            Use o filtro para achar qualquer um dos <strong>142 municípios</strong>.
+            Ao selecionar a cidade, o mapa vai até ela e mostra coordenador, cadastros e lideranças.
+            O calor representa <strong>quantidade de cadastros</strong> — não o número de lideranças.
+          </p>
           <HeatMapMT campaignSlug={campaign.slug} />
         </section>
 

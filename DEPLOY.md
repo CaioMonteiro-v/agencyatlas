@@ -64,8 +64,19 @@ Abra: http://localhost:3000
 ## Importante sobre plano free
 
 - App pode “dormir” sem acesso (cold start de 20–60s)
-- Dados do SQLite podem resetar se o container for recriado
-- Para produção séria depois: Postgres (Neon) + plano pago
+- **Dados do SQLite RESETAM** quando o container é recriado (redeploy / sleep do free)
+- Por isso cadastros e eventos podem “sumir” (ex.: Bianca, eventos de ontem)
+- Mitigações:
+  1. Use **Baixar backup dos dados** na aba Mobilização com frequência
+  2. No Render (plano pago): adicione um **Persistent Disk** montado em `/app/server/data`
+  3. Para produção séria: Postgres (Neon) + plano pago
+
+### Disco persistente no Render (recomendado)
+1. Serviço `agencyatlas-1` → **Disks**
+2. Add Disk → mount path: `/app/server/data`
+3. Redeploy
+
+Sem disco, cada deploy novo começa banco “limpo” (só campanha + 142 municípios do seed).
 
 ## Alimentar o sistema
 

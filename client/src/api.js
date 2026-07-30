@@ -32,6 +32,7 @@ export const api = {
   getLinks: (slug, origin) => request(`/api/campaigns/${slug}/links?origin=${encodeURIComponent(origin)}`),
   getRegistrations: (slug, { page = 1, q = '' } = {}) =>
     request(`/api/campaigns/${slug}/registrations?page=${page}&q=${encodeURIComponent(q)}`),
+  downloadBackup: (slug) => `/api/campaigns/${slug}/backup`,
   createRegistration: (slug, body) =>
     request(`/api/campaigns/${slug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getEvents: (slug) => request(`/api/campaigns/${slug}/events`),

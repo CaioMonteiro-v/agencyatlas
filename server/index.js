@@ -167,12 +167,16 @@ app.get('/api/campaigns/:slug/heatmap', (req, res) => {
   const municipalities = db.prepare(`
     SELECT
       m.*,
-      COALESCE(COUNT(r.id), 0) AS registrations_count
+      COALESCE(COUNT(DISTINCT r.id), 0) AS registrations_count,
+      COALESCE((
+        SELECT COUNT(*) FROM leaders l
+        WHERE l.municipality_id = m.id AND l.campaign_id = ?
+      ), 0) AS leaders_count
     FROM municipalities m
     LEFT JOIN registrations r ON r.municipality_id = m.id AND r.campaign_id = ?
     GROUP BY m.id
     ORDER BY registrations_count DESC, m.name ASC
-  `).all(campaign.id);
+  `).all(campaign.id, campaign.id);
 
   res.json({ points, municipalities });
 });
@@ -336,9 +340,9 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
   let where = 'WHERE r.campaign_id = ?';
   const params = [campaign.id];
   if (q) {
-    where += ' AND (r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ? OR l.name LIKE ?)';
+    where += ' AND (r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ? OR l.name LIKE ? OR r.organizer_name LIKE ?)';
     const like = `%${q}%`;
-    params.push(like, like, like, like);
+    params.push(like, like, like, like, like);
   }
 
   const total = db.prepare(`
@@ -364,6 +368,38 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
   `).all(...params, limit, offset);
 
   res.json({ total, page, limit, items: rows });
+});
+
+app.get('/api/campaigns/:slug/backup', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const payload = {
+    exported_at: new Date().toISOString(),
+    campaign,
+    coordinators: db.prepare('SELECT * FROM coordinators WHERE campaign_id = ?').all(campaign.id),
+    coordinator_municipalities: db.prepare(`
+      SELECT cm.* FROM coordinator_municipalities cm
+      JOIN coordinators c ON c.id = cm.coordinator_id
+      WHERE c.campaign_id = ?
+    `).all(campaign.id),
+    leaders: db.prepare('SELECT * FROM leaders WHERE campaign_id = ?').all(campaign.id),
+    registrations: db.prepare('SELECT * FROM registrations WHERE campaign_id = ?').all(campaign.id),
+    events: db.prepare('SELECT * FROM events WHERE campaign_id = ?').all(campaign.id),
+    event_registrations: db.prepare(`
+      SELECT er.* FROM event_registrations er
+      JOIN events e ON e.id = er.event_id
+      WHERE e.campaign_id = ?
+    `).all(campaign.id),
+    missions: db.prepare('SELECT * FROM missions WHERE campaign_id = ?').all(campaign.id),
+  };
+
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="atlas-backup-${campaign.slug}-${Date.now()}.json"`,
+  );
+  res.send(JSON.stringify(payload, null, 2));
 });
 
 app.post('/api/campaigns/:slug/registrations', (req, res) => {
@@ -423,15 +459,24 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const { name, description, location, event_date, event_time } = req.body;
+  const { name, description, location, event_date, event_time, organizer_name } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Nome e data são obrigatórios' });
 
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
 
   const result = db.prepare(`
-    INSERT INTO events (campaign_id, name, description, location, event_date, event_time, slug)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(campaign.id, name, description || '', location || '', event_date, event_time || '', slug);
+    INSERT INTO events (campaign_id, name, description, location, event_date, event_time, slug, organizer_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    campaign.id,
+    name,
+    description || '',
+    location || '',
+    event_date,
+    event_time || '',
+    slug,
+    organizer_name ? String(organizer_name).trim() : null,
+  );
 
   res.status(201).json(db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid));
 });
@@ -481,33 +526,37 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const event = db.prepare('SELECT * FROM events WHERE slug = ?').get(req.params.slug);
   if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
 
-  const { full_name, email, phone, connect_whatsapp } = req.body;
+  const { full_name, email, phone, connect_whatsapp, organizer_name } = req.body;
   if (!full_name) return res.status(400).json({ error: 'Nome completo é obrigatório' });
   if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório' });
 
-  const result = db.prepare(`
-    INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0);
+  const organizer = (organizer_name && String(organizer_name).trim())
+    || event.organizer_name
+    || null;
 
-  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(event.campaign_id);
+  const result = db.prepare(`
+    INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0, organizer);
 
   // Também entra no Registro de Cadastros da campanha (origem = evento)
   const reg = db.prepare(`
-    INSERT INTO registrations (campaign_id, leader_id, municipality_id, full_name, phone, email, source, referral_code, lat, lng)
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL)
+    INSERT INTO registrations (campaign_id, leader_id, municipality_id, full_name, phone, email, source, referral_code, lat, lng, organizer_name)
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?)
   `).run(
     event.campaign_id,
     full_name,
     phone,
     email || null,
-    `evento/${event.slug}`
+    `evento/${event.slug}`,
+    organizer,
   );
 
   res.status(201).json({
-    registration: db.prepare('SELECT * FROM event_registrations WHERE id = ?').get(result.lastInsertRowid),
-    campaign_registration_id: reg.lastInsertRowid,
-    whatsapp_url: campaign?.whatsapp_url || 'https://bit.ly/FalaFabio',
+    id: result.lastInsertRowid,
+    registration_id: reg.lastInsertRowid,
+    ok: true,
+    organizer_name: organizer,
   });
 });
 

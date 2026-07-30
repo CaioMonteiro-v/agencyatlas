@@ -49,6 +49,7 @@ export default function RegistrationsTable({ campaignSlug }) {
               <th>Telefone</th>
               <th>Data/Hora</th>
               <th>Mobilizador</th>
+              <th>Organiz./Coord.</th>
               <th>Total do mobilizador</th>
               <th>Origem</th>
             </tr>
@@ -65,6 +66,7 @@ export default function RegistrationsTable({ campaignSlug }) {
                     {row.municipality_name || ''}
                   </div>
                 </td>
+                <td>{row.organizer_name || '—'}</td>
                 <td>{row.mobilizer_total}</td>
                 <td>
                   <code style={{ fontSize: '0.8rem' }}>{row.source || row.referral_code || 'direto'}</code>

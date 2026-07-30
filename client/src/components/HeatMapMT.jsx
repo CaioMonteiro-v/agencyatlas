@@ -6,9 +6,10 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { Avatar, EmptyState } from './Ui';
 
-function FitBounds({ points, municipalities }) {
+function FitBounds({ points, municipalities, locked }) {
   const map = useMap();
   useEffect(() => {
+    if (locked) return;
     const coords = [
       ...points.map((p) => [p.lat, p.lng]),
       ...municipalities.map((m) => [m.lat, m.lng]),
@@ -19,7 +20,16 @@ function FitBounds({ points, municipalities }) {
     }
     const bounds = L.latLngBounds(coords);
     map.fitBounds(bounds.pad(0.18));
-  }, [map, points, municipalities]);
+  }, [map, points, municipalities, locked]);
+  return null;
+}
+
+function FlyToMunicipality({ municipality }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!municipality) return;
+    map.flyTo([municipality.lat, municipality.lng], 10, { duration: 1.1 });
+  }, [map, municipality]);
   return null;
 }
 
@@ -63,6 +73,8 @@ export default function HeatMapMT({ campaignSlug }) {
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState(null);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [filterId, setFilterId] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -92,98 +104,211 @@ export default function HeatMapMT({ campaignSlug }) {
 
   const maxCount = useMemo(
     () => Math.max(1, ...heatmap.municipalities.map((m) => m.registrations_count || 0)),
-    [heatmap.municipalities]
+    [heatmap.municipalities],
   );
 
+  const filteredMunicipalities = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    const list = [...heatmap.municipalities].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    if (!q) return list;
+    return list.filter((m) => m.name.toLowerCase().includes(q));
+  }, [heatmap.municipalities, filterQuery]);
+
+  function selectMunicipality(m) {
+    if (!m) {
+      setSelected(null);
+      setFilterId('');
+      return;
+    }
+    setSelected(m);
+    setFilterId(String(m.id));
+  }
+
+  function onFilterChange(e) {
+    const id = e.target.value;
+    setFilterId(id);
+    if (!id) {
+      setSelected(null);
+      return;
+    }
+    const muni = heatmap.municipalities.find((m) => String(m.id) === id);
+    if (muni) selectMunicipality(muni);
+  }
+
   return (
-    <div className="map-wrap">
-      {error && <EmptyState>{error}</EmptyState>}
-      <MapContainer
-        center={[-12.6, -55.9]}
-        zoom={6}
-        scrollWheelZoom
-        style={{ height: '100%', minHeight: 480 }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <FitBounds points={heatmap.points} municipalities={heatmap.municipalities} />
-        <HeatLayer points={heatmap.points} />
-        {heatmap.municipalities.map((m) => {
-          const intensity = (m.registrations_count || 0) / maxCount;
-          return (
-            <CircleMarker
-              key={m.id}
-              center={[m.lat, m.lng]}
-              radius={8 + intensity * 14}
-              pathOptions={{
-                color: '#5f8a7a',
-                fillColor: intensity > 0.6 ? '#c47a88' : intensity > 0.3 ? '#8fb5a5' : '#9ec0cf',
-                fillOpacity: 0.75,
-                weight: 2,
-              }}
-              eventHandlers={{
-                click: () => setSelected(m),
-              }}
-            >
-              <Popup>
-                <strong>{m.name}</strong>
-                <br />
-                {m.registrations_count} cadastros
-              </Popup>
-            </CircleMarker>
-          );
-        })}
-      </MapContainer>
+    <div className="map-block">
+      <div className="map-toolbar">
+        <label className="map-filter">
+          <span>Localizar município (142)</span>
+          <input
+            className="input"
+            list="mt-muni-list"
+            placeholder="Digite para buscar… ex.: Colíder"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+          />
+          <datalist id="mt-muni-list">
+            {filteredMunicipalities.map((m) => (
+              <option key={m.id} value={m.name} />
+            ))}
+          </datalist>
+        </label>
 
-      {selected && (
-        <aside className="side-panel" aria-live="polite">
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
-            <div>
-              <p className="eyebrow" style={{ marginBottom: 4 }}>Município</p>
-              <h3>{selected.name}</h3>
+        <label className="map-filter">
+          <span>Ir para a cidade</span>
+          <select className="select" value={filterId} onChange={onFilterChange}>
+            <option value="">Todas / visão geral</option>
+            {filteredMunicipalities.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.coordinator_name ? ` — ${m.coordinator_name}` : ''}
+                {` (${m.registrations_count || 0} cad.)`}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {filterQuery && (
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={() => {
+              const exact = heatmap.municipalities.find(
+                (m) => m.name.toLowerCase() === filterQuery.trim().toLowerCase(),
+              );
+              const first = exact || filteredMunicipalities[0];
+              if (first) selectMunicipality(first);
+            }}
+          >
+            Ir no mapa
+          </button>
+        )}
+      </div>
+
+      <p className="map-legend">
+        O calor vem dos <strong>cadastros</strong> (pessoas), não das lideranças.
+        Quanto mais gente cadastrada na região, mais intensa a mancha. Os círculos
+        também crescem com os cadastros; lideranças aparecem ao clicar no município.
+      </p>
+
+      <div className="map-wrap">
+        {error && <EmptyState>{error}</EmptyState>}
+        <MapContainer
+          center={[-12.6, -55.9]}
+          zoom={6}
+          scrollWheelZoom
+          style={{ height: '100%', minHeight: 480 }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <FitBounds
+            points={heatmap.points}
+            municipalities={heatmap.municipalities}
+            locked={Boolean(selected)}
+          />
+          <FlyToMunicipality municipality={selected} />
+          <HeatLayer points={heatmap.points} />
+          {heatmap.municipalities.map((m) => {
+            const intensity = (m.registrations_count || 0) / maxCount;
+            const isSelected = selected?.id === m.id;
+            return (
+              <CircleMarker
+                key={m.id}
+                center={[m.lat, m.lng]}
+                radius={isSelected ? 18 + intensity * 10 : 8 + intensity * 14}
+                pathOptions={{
+                  color: isSelected ? '#2C3E3A' : '#5f8a7a',
+                  fillColor: isSelected
+                    ? '#c47a88'
+                    : intensity > 0.6
+                      ? '#c47a88'
+                      : intensity > 0.3
+                        ? '#8fb5a5'
+                        : '#9ec0cf',
+                  fillOpacity: isSelected ? 0.95 : 0.75,
+                  weight: isSelected ? 3 : 2,
+                }}
+                eventHandlers={{
+                  click: () => selectMunicipality(m),
+                }}
+              >
+                <Popup>
+                  <strong>{m.name}</strong>
+                  <br />
+                  {m.registrations_count || 0} cadastros
+                  <br />
+                  {m.leaders_count || 0} lideranças
+                  {m.coordinator_name ? (
+                    <>
+                      <br />
+                      Coord.: {m.coordinator_name}
+                    </>
+                  ) : null}
+                </Popup>
+              </CircleMarker>
+            );
+          })}
+        </MapContainer>
+
+        {selected && (
+          <aside className="side-panel" aria-live="polite">
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div>
+                <p className="eyebrow" style={{ marginBottom: 4 }}>Município</p>
+                <h3>{selected.name}</h3>
+              </div>
+              <button
+                className="btn btn-soft btn-sm"
+                type="button"
+                onClick={() => selectMunicipality(null)}
+              >
+                Fechar
+              </button>
             </div>
-            <button className="btn btn-soft btn-sm" type="button" onClick={() => setSelected(null)}>
-              Fechar
-            </button>
-          </div>
 
-          {loadingDetail && <EmptyState>Carregando detalhes…</EmptyState>}
+            {loadingDetail && <EmptyState>Carregando detalhes…</EmptyState>}
 
-          {detail && (
-            <>
-              <p style={{ marginTop: '0.75rem' }}>
-                <strong>Coordenador Geral:</strong>{' '}
-                {detail.coordinator ? `${detail.municipality.name} — ${detail.coordinator}` : 'Não informado'}
-              </p>
-              <p>
-                <strong>Total de cadastros:</strong> {detail.registrations_count}
-              </p>
+            {detail && (
+              <>
+                <p style={{ marginTop: '0.75rem' }}>
+                  <strong>Coordenador:</strong>{' '}
+                  {detail.coordinator || 'Não informado'}
+                </p>
+                <p>
+                  <strong>Total de cadastros:</strong> {detail.registrations_count}
+                </p>
+                <p>
+                  <strong>Lideranças:</strong> {detail.leaders?.length || 0}
+                </p>
 
-              <h4 style={{ marginTop: '1rem', marginBottom: '0.35rem' }}>Lideranças</h4>
-              {!detail.leaders.length && <EmptyState>Nenhuma liderança neste município.</EmptyState>}
-              {detail.leaders.map((leader) => (
-                <div className="leader-item" key={leader.id}>
-                  <Avatar name={leader.name} photo={leader.photo_url} />
-                  <div>
-                    <strong>{leader.name}</strong>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-                      {leader.type === 'politica' ? 'Liderança política' : 'Multiplicador'} · {leader.activity_label}
+                <h4 style={{ marginTop: '1rem', marginBottom: '0.35rem' }}>Lideranças</h4>
+                {!detail.leaders.length && (
+                  <EmptyState>Nenhuma liderança neste município.</EmptyState>
+                )}
+                {detail.leaders.map((leader) => (
+                  <div className="leader-item" key={leader.id}>
+                    <Avatar name={leader.name} photo={leader.photo_url} />
+                    <div>
+                      <strong>{leader.name}</strong>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                        {leader.type === 'politica' ? 'Liderança política' : 'Multiplicador'} · {leader.activity_label}
+                      </div>
                     </div>
+                    <Link
+                      className="btn btn-soft btn-sm"
+                      to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
+                    >
+                      Perfil
+                    </Link>
                   </div>
-                  <Link
-                    className="btn btn-soft btn-sm"
-                    to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
-                  >
-                    Perfil
-                  </Link>
-                </div>
-              ))}
-            </>
-          )}
-        </aside>
-      )}
+                ))}
+              </>
+            )}
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

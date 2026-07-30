@@ -13,6 +13,10 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'coordinator_municipalities', 'ig_reach', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'last_meta_sync', 'TEXT');
 
+  ensureColumn(db, 'events', 'organizer_name', 'TEXT');
+  ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
+  ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS campaign_meta_config (
       campaign_id INTEGER PRIMARY KEY,

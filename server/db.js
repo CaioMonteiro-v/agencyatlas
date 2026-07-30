@@ -164,6 +164,7 @@ function initSchema(db) {
       referral_code TEXT,
       lat REAL,
       lng REAL,
+      organizer_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),
@@ -179,6 +180,7 @@ function initSchema(db) {
       event_date TEXT NOT NULL,
       event_time TEXT,
       slug TEXT UNIQUE NOT NULL,
+      organizer_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
@@ -190,6 +192,7 @@ function initSchema(db) {
       email TEXT,
       phone TEXT,
       connect_whatsapp INTEGER DEFAULT 0,
+      organizer_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
     );

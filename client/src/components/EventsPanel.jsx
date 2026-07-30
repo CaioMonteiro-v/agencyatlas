@@ -35,6 +35,7 @@ export default function EventsPanel({ campaignSlug }) {
     location: '',
     event_date: '',
     event_time: '',
+    organizer_name: '',
   });
   const [error, setError] = useState('');
 
@@ -85,7 +86,14 @@ export default function EventsPanel({ campaignSlug }) {
     try {
       await api.createEvent(campaignSlug, form);
       setShowForm(false);
-      setForm({ name: '', description: '', location: '', event_date: '', event_time: '' });
+      setForm({
+        name: '',
+        description: '',
+        location: '',
+        event_date: '',
+        event_time: '',
+        organizer_name: '',
+      });
       setToast('Evento criado');
       load(publicBase);
     } catch (err) {
@@ -156,6 +164,16 @@ export default function EventsPanel({ campaignSlug }) {
             Local
             <input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           </label>
+          <label>
+            Organizador / coordenador responsável
+            <input
+              className="input"
+              required
+              value={form.organizer_name}
+              onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
+              placeholder="Ex.: Bianca Silvinio Magalhães"
+            />
+          </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <label>
               Data
@@ -184,6 +202,11 @@ export default function EventsPanel({ campaignSlug }) {
                   {event.event_time ? ` · ${event.event_time}` : ''}
                 </p>
                 <p style={{ marginBottom: 0 }}>{event.location}</p>
+                {event.organizer_name && (
+                  <p style={{ marginBottom: 0 }}>
+                    <strong>Organizador:</strong> {event.organizer_name}
+                  </p>
+                )}
                 <p>{event.description}</p>
                 <span className="badge">{event.attendees || 0} inscritos</span>
               </div>
@@ -234,6 +257,7 @@ export default function EventsPanel({ campaignSlug }) {
                     <th>Nome</th>
                     <th>E-mail</th>
                     <th>Telefone</th>
+                    <th>Organiz./Coord.</th>
                     <th>WhatsApp?</th>
                     <th>Quando</th>
                   </tr>
@@ -244,6 +268,7 @@ export default function EventsPanel({ campaignSlug }) {
                       <td>{person.full_name}</td>
                       <td>{person.email || '—'}</td>
                       <td>{person.phone || '—'}</td>
+                      <td>{person.organizer_name || attendeesFor.organizer_name || '—'}</td>
                       <td>{person.connect_whatsapp ? 'Sim' : 'Não'}</td>
                       <td>{person.created_at}</td>
                     </tr>
