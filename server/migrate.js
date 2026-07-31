@@ -60,6 +60,15 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
 
+  // Índices que dependem de colunas novas (depois do ensureColumn)
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_mobilizer ON registrations(mobilizer_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code)');
+  } catch (err) {
+    console.warn('migrate indexes:', err.message);
+  }
+
   // Backfill: mobilizador do evento → coluna correta; organizador municipal fica livre
   try {
     const rows = db.prepare(`

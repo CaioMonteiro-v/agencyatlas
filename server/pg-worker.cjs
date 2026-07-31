@@ -44,7 +44,15 @@ runAsWorker(async (msg) => {
       return { ok: true };
     }
     case 'initSchema': {
-      await pool.query(PG_SCHEMA);
+      // Executa statement a statement para não derrubar o boot se um índice/coluna já existir
+      const parts = String(PG_SCHEMA).split(';').map((s) => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        try {
+          await pool.query(part);
+        } catch (err) {
+          console.warn('initSchema skip:', part.slice(0, 80), '→', err.message);
+        }
+      }
       return { ok: true };
     }
     case 'get': {

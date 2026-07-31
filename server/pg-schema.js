@@ -149,7 +149,6 @@ CREATE TABLE IF NOT EXISTS campaign_meta_config (
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
-CREATE INDEX IF NOT EXISTS idx_reg_mobilizer ON registrations(mobilizer_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_campaign ON leaders(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_code ON leaders(referral_code);
 CREATE INDEX IF NOT EXISTS idx_coord_campaign ON coordinators(campaign_id);
