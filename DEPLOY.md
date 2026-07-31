@@ -2,6 +2,22 @@
 
 Este app agora sobe com **Docker**. Isso evita o erro de `better-sqlite3`/`vite` e funciona melhor em hospedagens gratuitas.
 
+## Login da equipe (obrigatório no painel)
+
+No Render → **Environment**, adicione:
+
+```text
+ATLAS_TEAM_USER=equipe
+ATLAS_TEAM_PASSWORD=sua-senha-forte
+ATLAS_AUTH_SECRET=um-segredo-longo-aleatorio
+```
+
+- Painel (`/campanha`, `/admin`) exige login
+- QR de evento (`/evento/...`) e link de mobilizador (`/m/...`) continuam **públicos**
+- Localmente, se não definir senha, o padrão de desenvolvimento é usuário `equipe` / senha `atlas`
+
+---
+
 ## Opção 1 — Koyeb (recomendada)
 
 Mais estável para começar rápido.

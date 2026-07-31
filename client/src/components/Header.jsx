@@ -1,6 +1,9 @@
 import { NavLink, Link } from 'react-router-dom';
+import { useAuth } from '../auth';
 
 export default function Header({ compact = false }) {
+  const { isAuthenticated } = useAuth();
+
   return (
     <header className="site-header">
       <div className="container site-header__inner">
@@ -11,14 +14,24 @@ export default function Header({ compact = false }) {
           />
         </Link>
         <nav className="nav" aria-label="Principal">
-          <a href="/#servicos">Serviços</a>
-          <a href="/#campanhas">Campanhas</a>
-          <a href="/#dashboard">Dashboard</a>
-          <NavLink to="/admin">Administração</NavLink>
+          {isAuthenticated ? (
+            <>
+              <NavLink to="/campanha/fabio-garcia/mobilizacao">Mobilização</NavLink>
+              <NavLink to="/admin">Administração</NavLink>
+            </>
+          ) : (
+            <NavLink to="/login">Login equipe</NavLink>
+          )}
         </nav>
-        <Link to="/campanha/fabio-garcia" className="btn btn-primary btn-sm">
-          Abrir campanha
-        </Link>
+        {isAuthenticated ? (
+          <Link to="/campanha/fabio-garcia/mobilizacao" className="btn btn-primary btn-sm">
+            Abrir painel
+          </Link>
+        ) : (
+          <Link to="/login" className="btn btn-primary btn-sm">
+            Entrar
+          </Link>
+        )}
       </div>
     </header>
   );

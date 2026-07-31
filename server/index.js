@@ -12,6 +12,7 @@ const {
 } = require('./analytics');
 const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
 const { runAssistant } = require('./assistant');
+const { login, requireAuth, authConfigured, TEAM_USER, extractToken, verifyToken } = require('./auth');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -20,6 +21,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 app.use('/logos', express.static(path.join(__dirname, '../public/logos')));
+app.use(requireAuth);
 
 let db;
 
@@ -50,7 +52,20 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     service: 'atlas-agency',
     database: db?.dialect || (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL ? 'postgres' : 'sqlite'),
+    auth: authConfigured(),
   });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const result = login(req.body.username, req.body.password);
+  if (!result.ok) return res.status(401).json({ error: result.error });
+  res.json(result);
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = verifyToken(extractToken(req));
+  if (!user) return res.json({ authenticated: false, auth_configured: authConfigured() });
+  res.json({ authenticated: true, user: { username: user.username, role: 'equipe' } });
 });
 
 app.get('/api/agency/summary', (_req, res) => {
@@ -402,6 +417,7 @@ app.get('/api/campaigns/:slug/backup', (req, res) => {
       WHERE c.campaign_id = ?
     `).all(campaign.id),
     leaders: db.prepare('SELECT * FROM leaders WHERE campaign_id = ?').all(campaign.id),
+    mobilizers: db.prepare('SELECT * FROM mobilizers WHERE campaign_id = ?').all(campaign.id),
     registrations: db.prepare('SELECT * FROM registrations WHERE campaign_id = ?').all(campaign.id),
     events: db.prepare('SELECT * FROM events WHERE campaign_id = ?').all(campaign.id),
     event_registrations: db.prepare(`
@@ -635,6 +651,240 @@ app.get('/api/campaigns/:slug/events/:eventId/attendees', (req, res) => {
   `).all(event.id);
 
   res.json({ event, attendees });
+});
+
+app.get('/api/campaigns/:slug/events/:eventId/radar', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const event = db.prepare('SELECT * FROM events WHERE id = ? AND campaign_id = ?')
+    .get(req.params.eventId, campaign.id);
+  if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
+
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN connect_whatsapp = 1 THEN 1 ELSE 0 END), 0) AS whatsapp_clicks
+    FROM event_registrations
+    WHERE event_id = ?
+  `).get(event.id);
+
+  const recent = db.prepare(`
+    SELECT id, full_name, phone, organizer_name, connect_whatsapp, created_at
+    FROM event_registrations
+    WHERE event_id = ?
+    ORDER BY created_at DESC
+    LIMIT 40
+  `).all(event.id);
+
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const recentPace = recent.filter((r) => {
+    const t = new Date(r.created_at).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  }).length;
+
+  res.json({
+    event,
+    total: Number(stats.total) || 0,
+    whatsapp_clicks: Number(stats.whatsapp_clicks) || 0,
+    recent_pace: recentPace,
+    recent,
+    generated_at: new Date().toISOString(),
+  });
+});
+
+function slugifyMobilizerCode(name, fallback = '') {
+  const base = String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 28);
+  return base || fallback || nano().slice(0, 6);
+}
+
+function mobilizerStats(campaignId, mobilizerId) {
+  const row = db.prepare(`
+    SELECT COUNT(*) AS c FROM registrations
+    WHERE campaign_id = ? AND mobilizer_id = ?
+  `).get(campaignId, mobilizerId);
+  return Number(row?.c) || 0;
+}
+
+/* ---------- Mobilizadores (código pessoal) ---------- */
+app.get('/api/campaigns/:slug/mobilizers', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const rows = db.prepare(`
+    SELECT * FROM mobilizers WHERE campaign_id = ? ORDER BY name ASC
+  `).all(campaign.id);
+
+  res.json(rows.map((m) => ({
+    ...m,
+    registrations: mobilizerStats(campaign.id, m.id),
+    link_path: `/m/${campaign.slug}/${m.code}`,
+  })));
+});
+
+app.post('/api/campaigns/:slug/mobilizers', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome do mobilizador é obrigatório' });
+
+  let code = slugifyMobilizerCode(req.body.code || name);
+  const exists = db.prepare(
+    'SELECT id FROM mobilizers WHERE campaign_id = ? AND code = ?'
+  ).get(campaign.id, code);
+  if (exists) code = `${code}-${nano().slice(0, 3)}`;
+
+  const result = db.prepare(`
+    INSERT INTO mobilizers (campaign_id, name, code, phone, notes, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(
+    campaign.id,
+    name,
+    code,
+    req.body.phone || null,
+    req.body.notes || null,
+  );
+
+  const mobilizer = db.prepare('SELECT * FROM mobilizers WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json({
+    ...mobilizer,
+    registrations: 0,
+    link_path: `/m/${campaign.slug}/${mobilizer.code}`,
+  });
+});
+
+app.patch('/api/campaigns/:slug/mobilizers/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const mobilizer = db.prepare(
+    'SELECT * FROM mobilizers WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!mobilizer) return res.status(404).json({ error: 'Mobilizador não encontrado' });
+
+  const name = req.body.name != null ? String(req.body.name).trim() : mobilizer.name;
+  if (!name) return res.status(400).json({ error: 'Nome inválido' });
+
+  let code = mobilizer.code;
+  if (req.body.code != null) {
+    code = slugifyMobilizerCode(req.body.code, mobilizer.code);
+    const clash = db.prepare(
+      'SELECT id FROM mobilizers WHERE campaign_id = ? AND code = ? AND id != ?'
+    ).get(campaign.id, code, mobilizer.id);
+    if (clash) return res.status(400).json({ error: 'Código já em uso' });
+  }
+
+  const phone = req.body.phone !== undefined ? (req.body.phone || null) : mobilizer.phone;
+  const notes = req.body.notes !== undefined ? (req.body.notes || null) : mobilizer.notes;
+  const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : mobilizer.active;
+
+  db.prepare(`
+    UPDATE mobilizers SET name = ?, code = ?, phone = ?, notes = ?, active = ? WHERE id = ?
+  `).run(name, code, phone, notes, active, mobilizer.id);
+
+  // Mantém nome na Base quando o mobilizador é renomeado
+  if (name !== mobilizer.name) {
+    db.prepare(`
+      UPDATE registrations SET mobilizer_name = ? WHERE mobilizer_id = ?
+    `).run(name, mobilizer.id);
+  }
+
+  const updated = db.prepare('SELECT * FROM mobilizers WHERE id = ?').get(mobilizer.id);
+  res.json({
+    ...updated,
+    registrations: mobilizerStats(campaign.id, updated.id),
+    link_path: `/m/${campaign.slug}/${updated.code}`,
+  });
+});
+
+app.delete('/api/campaigns/:slug/mobilizers/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const mobilizer = db.prepare(
+    'SELECT * FROM mobilizers WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!mobilizer) return res.status(404).json({ error: 'Mobilizador não encontrado' });
+
+  db.prepare('DELETE FROM mobilizers WHERE id = ?').run(mobilizer.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/m/:slug/:code', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const mobilizer = db.prepare(`
+    SELECT * FROM mobilizers
+    WHERE campaign_id = ? AND code = ? AND active = 1
+  `).get(campaign.id, String(req.params.code || '').toLowerCase());
+
+  if (!mobilizer) return res.status(404).json({ error: 'Link de mobilizador inválido' });
+
+  res.json({
+    campaign: {
+      slug: campaign.slug,
+      name: campaign.name,
+      candidate: campaign.candidate,
+      logo_url: campaign.logo_url,
+      accent_color: campaign.accent_color,
+      whatsapp_url: campaign.whatsapp_url,
+    },
+    mobilizer: {
+      id: mobilizer.id,
+      name: mobilizer.name,
+      code: mobilizer.code,
+    },
+  });
+});
+
+app.post('/api/m/:slug/:code/registrations', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const mobilizer = db.prepare(`
+    SELECT * FROM mobilizers
+    WHERE campaign_id = ? AND code = ? AND active = 1
+  `).get(campaign.id, String(req.params.code || '').toLowerCase());
+  if (!mobilizer) return res.status(404).json({ error: 'Link de mobilizador inválido' });
+
+  const { full_name, phone, email, organizer_name } = req.body;
+  if (!full_name || !phone) {
+    return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
+  }
+
+  const organizer = organizer_name ? String(organizer_name).trim() : null;
+
+  const result = db.prepare(`
+    INSERT INTO registrations (
+      campaign_id, leader_id, municipality_id, full_name, phone, email,
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id
+    )
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)
+  `).run(
+    campaign.id,
+    full_name,
+    phone,
+    email || null,
+    `mobilizador/${mobilizer.code}`,
+    organizer,
+    mobilizer.name,
+    mobilizer.id,
+  );
+
+  res.status(201).json({
+    ok: true,
+    id: result.lastInsertRowid,
+    mobilizer_name: mobilizer.name,
+    whatsapp_url: campaign.whatsapp_url,
+  });
 });
 
 /* ---------- Missions ---------- */

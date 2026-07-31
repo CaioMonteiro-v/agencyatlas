@@ -38,6 +38,18 @@ CREATE TABLE IF NOT EXISTS leaders (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS mobilizers (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  phone TEXT,
+  notes TEXT,
+  active INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(campaign_id, code)
+);
+
 CREATE TABLE IF NOT EXISTS registrations (
   id SERIAL PRIMARY KEY,
   campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -52,6 +64,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   lng DOUBLE PRECISION,
   organizer_name TEXT,
   mobilizer_name TEXT,
+  mobilizer_id INTEGER REFERENCES mobilizers(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -136,9 +149,12 @@ CREATE TABLE IF NOT EXISTS campaign_meta_config (
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
+CREATE INDEX IF NOT EXISTS idx_reg_mobilizer ON registrations(mobilizer_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_campaign ON leaders(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_code ON leaders(referral_code);
 CREATE INDEX IF NOT EXISTS idx_coord_campaign ON coordinators(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code);
 `;
 
 module.exports = { PG_SCHEMA };

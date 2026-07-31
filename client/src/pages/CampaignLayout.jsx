@@ -1,12 +1,15 @@
-import { NavLink, Outlet, Link, useParams } from 'react-router-dom';
+import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import { EmptyState } from '../components/Ui';
 
 export default function CampaignLayout() {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const [campaign, setCampaign] = useState(null);
   const [error, setError] = useState('');
 
@@ -15,6 +18,11 @@ export default function CampaignLayout() {
       .then(setCampaign)
       .catch((err) => setError(err.message));
   }, [slug]);
+
+  function onLogout() {
+    logout();
+    navigate('/login');
+  }
 
   if (error) {
     return (
@@ -56,7 +64,9 @@ export default function CampaignLayout() {
             >
               WhatsApp · bit.ly/FalaFabio
             </a>
-            <Link className="btn btn-soft" to="/">Voltar à Atlas</Link>
+            <button type="button" className="btn btn-soft" onClick={onLogout}>
+              Sair{user?.username ? ` (${user.username})` : ''}
+            </button>
           </div>
         </div>
 

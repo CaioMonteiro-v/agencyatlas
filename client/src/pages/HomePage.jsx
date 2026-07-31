@@ -1,19 +1,25 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { StatusBadge, EmptyState } from '../components/Ui';
 import { api } from '../api';
+import { useAuth } from '../auth';
 
 export default function HomePage() {
+  const { isAuthenticated, loading } = useAuth();
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setSummary(null);
+      return;
+    }
     api.getAgencySummary()
       .then(setSummary)
       .catch((err) => setError(err.message));
-  }, []);
+  }, [isAuthenticated]);
 
   return (
     <>
@@ -30,101 +36,88 @@ export default function HomePage() {
             </div>
             <h1>Atlas Agency</h1>
             <p className="hero__lead">
-              Uma casa digital delicada para cuidar de campanhas, lideranças e mobilização —
-              com clareza, afeto e presença em todo o território.
+              Sistema interno de mobilização da equipe — painel, radar de eventos e códigos pessoais.
             </p>
             <div className="hero__actions">
-              <a className="btn btn-primary" href="#campanhas">Ver campanhas</a>
-              <Link className="btn btn-soft" to="/campanha/fabio-garcia/mobilizacao">
-                Abrir mobilização
-              </Link>
+              {isAuthenticated ? (
+                <Link className="btn btn-primary" to="/campanha/fabio-garcia/mobilizacao">
+                  Abrir mobilização
+                </Link>
+              ) : (
+                <Link className="btn btn-primary" to="/login">
+                  Entrar na equipe
+                </Link>
+              )}
+              <a className="btn btn-soft" href="#como-usar">Como usar</a>
             </div>
           </div>
         </section>
 
-        <section className="section" id="servicos">
+        <section className="section" id="como-usar">
           <div className="container">
             <div className="section__head">
-              <p className="eyebrow">Missão</p>
-              <h2>Mobilizar com cuidado e inteligência</h2>
+              <p className="eyebrow">Operação</p>
+              <h2>Feito para a equipe de mobilização</h2>
               <p>
-                A Atlas Agency desenvolve plataformas amigáveis para gestão de múltiplas campanhas,
-                acompanhamento de mídia e tráfego, e ferramentas de mobilização digital com rastreabilidade.
+                Login só para o painel. QR de evento e link pessoal do mobilizador continuam públicos
+                para captar no campo e mandar a pessoa ao WhatsApp do Fábio.
               </p>
             </div>
             <div className="services">
               <article className="service">
-                <h3>Campanhas</h3>
-                <p>Espaços dedicados para cada projeto político, com identidade própria e visão geral clara.</p>
+                <h3>Painel com login</h3>
+                <p>Base, mapa, coordenadores, eventos e metas — só quem está na equipe.</p>
               </article>
               <article className="service">
-                <h3>Mobilização</h3>
-                <p>Mapas, rankings, links parametrizados, eventos com QR Code e missões com metas reais.</p>
+                <h3>Código do mobilizador</h3>
+                <p>Link curto por pessoa. Cada cadastro já nasce creditado na Base.</p>
               </article>
               <article className="service">
-                <h3>Mídia & Conteúdo</h3>
-                <p>Ambientes preparados para tráfego pago e criação de conteúdo — em expansão contínua.</p>
+                <h3>Radar ao vivo</h3>
+                <p>Durante o evento, veja cadastros entrando em tempo real no celular.</p>
               </article>
             </div>
           </div>
         </section>
 
-        <section className="section" id="dashboard" style={{ paddingTop: 0 }}>
-          <div className="container">
-            <div className="section__head">
-              <p className="eyebrow">Dashboard geral</p>
-              <h2>Resumo das campanhas ativas</h2>
-            </div>
-            {error && <EmptyState>{error}</EmptyState>}
-            {summary && (
-              <div className="stats-row">
-                <div className="stat">
-                  <strong>{summary.totals.active_campaigns}</strong>
-                  <span>Campanhas ativas</span>
-                </div>
-                <div className="stat">
-                  <strong>{summary.totals.registrations}</strong>
-                  <span>Cadastros</span>
-                </div>
-                <div className="stat">
-                  <strong>{summary.totals.leaders}</strong>
-                  <span>Lideranças</span>
-                </div>
-                <div className="stat">
-                  <strong>{summary.totals.active_missions}</strong>
-                  <span>Missões ativas</span>
-                </div>
+        {isAuthenticated && (
+          <section className="section" id="dashboard" style={{ paddingTop: 0 }}>
+            <div className="container">
+              <div className="section__head">
+                <p className="eyebrow">Dashboard geral</p>
+                <h2>Resumo das campanhas ativas</h2>
               </div>
-            )}
-          </div>
-        </section>
-
-        <section className="section" id="campanhas" style={{ paddingTop: 0 }}>
-          <div className="container">
-            <div className="section__head">
-              <p className="eyebrow">Projetos</p>
-              <h2>Campanhas sob o cuidado da Atlas</h2>
+              {error && <EmptyState>{error}</EmptyState>}
+              {summary && (
+                <div className="stats-row">
+                  <article className="stat"><strong>{summary.totals.active_campaigns}</strong><span>Campanhas</span></article>
+                  <article className="stat"><strong>{summary.totals.leaders}</strong><span>Lideranças</span></article>
+                  <article className="stat"><strong>{summary.totals.registrations}</strong><span>Cadastros</span></article>
+                  <article className="stat"><strong>{summary.totals.events}</strong><span>Eventos</span></article>
+                </div>
+              )}
+              {summary?.campaigns?.length > 0 && (
+                <div className="campaign-list" style={{ marginTop: '1.25rem' }}>
+                  {summary.campaigns.map((c) => (
+                    <article key={c.id} className="panel panel-pad" style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div>
+                          <h3 style={{ marginBottom: 4 }}>{c.name}</h3>
+                          <p style={{ margin: 0 }}>{c.candidate}</p>
+                        </div>
+                        <StatusBadge status={c.status} />
+                      </div>
+                      <Link className="btn btn-primary btn-sm" style={{ marginTop: '0.75rem' }} to={`/campanha/${c.slug}/mobilizacao`}>
+                        Abrir
+                      </Link>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {!summary && !error && !loading && <EmptyState>Carregando…</EmptyState>}
             </div>
-            <div className="campaign-list">
-              {(summary?.campaigns || []).map((campaign) => (
-                <Link key={campaign.id} to={`/campanha/${campaign.slug}`} className="campaign-row">
-                  <img src={campaign.logo_url || '/logos/atlas-agency.png'} alt="" />
-                  <div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: 4 }}>
-                      <h3 style={{ margin: 0 }}>{campaign.name}</h3>
-                      <StatusBadge status={campaign.status} />
-                    </div>
-                    <p style={{ marginBottom: 0 }}>{campaign.description}</p>
-                    <p style={{ marginBottom: 0, marginTop: 8, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                      {campaign.stats.registrations} cadastros · {campaign.stats.leaders} lideranças · {campaign.stats.missions} missões
-                    </p>
-                  </div>
-                  <span className="btn btn-soft btn-sm">Abrir</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
       <Footer />
     </>

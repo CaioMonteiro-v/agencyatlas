@@ -1,23 +1,54 @@
+const TOKEN_KEY = 'atlas_auth_token';
+
 const API_BASE = '';
 
+function getToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAuthToken(token) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAuthToken() {
+  setAuthToken('');
+}
+
 async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Erro na requisição');
+    const error = new Error(err.error || 'Erro na requisição');
+    error.status = res.status;
+    throw error;
   }
 
   return res.json();
 }
 
 export const api = {
+  login: (body) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  me: () => request('/api/auth/me'),
   getAgencySummary: () => request('/api/agency/summary'),
   getCampaigns: () => request('/api/campaigns'),
   getCampaign: (slug) => request(`/api/campaigns/${slug}`),
@@ -43,6 +74,7 @@ export const api = {
   registerEvent: (eventSlug, body) =>
     request(`/api/events/${eventSlug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getEventAttendees: (slug, eventId) => request(`/api/campaigns/${slug}/events/${eventId}/attendees`),
+  getEventRadar: (slug, eventId) => request(`/api/campaigns/${slug}/events/${eventId}/radar`),
   getMissions: (slug) => request(`/api/campaigns/${slug}/missions`),
   createMission: (slug, body) => request(`/api/campaigns/${slug}/missions`, { method: 'POST', body: JSON.stringify(body) }),
   updateMissionProgress: (slug, id, body) =>
@@ -68,6 +100,16 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  getMobilizers: (slug) => request(`/api/campaigns/${slug}/mobilizers`),
+  createMobilizer: (slug, body) =>
+    request(`/api/campaigns/${slug}/mobilizers`, { method: 'POST', body: JSON.stringify(body) }),
+  updateMobilizer: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/mobilizers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteMobilizer: (slug, id) =>
+    request(`/api/campaigns/${slug}/mobilizers/${id}`, { method: 'DELETE' }),
+  getMobilizerPublic: (slug, code) => request(`/api/m/${slug}/${code}`),
+  registerMobilizer: (slug, code, body) =>
+    request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
   runAssistant: (slug) => request(`/api/campaigns/${slug}/assistant`, { method: 'POST', body: '{}' }),
   getMetaStatus: (slug) => request(`/api/campaigns/${slug}/meta/status`),

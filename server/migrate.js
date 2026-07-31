@@ -14,6 +14,38 @@ function ensureColumn(db, table, column, definition) {
 }
 
 function migrateAnalyticsSchema(db) {
+  // Mobilizers (código pessoal) — criar antes da FK em registrations
+  if (db.dialect === 'postgres') {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mobilizers (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        phone TEXT,
+        notes TEXT,
+        active INTEGER DEFAULT 1,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(campaign_id, code)
+      );
+    `);
+  } else {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mobilizers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        code TEXT NOT NULL,
+        phone TEXT,
+        notes TEXT,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(campaign_id, code),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+    `);
+  }
+
   ensureColumn(db, 'coordinator_municipalities', 'vote_expectation', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'content_views_expected', 'INTEGER DEFAULT 0');
   ensureColumn(db, 'coordinator_municipalities', 'content_views_actual', 'INTEGER DEFAULT 0');
@@ -26,6 +58,7 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
+  ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
 
   // Backfill: mobilizador do evento → coluna correta; organizador municipal fica livre
   try {

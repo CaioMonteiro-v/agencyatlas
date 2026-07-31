@@ -5,6 +5,7 @@ import RankingPanel from '../components/RankingPanel';
 import LinksPanel from '../components/LinksPanel';
 import RegistrationsTable from '../components/RegistrationsTable';
 import EventsPanel from '../components/EventsPanel';
+import MobilizersPanel from '../components/MobilizersPanel';
 import MissionsPanel from '../components/MissionsPanel';
 
 export default function MobilizationPage() {
@@ -18,8 +19,23 @@ export default function MobilizationPage() {
       .catch(() => setDbKind('unknown'));
   }, []);
 
-  function downloadBackup() {
-    window.location.href = `/api/campaigns/${campaign.slug}/backup`;
+  async function downloadBackup() {
+    try {
+      const token = localStorage.getItem('atlas_auth_token') || '';
+      const res = await fetch(`/api/campaigns/${campaign.slug}/backup`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Falha ao baixar backup');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `atlas-backup-${campaign.slug}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message || 'Erro no backup');
+    }
   }
 
   return (
@@ -76,6 +92,7 @@ export default function MobilizationPage() {
         </div>
 
         <RegistrationsTable campaignSlug={campaign.slug} />
+        <MobilizersPanel campaignSlug={campaign.slug} />
         <EventsPanel campaignSlug={campaign.slug} />
         <MissionsPanel campaignSlug={campaign.slug} />
       </div>

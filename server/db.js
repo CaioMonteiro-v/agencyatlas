@@ -136,6 +136,19 @@ function initSqliteSchema(db) {
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
     );
 
+    CREATE TABLE IF NOT EXISTS mobilizers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      code TEXT NOT NULL,
+      phone TEXT,
+      notes TEXT,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(campaign_id, code),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS registrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,
@@ -150,10 +163,12 @@ function initSqliteSchema(db) {
       lng REAL,
       organizer_name TEXT,
       mobilizer_name TEXT,
+      mobilizer_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),
-      FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id),
+      FOREIGN KEY (mobilizer_id) REFERENCES mobilizers(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS events (

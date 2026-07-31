@@ -308,6 +308,12 @@ export default function EventsPanel({ campaignSlug }) {
                 <Link className="btn btn-soft btn-sm" to={`/evento/${event.slug}`}>
                   Página de inscrição
                 </Link>
+                <Link
+                  className="btn btn-primary btn-sm"
+                  to={`/campanha/${campaignSlug}/eventos/${event.id}/radar`}
+                >
+                  Radar ao vivo
+                </Link>
                 <button type="button" className="btn btn-accent btn-sm" onClick={() => viewAttendees(event)}>
                   Ver inscritos ({event.attendees || 0})
                 </button>
