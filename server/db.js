@@ -149,6 +149,15 @@ function initSqliteSchema(db) {
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS team_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'equipe',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS registrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,

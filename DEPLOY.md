@@ -2,19 +2,23 @@
 
 Este app agora sobe com **Docker**. Isso evita o erro de `better-sqlite3`/`vite` e funciona melhor em hospedagens gratuitas.
 
-## Login da equipe (obrigatório no painel)
+## Login da equipe
 
-No Render → **Environment**, adicione:
+Acesse `/login`:
+1. **Primeiro acesso:** tela “Criar conta” (nome, usuário, senha) — libera o painel
+2. **Depois:** Entrar com usuário/senha
+3. **Novos membros (opcional):** no Render, defina `ATLAS_INVITE_CODE=seu-codigo` para permitir “Criar conta” com convite
 
+Variáveis úteis:
 ```text
-ATLAS_TEAM_USER=equipe
-ATLAS_TEAM_PASSWORD=sua-senha-forte
 ATLAS_AUTH_SECRET=um-segredo-longo-aleatorio
+ATLAS_INVITE_CODE=atlas-mt-2026
 ```
+
+Opcional (legado): `ATLAS_TEAM_USER` + `ATLAS_TEAM_PASSWORD` ainda funcionam como login de emergência.
 
 - Painel (`/campanha`, `/admin`) exige login
 - QR de evento (`/evento/...`) e link de mobilizador (`/m/...`) continuam **públicos**
-- Localmente, se não definir senha, o padrão de desenvolvimento é usuário `equipe` / senha `atlas`
 
 ---
 

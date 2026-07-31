@@ -28,6 +28,14 @@ function migrateAnalyticsSchema(db) {
         created_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(campaign_id, code)
       );
+      CREATE TABLE IF NOT EXISTS team_users (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'equipe',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
   } else {
     db.exec(`
@@ -42,6 +50,14 @@ function migrateAnalyticsSchema(db) {
         created_at TEXT DEFAULT (datetime('now')),
         UNIQUE(campaign_id, code),
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS team_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'equipe',
+        created_at TEXT DEFAULT (datetime('now'))
       );
     `);
   }

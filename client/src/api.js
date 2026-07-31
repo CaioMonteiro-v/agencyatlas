@@ -40,6 +40,7 @@ async function request(path, options = {}) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     const error = new Error(err.error || 'Erro na requisição');
     error.status = res.status;
+    error.can_register = err.can_register;
     throw error;
   }
 
@@ -48,7 +49,10 @@ async function request(path, options = {}) {
 
 export const api = {
   login: (body) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  register: (body) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  authStatus: () => request('/api/auth/status'),
   me: () => request('/api/auth/me'),
+  getAuthUsers: () => request('/api/auth/users'),
   getAgencySummary: () => request('/api/agency/summary'),
   getCampaigns: () => request('/api/campaigns'),
   getCampaign: (slug) => request(`/api/campaigns/${slug}`),

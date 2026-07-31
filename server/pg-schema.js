@@ -50,6 +50,15 @@ CREATE TABLE IF NOT EXISTS mobilizers (
   UNIQUE(campaign_id, code)
 );
 
+CREATE TABLE IF NOT EXISTS team_users (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'equipe',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS registrations (
   id SERIAL PRIMARY KEY,
   campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,

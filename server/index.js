@@ -12,7 +12,7 @@ const {
 } = require('./analytics');
 const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
 const { runAssistant } = require('./assistant');
-const { login, requireAuth, authConfigured, TEAM_USER, extractToken, verifyToken } = require('./auth');
+const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -58,14 +58,48 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const result = login(req.body.username, req.body.password);
-  if (!result.ok) return res.status(401).json({ error: result.error });
+  if (!result.ok) return res.status(401).json(result);
   res.json(result);
+});
+
+app.post('/api/auth/register', (req, res) => {
+  const actor = verifyToken(extractToken(req));
+  const result = register({
+    name: req.body.name,
+    username: req.body.username,
+    password: req.body.password,
+    invite_code: req.body.invite_code,
+  }, actor);
+  if (!result.ok) return res.status(400).json(result);
+  res.status(201).json(result);
+});
+
+app.get('/api/auth/status', (_req, res) => {
+  res.json({
+    auth_configured: authConfigured(),
+    can_register: canSelfRegister(),
+    needs_first_user: !hasTeamUsers(),
+    invite_required: Boolean(process.env.ATLAS_INVITE_CODE) && hasTeamUsers(),
+  });
 });
 
 app.get('/api/auth/me', (req, res) => {
   const user = verifyToken(extractToken(req));
-  if (!user) return res.json({ authenticated: false, auth_configured: authConfigured() });
-  res.json({ authenticated: true, user: { username: user.username, role: 'equipe' } });
+  if (!user) {
+    return res.json({
+      authenticated: false,
+      auth_configured: authConfigured(),
+      can_register: canSelfRegister(),
+    });
+  }
+  res.json({ authenticated: true, user });
+});
+
+app.get('/api/auth/users', (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Apenas admin pode listar usuários' });
+  }
+  res.json(listUsers());
 });
 
 app.get('/api/agency/summary', (_req, res) => {
@@ -1427,6 +1461,7 @@ app.get('*', (req, res, next) => {
 
 async function start() {
   db = await getDb();
+  setAuthDb(db);
   seedProduction(db);
   if (process.env.SEED_DEMO === 'true') {
     seedDemo(db);

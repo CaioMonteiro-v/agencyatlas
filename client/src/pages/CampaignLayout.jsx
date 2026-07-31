@@ -65,7 +65,7 @@ export default function CampaignLayout() {
               WhatsApp · bit.ly/FalaFabio
             </a>
             <button type="button" className="btn btn-soft" onClick={onLogout}>
-              Sair{user?.username ? ` (${user.username})` : ''}
+              Sair{user?.name ? ` (${user.name.split(' ')[0]})` : user?.username ? ` (${user.username})` : ''}
             </button>
           </div>
         </div>
