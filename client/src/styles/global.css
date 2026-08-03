@@ -1543,3 +1543,21 @@ th {
 .content-card .stack > .content-assignment + .content-assignment {
   margin-top: 0.55rem;
 }
+
+.campaign-home-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.campaign-home-card__brand img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 0.35rem;
+}
