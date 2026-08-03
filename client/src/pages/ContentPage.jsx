@@ -32,16 +32,21 @@ export default function ContentPage() {
   const [editForms, setEditForms] = useState({});
 
   async function load() {
-    const [week, coords] = await Promise.all([
-      api.getContent(campaign.slug),
-      api.getCoordinators(campaign.slug).catch(() => ({ coordinators: [] })),
-    ]);
-    setData(week);
-    setCoordinators(coords.coordinators || []);
+    try {
+      const [week, coords] = await Promise.all([
+        api.getContent(campaign.slug),
+        api.getCoordinators(campaign.slug).catch(() => ({ coordinators: [] })),
+      ]);
+      setData(week);
+      setCoordinators(coords.coordinators || []);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Erro ao carregar conteúdo');
+    }
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load();
   }, [campaign.slug]);
 
   const selectedCoordMunnis = useMemo(() => {

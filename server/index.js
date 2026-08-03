@@ -1305,10 +1305,15 @@ app.get('/api/campaigns/:slug/meta/status', (req, res) => {
 
 /* ---------- Conteúdo da semana ---------- */
 app.get('/api/campaigns/:slug/content', (req, res) => {
-  const campaign = getCampaignBySlug(req.params.slug);
-  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
-  const week = listContentWeek(db, campaign.id);
-  res.json({ ...week, meta: metaStatus() });
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const week = listContentWeek(db, campaign.id);
+    res.json({ ...week, meta: metaStatus() });
+  } catch (err) {
+    console.error('GET content:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar conteúdo' });
+  }
 });
 
 app.post('/api/campaigns/:slug/content', (req, res) => {

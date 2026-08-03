@@ -72,8 +72,14 @@ function listContentWeek(db, campaignId) {
   const posts = db.prepare(`
     SELECT * FROM content_posts
     WHERE campaign_id = ? AND status != 'arquivada'
-    ORDER BY COALESCE(posted_at, created_at) DESC, id DESC
-  `).all(campaignId).map((p) => buildContentDetail(db, p));
+    ORDER BY id DESC
+  `).all(campaignId)
+    .sort((a, b) => {
+      const da = String(a.posted_at || a.created_at || '');
+      const dbv = String(b.posted_at || b.created_at || '');
+      return dbv.localeCompare(da);
+    })
+    .map((p) => buildContentDetail(db, p));
 
   const alarms = [];
   for (const post of posts) {
