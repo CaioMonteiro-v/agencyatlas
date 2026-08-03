@@ -99,11 +99,17 @@ export default function HomePage() {
               {summary?.campaigns?.length > 0 && (
                 <div className="campaign-list" style={{ marginTop: '1.25rem' }}>
                   {summary.campaigns.map((c) => (
-                    <article key={c.id} className="panel panel-pad" style={{ marginBottom: '0.75rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                        <div>
-                          <h3 style={{ marginBottom: 4 }}>{c.name}</h3>
-                          <p style={{ margin: 0 }}>{c.candidate}</p>
+                    <article key={c.id} className="panel panel-pad campaign-home-card" style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                        <div className="campaign-home-card__brand">
+                          <img
+                            src={c.logo_url || '/logos/fabio-garcia.png'}
+                            alt={c.candidate || c.name}
+                          />
+                          <div>
+                            <h3 style={{ marginBottom: 4 }}>{c.name}</h3>
+                            <p style={{ margin: 0 }}>{c.candidate}</p>
+                          </div>
                         </div>
                         <StatusBadge status={c.status} />
                       </div>
