@@ -115,6 +115,23 @@ export const api = {
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
+  getContent: (slug) => request(`/api/campaigns/${slug}/content`),
+  createContent: (slug, body) =>
+    request(`/api/campaigns/${slug}/content`, { method: 'POST', body: JSON.stringify(body) }),
+  updateContent: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/content/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteContent: (slug, id) =>
+    request(`/api/campaigns/${slug}/content/${id}`, { method: 'DELETE' }),
+  createContentAssignment: (slug, postId, body) =>
+    request(`/api/campaigns/${slug}/content/${postId}/assignments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateContentAssignment: (slug, postId, assignmentId, body) =>
+    request(`/api/campaigns/${slug}/content/${postId}/assignments/${assignmentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   runAssistant: (slug) => request(`/api/campaigns/${slug}/assistant`, { method: 'POST', body: '{}' }),
   getMetaStatus: (slug) => request(`/api/campaigns/${slug}/meta/status`),
   syncMeta: (slug) => request(`/api/campaigns/${slug}/meta/sync`, { method: 'POST', body: '{}' }),

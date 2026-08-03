@@ -123,6 +123,69 @@ function migrateAnalyticsSchema(db) {
         updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS content_posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        caption TEXT,
+        permalink TEXT,
+        posted_at TEXT,
+        source TEXT DEFAULT 'manual',
+        meta_media_id TEXT,
+        likes INTEGER DEFAULT 0,
+        comments INTEGER DEFAULT 0,
+        reach INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'ativa',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS content_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content_post_id INTEGER NOT NULL,
+        coordinator_id INTEGER,
+        municipality_id INTEGER,
+        target_views INTEGER DEFAULT 0,
+        actual_views INTEGER DEFAULT 0,
+        target_comments INTEGER DEFAULT 0,
+        actual_comments INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pendente',
+        notes TEXT,
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (content_post_id) REFERENCES content_posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+        FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
+      );
+    `);
+  } else {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS content_posts (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        caption TEXT,
+        permalink TEXT,
+        posted_at TEXT,
+        source TEXT DEFAULT 'manual',
+        meta_media_id TEXT,
+        likes INTEGER DEFAULT 0,
+        comments INTEGER DEFAULT 0,
+        reach INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'ativa',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS content_assignments (
+        id SERIAL PRIMARY KEY,
+        content_post_id INTEGER NOT NULL REFERENCES content_posts(id) ON DELETE CASCADE,
+        coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+        municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+        target_views INTEGER DEFAULT 0,
+        actual_views INTEGER DEFAULT 0,
+        target_comments INTEGER DEFAULT 0,
+        actual_comments INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pendente',
+        notes TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
   }
 }

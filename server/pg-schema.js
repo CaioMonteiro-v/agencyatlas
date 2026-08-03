@@ -155,6 +155,36 @@ CREATE TABLE IF NOT EXISTS campaign_meta_config (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS content_posts (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  caption TEXT,
+  permalink TEXT,
+  posted_at TEXT,
+  source TEXT DEFAULT 'manual',
+  meta_media_id TEXT,
+  likes INTEGER DEFAULT 0,
+  comments INTEGER DEFAULT 0,
+  reach INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'ativa',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS content_assignments (
+  id SERIAL PRIMARY KEY,
+  content_post_id INTEGER NOT NULL REFERENCES content_posts(id) ON DELETE CASCADE,
+  coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+  target_views INTEGER DEFAULT 0,
+  actual_views INTEGER DEFAULT 0,
+  target_comments INTEGER DEFAULT 0,
+  actual_comments INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pendente',
+  notes TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);

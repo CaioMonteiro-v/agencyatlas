@@ -13,6 +13,7 @@ const {
 const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
 const { runAssistant } = require('./assistant');
 const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
+const { listContentWeek, buildContentDetail } = require('./content');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -1296,6 +1297,208 @@ app.get('/api/campaigns/:slug/meta/status', (req, res) => {
   res.json({ ...metaStatus(), config: cfg || null });
 });
 
+/* ---------- Conteúdo da semana ---------- */
+app.get('/api/campaigns/:slug/content', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const week = listContentWeek(db, campaign.id);
+  res.json({ ...week, meta: metaStatus() });
+});
+
+app.post('/api/campaigns/:slug/content', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const title = String(req.body.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'Título do conteúdo é obrigatório' });
+
+  const result = db.prepare(`
+    INSERT INTO content_posts (
+      campaign_id, title, caption, permalink, posted_at, source,
+      likes, comments, reach, status
+    ) VALUES (?, ?, ?, ?, ?, 'manual', ?, ?, ?, 'ativa')
+  `).run(
+    campaign.id,
+    title,
+    req.body.caption || '',
+    req.body.permalink || null,
+    req.body.posted_at || new Date().toISOString().slice(0, 10),
+    Math.max(0, Number(req.body.likes) || 0),
+    Math.max(0, Number(req.body.comments) || 0),
+    Math.max(0, Number(req.body.reach) || 0),
+  );
+
+  const post = db.prepare('SELECT * FROM content_posts WHERE id = ?').get(result.lastInsertRowid);
+
+  // Atribuições opcionais na criação
+  const assignments = Array.isArray(req.body.assignments) ? req.body.assignments : [];
+  const insertA = db.prepare(`
+    INSERT INTO content_assignments (
+      content_post_id, coordinator_id, municipality_id,
+      target_views, actual_views, target_comments, actual_comments, status, notes
+    ) VALUES (?, ?, ?, ?, 0, ?, 0, 'pendente', ?)
+  `);
+  for (const a of assignments) {
+    if (!a.coordinator_id) continue;
+    insertA.run(
+      post.id,
+      Number(a.coordinator_id),
+      a.municipality_id ? Number(a.municipality_id) : null,
+      Math.max(0, Number(a.target_views) || 0),
+      Math.max(0, Number(a.target_comments) || 0),
+      a.notes || null,
+    );
+  }
+
+  // Atalho: cobrar todos os municípios de um coordenador
+  if (req.body.assign_all_for_coordinator_id) {
+    const cid = Number(req.body.assign_all_for_coordinator_id);
+    const target = Math.max(0, Number(req.body.default_target_views) || 500);
+    const munis = db.prepare(`
+      SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
+    `).all(cid);
+    for (const m of munis) {
+      insertA.run(post.id, cid, m.municipality_id, target, 0, null);
+    }
+  }
+
+  res.status(201).json(buildContentDetail(db, post));
+});
+
+app.patch('/api/campaigns/:slug/content/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const post = db.prepare(
+    'SELECT * FROM content_posts WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!post) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+
+  const title = req.body.title != null ? String(req.body.title).trim() : post.title;
+  if (!title) return res.status(400).json({ error: 'Título inválido' });
+
+  db.prepare(`
+    UPDATE content_posts SET
+      title = ?, caption = ?, permalink = ?, posted_at = ?,
+      likes = ?, comments = ?, reach = ?, status = ?
+    WHERE id = ?
+  `).run(
+    title,
+    req.body.caption !== undefined ? req.body.caption : post.caption,
+    req.body.permalink !== undefined ? req.body.permalink : post.permalink,
+    req.body.posted_at !== undefined ? req.body.posted_at : post.posted_at,
+    req.body.likes !== undefined ? Math.max(0, Number(req.body.likes) || 0) : post.likes,
+    req.body.comments !== undefined ? Math.max(0, Number(req.body.comments) || 0) : post.comments,
+    req.body.reach !== undefined ? Math.max(0, Number(req.body.reach) || 0) : post.reach,
+    req.body.status || post.status,
+    post.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM content_posts WHERE id = ?').get(post.id);
+  res.json(buildContentDetail(db, updated));
+});
+
+app.post('/api/campaigns/:slug/content/:id/assignments', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const post = db.prepare(
+    'SELECT * FROM content_posts WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!post) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+
+  const coordinatorId = Number(req.body.coordinator_id);
+  if (!coordinatorId) return res.status(400).json({ error: 'Selecione o coordenador' });
+
+  const coord = db.prepare(
+    'SELECT id FROM coordinators WHERE id = ? AND campaign_id = ?'
+  ).get(coordinatorId, campaign.id);
+  if (!coord) return res.status(400).json({ error: 'Coordenador inválido' });
+
+  const result = db.prepare(`
+    INSERT INTO content_assignments (
+      content_post_id, coordinator_id, municipality_id,
+      target_views, actual_views, target_comments, actual_comments, status, notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    post.id,
+    coordinatorId,
+    req.body.municipality_id ? Number(req.body.municipality_id) : null,
+    Math.max(0, Number(req.body.target_views) || 0),
+    Math.max(0, Number(req.body.actual_views) || 0),
+    Math.max(0, Number(req.body.target_comments) || 0),
+    Math.max(0, Number(req.body.actual_comments) || 0),
+    req.body.status || 'pendente',
+    req.body.notes || null,
+  );
+
+  const row = db.prepare('SELECT * FROM content_assignments WHERE id = ?').get(result.lastInsertRowid);
+  const detail = buildContentDetail(db, db.prepare('SELECT * FROM content_posts WHERE id = ?').get(post.id));
+  res.status(201).json({
+    assignment: detail.assignments.find((a) => a.id === row.id),
+    post: detail,
+  });
+});
+
+app.patch('/api/campaigns/:slug/content/:id/assignments/:assignmentId', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const post = db.prepare(
+    'SELECT * FROM content_posts WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!post) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+
+  const assignment = db.prepare(`
+    SELECT * FROM content_assignments
+    WHERE id = ? AND content_post_id = ?
+  `).get(req.params.assignmentId, post.id);
+  if (!assignment) return res.status(404).json({ error: 'Atribuição não encontrada' });
+
+  db.prepare(`
+    UPDATE content_assignments SET
+      target_views = ?,
+      actual_views = ?,
+      target_comments = ?,
+      actual_comments = ?,
+      status = ?,
+      notes = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    req.body.target_views !== undefined ? Math.max(0, Number(req.body.target_views) || 0) : assignment.target_views,
+    req.body.actual_views !== undefined ? Math.max(0, Number(req.body.actual_views) || 0) : assignment.actual_views,
+    req.body.target_comments !== undefined ? Math.max(0, Number(req.body.target_comments) || 0) : assignment.target_comments,
+    req.body.actual_comments !== undefined ? Math.max(0, Number(req.body.actual_comments) || 0) : assignment.actual_comments,
+    req.body.status || assignment.status,
+    req.body.notes !== undefined ? req.body.notes : assignment.notes,
+    assignment.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM content_assignments WHERE id = ?').get(assignment.id);
+  if (updated.coordinator_id && updated.municipality_id && req.body.actual_views !== undefined) {
+    db.prepare(`
+      UPDATE coordinator_municipalities SET
+        content_views_actual = CASE
+          WHEN ? > content_views_actual THEN ? ELSE content_views_actual END
+      WHERE coordinator_id = ? AND municipality_id = ?
+    `).run(updated.actual_views, updated.actual_views, updated.coordinator_id, updated.municipality_id);
+  }
+
+  res.json(buildContentDetail(db, post));
+});
+
+app.delete('/api/campaigns/:slug/content/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const post = db.prepare(
+    'SELECT * FROM content_posts WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!post) return res.status(404).json({ error: 'Conteúdo não encontrado' });
+  db.prepare('DELETE FROM content_posts WHERE id = ?').run(post.id);
+  res.json({ ok: true });
+});
+
 app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
@@ -1341,13 +1544,55 @@ app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
           d.municipality_id,
         );
       }
+
+      // Importa posts do IG para a aba Conteúdo (ainda sem API, este bloco não roda)
+      for (const m of snapshot.media || []) {
+        const title = ((m.caption || 'Post Instagram').trim().split('\n')[0] || 'Post Instagram').slice(0, 80);
+        const existing = db.prepare(`
+          SELECT id FROM content_posts WHERE campaign_id = ? AND meta_media_id = ?
+        `).get(campaign.id, String(m.id));
+        if (existing) {
+          db.prepare(`
+            UPDATE content_posts SET
+              likes = ?, comments = ?, reach = ?, permalink = ?, caption = ?
+            WHERE id = ?
+          `).run(
+            Number(m.like_count || 0),
+            Number(m.comments_count || 0),
+            Number(m.reach || m.impressions || 0),
+            m.permalink || null,
+            m.caption || '',
+            existing.id,
+          );
+        } else {
+          db.prepare(`
+            INSERT INTO content_posts (
+              campaign_id, title, caption, permalink, posted_at, source,
+              meta_media_id, likes, comments, reach, status
+            ) VALUES (?, ?, ?, ?, ?, 'meta', ?, ?, ?, ?, 'ativa')
+          `).run(
+            campaign.id,
+            title,
+            m.caption || '',
+            m.permalink || null,
+            (m.timestamp || '').slice(0, 10) || now.slice(0, 10),
+            String(m.id),
+            Number(m.like_count || 0),
+            Number(m.comments_count || 0),
+            Number(m.reach || m.impressions || 0),
+          );
+        }
+      }
     })();
+
+    const week = listContentWeek(db, campaign.id);
 
     res.json({
       ok: true,
       synced_at: now,
       totals: snapshot.totals,
       municipalities_updated: distributed.length,
+      content_posts: week.posts.length,
       media_sample: (snapshot.media || []).slice(0, 5).map((m) => ({
         id: m.id,
         caption: (m.caption || '').slice(0, 120),
