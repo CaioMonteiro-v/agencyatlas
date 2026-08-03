@@ -461,6 +461,12 @@ app.get('/api/campaigns/:slug/backup', (req, res) => {
       WHERE e.campaign_id = ?
     `).all(campaign.id),
     missions: db.prepare('SELECT * FROM missions WHERE campaign_id = ?').all(campaign.id),
+    content_posts: db.prepare('SELECT * FROM content_posts WHERE campaign_id = ?').all(campaign.id),
+    content_assignments: db.prepare(`
+      SELECT ca.* FROM content_assignments ca
+      JOIN content_posts cp ON cp.id = ca.content_post_id
+      WHERE cp.campaign_id = ?
+    `).all(campaign.id),
   };
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
