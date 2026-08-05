@@ -36,7 +36,7 @@ export default function HomePage() {
             </div>
             <h1>Atlas Agency</h1>
             <p className="hero__lead">
-              Sistema interno de mobilização da equipe — painel, radar de eventos e códigos pessoais.
+              Sistema interno de mobilização majoritária — painel da equipe, radar de eventos e códigos pessoais.
             </p>
             <div className="hero__actions">
               {isAuthenticated ? (

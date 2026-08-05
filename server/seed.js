@@ -59,17 +59,33 @@ function daysAgo(n) {
 
 function ensureBaseCampaign(db) {
   let campaign = db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
-  if (campaign) return campaign;
+  if (campaign) {
+    // Majoritária 2026 — atualiza identidade sem quebrar slug/URLs
+    db.prepare(`
+      UPDATE campaigns SET
+        name = ?,
+        candidate = ?,
+        description = ?,
+        mission = ?
+      WHERE slug = 'fabio-garcia'
+    `).run(
+      'Campanha Fábio Garcia — Vice-Governador',
+      'Fábio Garcia · Vice-Governador de Mato Grosso',
+      'Mobilização majoritária em todo o Mato Grosso: território, lideranças e conversão digital.',
+      'Articular os 142 municípios, conectar coordenadores e transformar presença em voto majoritário.',
+    );
+    return db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
+  }
 
   const result = db.prepare(`
     INSERT INTO campaigns (slug, name, candidate, description, mission, status, accent_color, logo_url, whatsapp_url)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     'fabio-garcia',
-    'Campanha Fábio Garcia',
-    'Fábio Garcia',
-    'Mobilização digital e articulação territorial em Mato Grosso.',
-    'Conectar lideranças, multiplicadores e comunidades em todo o estado.',
+    'Campanha Fábio Garcia — Vice-Governador',
+    'Fábio Garcia · Vice-Governador de Mato Grosso',
+    'Mobilização majoritária em todo o Mato Grosso: território, lideranças e conversão digital.',
+    'Articular os 142 municípios, conectar coordenadores e transformar presença em voto majoritário.',
     'ativa',
     '#0033A0',
     '/logos/fabio-garcia.png',

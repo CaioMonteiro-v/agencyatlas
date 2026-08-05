@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" role="img" aria-label="Fábio Garcia Deputado Federal">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" role="img" aria-label="Fábio Garcia Vice-Governador">
   <style>
     .fabio { font-family: Arial Black, Helvetica Neue, Helvetica, Arial, sans-serif; font-weight: 900; font-size: 168px; fill: #F5C400; letter-spacing: -6px; }
     .garcia { font-family: Arial Black, Helvetica Neue, Helvetica, Arial, sans-serif; font-weight: 900; font-size: 168px; fill: #0033A0; letter-spacing: -4px; }
-    .sub { font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 44px; fill: #0033A0; letter-spacing: 20px; }
+    .sub { font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 40px; fill: #0033A0; letter-spacing: 12px; }
   </style>
 
   <text class="fabio" x="24" y="160">FABI</text>
@@ -18,5 +18,5 @@
   </g>
 
   <text class="garcia" x="24" y="330">GARCIA</text>
-  <text class="sub" x="30" y="410">DEPUTADO FEDERAL</text>
+  <text class="sub" x="30" y="410">VICE-GOVERNADOR</text>
 </svg>

@@ -43,7 +43,7 @@ export default function MobilizerCapturePage() {
   const waHref = info
     ? buildWhatsAppLink(
       info.campaign.whatsapp_url,
-      `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e me cadastrei com ${info.mobilizer.name}. Quero ficar por dentro da campanha.`,
+      `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e me cadastrei com ${info.mobilizer.name}. Quero apoiar a campanha a vice-governador.`,
     )
     : 'https://bit.ly/FalaFabio';
 
