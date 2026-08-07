@@ -6,6 +6,7 @@ import LinksPanel from '../components/LinksPanel';
 import RegistrationsTable from '../components/RegistrationsTable';
 import EventsPanel from '../components/EventsPanel';
 import MobilizersPanel from '../components/MobilizersPanel';
+import MobilizedContentsPanel from '../components/MobilizedContentsPanel';
 import MissionsPanel from '../components/MissionsPanel';
 
 export default function MobilizationPage() {
@@ -93,6 +94,7 @@ export default function MobilizationPage() {
 
         <RegistrationsTable campaignSlug={campaign.slug} />
         <MobilizersPanel campaignSlug={campaign.slug} />
+        <MobilizedContentsPanel campaignSlug={campaign.slug} />
         <EventsPanel campaignSlug={campaign.slug} />
         <MissionsPanel campaignSlug={campaign.slug} />
       </div>

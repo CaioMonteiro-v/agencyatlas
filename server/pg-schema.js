@@ -185,6 +185,30 @@ CREATE TABLE IF NOT EXISTS content_assignments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS mobilized_contents (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  bitly_url TEXT NOT NULL,
+  destination_url TEXT,
+  clicks INTEGER DEFAULT 0,
+  views INTEGER DEFAULT 0,
+  notes TEXT,
+  status TEXT DEFAULT 'ativo',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS mobilized_content_channels (
+  id SERIAL PRIMARY KEY,
+  mobilized_content_id INTEGER NOT NULL REFERENCES mobilized_contents(id) ON DELETE CASCADE,
+  channel_type TEXT DEFAULT 'grupo',
+  channel_name TEXT NOT NULL,
+  members_count INTEGER DEFAULT 0,
+  sent_at TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);

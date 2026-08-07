@@ -292,6 +292,32 @@ function initSqliteSchema(db) {
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS mobilized_contents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      bitly_url TEXT NOT NULL,
+      destination_url TEXT,
+      clicks INTEGER DEFAULT 0,
+      views INTEGER DEFAULT 0,
+      notes TEXT,
+      status TEXT DEFAULT 'ativo',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mobilized_content_channels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mobilized_content_id INTEGER NOT NULL,
+      channel_type TEXT DEFAULT 'grupo',
+      channel_name TEXT NOT NULL,
+      members_count INTEGER DEFAULT 0,
+      sent_at TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (mobilized_content_id) REFERENCES mobilized_contents(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
     CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);

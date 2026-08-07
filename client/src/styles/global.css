@@ -688,6 +688,32 @@ th {
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.8), rgba(238, 245, 242, 0.55));
 }
 
+.mobilized-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.65rem;
+}
+
+.mobilized-summary > div {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.55);
+  display: grid;
+  gap: 0.15rem;
+}
+
+.mobilized-summary strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mobilized-summary span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .progress {
   height: 10px;
   border-radius: 999px;

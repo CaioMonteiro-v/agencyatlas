@@ -14,6 +14,7 @@ const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./me
 const { runAssistant } = require('./assistant');
 const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 const { listContentWeek, buildContentDetail } = require('./content');
+const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -466,6 +467,12 @@ app.get('/api/campaigns/:slug/backup', (req, res) => {
       SELECT ca.* FROM content_assignments ca
       JOIN content_posts cp ON cp.id = ca.content_post_id
       WHERE cp.campaign_id = ?
+    `).all(campaign.id),
+    mobilized_contents: db.prepare('SELECT * FROM mobilized_contents WHERE campaign_id = ?').all(campaign.id),
+    mobilized_content_channels: db.prepare(`
+      SELECT ch.* FROM mobilized_content_channels ch
+      JOIN mobilized_contents mc ON mc.id = ch.mobilized_content_id
+      WHERE mc.campaign_id = ?
     `).all(campaign.id),
   };
 
@@ -1508,6 +1515,197 @@ app.delete('/api/campaigns/:slug/content/:id', (req, res) => {
   if (!post) return res.status(404).json({ error: 'Conteúdo não encontrado' });
   db.prepare('DELETE FROM content_posts WHERE id = ?').run(post.id);
   res.json({ ok: true });
+});
+
+/* ---------- Conteúdos mobilizados (Bitly + grupos/canais) ---------- */
+function getMobilizedOwned(slug, id) {
+  const campaign = getCampaignBySlug(slug);
+  if (!campaign) return { error: { status: 404, message: 'Campanha não encontrada' } };
+  const row = db.prepare(
+    'SELECT * FROM mobilized_contents WHERE id = ? AND campaign_id = ?'
+  ).get(id, campaign.id);
+  if (!row) return { error: { status: 404, message: 'Conteúdo mobilizado não encontrado' } };
+  return { campaign, row };
+}
+
+app.get('/api/campaigns/:slug/mobilized', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    res.json(listMobilizedContents(db, campaign.id));
+  } catch (err) {
+    console.error('GET mobilized:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar conteúdos mobilizados' });
+  }
+});
+
+app.post('/api/campaigns/:slug/mobilized', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const title = String(req.body.title || '').trim();
+  const bitlyUrl = String(req.body.bitly_url || '').trim();
+  if (!title) return res.status(400).json({ error: 'Título é obrigatório' });
+  if (!bitlyUrl) return res.status(400).json({ error: 'Link Bitly é obrigatório' });
+
+  const result = db.prepare(`
+    INSERT INTO mobilized_contents (
+      campaign_id, title, bitly_url, destination_url, clicks, views, notes, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo')
+  `).run(
+    campaign.id,
+    title,
+    bitlyUrl,
+    req.body.destination_url ? String(req.body.destination_url).trim() : null,
+    Math.max(0, Number(req.body.clicks) || 0),
+    Math.max(0, Number(req.body.views) || 0),
+    req.body.notes ? String(req.body.notes).trim() : null,
+  );
+
+  const row = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(result.lastInsertRowid);
+
+  const channels = Array.isArray(req.body.channels) ? req.body.channels : [];
+  const insertCh = db.prepare(`
+    INSERT INTO mobilized_content_channels (
+      mobilized_content_id, channel_type, channel_name, members_count, sent_at, notes
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const ch of channels) {
+    const name = String(ch.channel_name || ch.name || '').trim();
+    if (!name) continue;
+    insertCh.run(
+      row.id,
+      ch.channel_type === 'canal' ? 'canal' : 'grupo',
+      name,
+      Math.max(0, Number(ch.members_count) || 0),
+      ch.sent_at || new Date().toISOString().slice(0, 10),
+      ch.notes || null,
+    );
+  }
+
+  res.status(201).json(enrichMobilizedContent(db, row));
+});
+
+app.patch('/api/campaigns/:slug/mobilized/:id', (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+  const { row } = owned;
+
+  const title = req.body.title != null ? String(req.body.title).trim() : row.title;
+  const bitlyUrl = req.body.bitly_url != null ? String(req.body.bitly_url).trim() : row.bitly_url;
+  if (!title) return res.status(400).json({ error: 'Título inválido' });
+  if (!bitlyUrl) return res.status(400).json({ error: 'Link Bitly inválido' });
+
+  db.prepare(`
+    UPDATE mobilized_contents SET
+      title = ?, bitly_url = ?, destination_url = ?,
+      clicks = ?, views = ?, notes = ?, status = ?
+    WHERE id = ?
+  `).run(
+    title,
+    bitlyUrl,
+    req.body.destination_url !== undefined
+      ? (req.body.destination_url ? String(req.body.destination_url).trim() : null)
+      : row.destination_url,
+    req.body.clicks !== undefined ? Math.max(0, Number(req.body.clicks) || 0) : row.clicks,
+    req.body.views !== undefined ? Math.max(0, Number(req.body.views) || 0) : row.views,
+    req.body.notes !== undefined ? req.body.notes : row.notes,
+    req.body.status || row.status,
+    row.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(row.id);
+  res.json(enrichMobilizedContent(db, updated));
+});
+
+app.delete('/api/campaigns/:slug/mobilized/:id', (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+  db.prepare('DELETE FROM mobilized_contents WHERE id = ?').run(owned.row.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/campaigns/:slug/mobilized/:id/channels', (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+
+  const name = String(req.body.channel_name || req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nome do grupo/canal é obrigatório' });
+
+  const result = db.prepare(`
+    INSERT INTO mobilized_content_channels (
+      mobilized_content_id, channel_type, channel_name, members_count, sent_at, notes
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    owned.row.id,
+    req.body.channel_type === 'canal' ? 'canal' : 'grupo',
+    name,
+    Math.max(0, Number(req.body.members_count) || 0),
+    req.body.sent_at || new Date().toISOString().slice(0, 10),
+    req.body.notes || null,
+  );
+
+  const channel = db.prepare('SELECT * FROM mobilized_content_channels WHERE id = ?')
+    .get(result.lastInsertRowid);
+  res.status(201).json({
+    channel,
+    content: enrichMobilizedContent(db, owned.row),
+  });
+});
+
+app.patch('/api/campaigns/:slug/mobilized/:id/channels/:channelId', (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+
+  const channel = db.prepare(`
+    SELECT * FROM mobilized_content_channels
+    WHERE id = ? AND mobilized_content_id = ?
+  `).get(req.params.channelId, owned.row.id);
+  if (!channel) return res.status(404).json({ error: 'Grupo/canal não encontrado' });
+
+  const name = req.body.channel_name != null
+    ? String(req.body.channel_name).trim()
+    : channel.channel_name;
+  if (!name) return res.status(400).json({ error: 'Nome inválido' });
+
+  db.prepare(`
+    UPDATE mobilized_content_channels SET
+      channel_type = ?, channel_name = ?, members_count = ?, sent_at = ?, notes = ?
+    WHERE id = ?
+  `).run(
+    req.body.channel_type === 'canal' || req.body.channel_type === 'grupo'
+      ? req.body.channel_type
+      : channel.channel_type,
+    name,
+    req.body.members_count !== undefined
+      ? Math.max(0, Number(req.body.members_count) || 0)
+      : channel.members_count,
+    req.body.sent_at !== undefined ? req.body.sent_at : channel.sent_at,
+    req.body.notes !== undefined ? req.body.notes : channel.notes,
+    channel.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM mobilized_content_channels WHERE id = ?').get(channel.id);
+  const content = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(owned.row.id);
+  res.json({
+    channel: updated,
+    content: enrichMobilizedContent(db, content),
+  });
+});
+
+app.delete('/api/campaigns/:slug/mobilized/:id/channels/:channelId', (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+
+  const channel = db.prepare(`
+    SELECT * FROM mobilized_content_channels
+    WHERE id = ? AND mobilized_content_id = ?
+  `).get(req.params.channelId, owned.row.id);
+  if (!channel) return res.status(404).json({ error: 'Grupo/canal não encontrado' });
+
+  db.prepare('DELETE FROM mobilized_content_channels WHERE id = ?').run(channel.id);
+  const content = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(owned.row.id);
+  res.json({ ok: true, content: enrichMobilizedContent(db, content) });
 });
 
 app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {

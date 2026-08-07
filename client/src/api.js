@@ -132,6 +132,25 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  getMobilized: (slug) => request(`/api/campaigns/${slug}/mobilized`),
+  createMobilized: (slug, body) =>
+    request(`/api/campaigns/${slug}/mobilized`, { method: 'POST', body: JSON.stringify(body) }),
+  updateMobilized: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteMobilized: (slug, id) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}`, { method: 'DELETE' }),
+  addMobilizedChannel: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}/channels`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateMobilizedChannel: (slug, id, channelId, body) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}/channels/${channelId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteMobilizedChannel: (slug, id, channelId) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}/channels/${channelId}`, { method: 'DELETE' }),
   runAssistant: (slug) => request(`/api/campaigns/${slug}/assistant`, { method: 'POST', body: '{}' }),
   getMetaStatus: (slug) => request(`/api/campaigns/${slug}/meta/status`),
   syncMeta: (slug) => request(`/api/campaigns/${slug}/meta/sync`, { method: 'POST', body: '{}' }),
