@@ -151,6 +151,17 @@ Sem essas variáveis o sistema funciona em **modo manual**: você informa views,
 
 > O Instagram não entrega geolocalização municipal nativa sem Ads. O sync distribui o engajamento da conta proporcionalmente às metas de views de cada município.
 
+### Bitly Analytics
+
+Na aba **Mobilização → Conteúdos mobilizados**, o painel mostra análise estilo Bitly (cliques) + grupos/canais e pessoas.
+
+```bash
+BITLY_ACCESS_TOKEN=seu-token-bitly
+```
+
+Com o token: botão **Atualizar do Bitly** puxa total de cliques e série dos últimos 30 dias.  
+Sem o token: informe o total de cliques manualmente (como no painel do Bitly) e cadastre os grupos/canais.
+
 ### Atlas Assistente (IA)
 
 A aba **Relatório** gera um briefing local automaticamente.
