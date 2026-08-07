@@ -139,6 +139,10 @@ export const api = {
     request(`/api/campaigns/${slug}/mobilized/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteMobilized: (slug, id) =>
     request(`/api/campaigns/${slug}/mobilized/${id}`, { method: 'DELETE' }),
+  syncMobilized: (slug) =>
+    request(`/api/campaigns/${slug}/mobilized/sync`, { method: 'POST', body: '{}' }),
+  syncMobilizedOne: (slug, id) =>
+    request(`/api/campaigns/${slug}/mobilized/${id}/sync`, { method: 'POST', body: '{}' }),
   addMobilizedChannel: (slug, id, body) =>
     request(`/api/campaigns/${slug}/mobilized/${id}/channels`, {
       method: 'POST',

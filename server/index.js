@@ -15,6 +15,7 @@ const { runAssistant } = require('./assistant');
 const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 const { listContentWeek, buildContentDetail } = require('./content');
 const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
+const { bitlyStatus, syncMobilizedFromBitly } = require('./bitly');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -1532,7 +1533,7 @@ app.get('/api/campaigns/:slug/mobilized', (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
-    res.json(listMobilizedContents(db, campaign.id));
+    res.json({ ...listMobilizedContents(db, campaign.id), bitly: bitlyStatus() });
   } catch (err) {
     console.error('GET mobilized:', err);
     res.status(500).json({ error: err.message || 'Erro ao carregar conteúdos mobilizados' });
@@ -1706,6 +1707,66 @@ app.delete('/api/campaigns/:slug/mobilized/:id/channels/:channelId', (req, res) 
   db.prepare('DELETE FROM mobilized_content_channels WHERE id = ?').run(channel.id);
   const content = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(owned.row.id);
   res.json({ ok: true, content: enrichMobilizedContent(db, content) });
+});
+
+app.post('/api/campaigns/:slug/mobilized/:id/sync', async (req, res) => {
+  const owned = getMobilizedOwned(req.params.slug, req.params.id);
+  if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
+
+  try {
+    const { row, analytics } = await syncMobilizedFromBitly(db, owned.row);
+    if (!analytics.ok) {
+      return res.status(analytics.mode === 'manual' ? 400 : 502).json({
+        error: analytics.error || 'Falha ao sincronizar Bitly',
+        bitly: bitlyStatus(),
+      });
+    }
+    res.json({
+      content: enrichMobilizedContent(db, row),
+      analytics,
+      bitly: bitlyStatus(),
+    });
+  } catch (err) {
+    console.error('POST mobilized sync:', err);
+    res.status(502).json({ error: err.message || 'Erro na API Bitly', bitly: bitlyStatus() });
+  }
+});
+
+app.post('/api/campaigns/:slug/mobilized/sync', async (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const status = bitlyStatus();
+  if (!status.configured) {
+    return res.status(400).json({ error: status.hint, bitly: status });
+  }
+
+  const rows = db.prepare(`
+    SELECT * FROM mobilized_contents
+    WHERE campaign_id = ? AND status != 'arquivado'
+    ORDER BY id DESC
+  `).all(campaign.id);
+
+  const results = [];
+  for (const row of rows) {
+    try {
+      const { row: updated, analytics } = await syncMobilizedFromBitly(db, row);
+      results.push({
+        id: row.id,
+        ok: analytics.ok,
+        clicks: updated?.clicks ?? row.clicks,
+        error: analytics.ok ? null : analytics.error,
+      });
+    } catch (err) {
+      results.push({ id: row.id, ok: false, error: err.message });
+    }
+  }
+
+  res.json({
+    ...listMobilizedContents(db, campaign.id),
+    sync: results,
+    bitly: bitlyStatus(),
+  });
 });
 
 app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {

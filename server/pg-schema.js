@@ -192,9 +192,12 @@ CREATE TABLE IF NOT EXISTS mobilized_contents (
   bitly_url TEXT NOT NULL,
   destination_url TEXT,
   clicks INTEGER DEFAULT 0,
+  clicks_30d INTEGER DEFAULT 0,
+  clicks_series TEXT,
   views INTEGER DEFAULT 0,
   notes TEXT,
   status TEXT DEFAULT 'ativo',
+  bitly_synced_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

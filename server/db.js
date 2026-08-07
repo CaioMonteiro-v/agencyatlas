@@ -299,9 +299,12 @@ function initSqliteSchema(db) {
       bitly_url TEXT NOT NULL,
       destination_url TEXT,
       clicks INTEGER DEFAULT 0,
+      clicks_30d INTEGER DEFAULT 0,
+      clicks_series TEXT,
       views INTEGER DEFAULT 0,
       notes TEXT,
       status TEXT DEFAULT 'ativo',
+      bitly_synced_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );

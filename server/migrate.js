@@ -206,9 +206,12 @@ function migrateAnalyticsSchema(db) {
           bitly_url TEXT NOT NULL,
           destination_url TEXT,
           clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
           views INTEGER DEFAULT 0,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
+          bitly_synced_at TIMESTAMPTZ,
           created_at TIMESTAMPTZ DEFAULT NOW()
         )
       `);
@@ -233,9 +236,12 @@ function migrateAnalyticsSchema(db) {
           bitly_url TEXT NOT NULL,
           destination_url TEXT,
           clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
           views INTEGER DEFAULT 0,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
+          bitly_synced_at TEXT,
           created_at TEXT DEFAULT (datetime('now')),
           FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
         );
@@ -254,6 +260,19 @@ function migrateAnalyticsSchema(db) {
     }
   } catch (err) {
     console.warn('migrate mobilized contents:', err.message);
+  }
+
+  try {
+    ensureColumn(db, 'mobilized_contents', 'clicks_30d', 'INTEGER DEFAULT 0');
+    ensureColumn(db, 'mobilized_contents', 'clicks_series', 'TEXT');
+    ensureColumn(
+      db,
+      'mobilized_contents',
+      'bitly_synced_at',
+      db.dialect === 'postgres' ? 'TIMESTAMPTZ' : 'TEXT',
+    );
+  } catch (err) {
+    console.warn('migrate mobilized analytics columns:', err.message);
   }
 }
 
