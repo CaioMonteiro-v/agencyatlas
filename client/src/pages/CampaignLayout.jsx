@@ -55,7 +55,7 @@ export default function CampaignLayout() {
               <p style={{ margin: 0 }}>{campaign.candidate}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div className="campaign-top__actions">
             <a
               className="btn btn-whatsapp"
               href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
