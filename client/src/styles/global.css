@@ -135,7 +135,8 @@ p {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.75);
   cursor: pointer;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   gap: 5px;
   flex-direction: column;
 }
@@ -1727,7 +1728,7 @@ th {
   }
 
   .nav-toggle {
-    display: grid;
+    display: inline-flex;
   }
 
   .nav-drawer {
