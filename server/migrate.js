@@ -73,18 +73,59 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'events', 'coordinator_id', 'INTEGER');
   ensureColumn(db, 'events', 'channel_link', 'TEXT');
   ensureColumn(db, 'events', 'channel_name', 'TEXT');
+  ensureColumn(db, 'events', 'municipality_id', 'INTEGER');
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
+  ensureColumn(db, 'registrations', 'funnel', 'TEXT');
 
   // Índices que dependem de colunas novas (depois do ensureColumn)
   try {
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_mobilizer ON registrations(mobilizer_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_funnel ON registrations(funnel)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_events_muni ON events(municipality_id)');
   } catch (err) {
     console.warn('migrate indexes:', err.message);
+  }
+
+  // Backfill funis: liderança → coordenador; eventos → papel do evento; mobilizador → mobilizador
+  try {
+    db.prepare(`
+      UPDATE registrations SET funnel = 'coordenador'
+      WHERE funnel IS NULL AND leader_id IS NOT NULL
+    `).run();
+    db.prepare(`
+      UPDATE registrations SET funnel = 'mobilizador'
+      WHERE funnel IS NULL AND mobilizer_id IS NOT NULL
+    `).run();
+    db.prepare(`
+      UPDATE registrations SET funnel = CASE
+        WHEN e.organizer_role = 'coordinator' THEN 'coordenador'
+        ELSE 'mobilizador'
+      END
+      FROM events e
+      WHERE registrations.funnel IS NULL
+        AND registrations.source = ('evento/' || e.slug)
+    `).run();
+  } catch (err) {
+    // SQLite não tem UPDATE...FROM — fallback
+    try {
+      const eventRows = db.prepare(`
+        SELECT r.id, e.organizer_role
+        FROM registrations r
+        JOIN events e ON r.source = ('evento/' || e.slug)
+        WHERE r.funnel IS NULL
+      `).all();
+      const upd = db.prepare('UPDATE registrations SET funnel = ? WHERE id = ?');
+      for (const row of eventRows) {
+        upd.run(row.organizer_role === 'coordinator' ? 'coordenador' : 'mobilizador', row.id);
+      }
+    } catch (err2) {
+      console.warn('migrate funnel backfill:', err2.message);
+    }
   }
 
   // Backfill: mobilizador do evento → coluna correta; organizador municipal fica livre

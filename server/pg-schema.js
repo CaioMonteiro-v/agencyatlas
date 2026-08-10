@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   organizer_name TEXT,
   mobilizer_name TEXT,
   mobilizer_id INTEGER REFERENCES mobilizers(id) ON DELETE SET NULL,
+  funnel TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -91,6 +92,7 @@ CREATE TABLE IF NOT EXISTS events (
   coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
   channel_link TEXT,
   channel_name TEXT,
+  municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -68,7 +68,8 @@ function HeatLayer({ points }) {
 }
 
 export default function HeatMapMT({ campaignSlug }) {
-  const [heatmap, setHeatmap] = useState({ points: [], municipalities: [] });
+  const [heatmap, setHeatmap] = useState({ points: [], municipalities: [], funnel_totals: null });
+  const [funnel, setFunnel] = useState('todos');
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -78,13 +79,13 @@ export default function HeatMapMT({ campaignSlug }) {
 
   useEffect(() => {
     let alive = true;
-    api.getHeatmap(campaignSlug)
+    api.getHeatmap(campaignSlug, funnel)
       .then((data) => {
         if (alive) setHeatmap(data);
       })
       .catch((err) => alive && setError(err.message));
     return () => { alive = false; };
-  }, [campaignSlug]);
+  }, [campaignSlug, funnel]);
 
   useEffect(() => {
     if (!selected) {
@@ -137,6 +138,30 @@ export default function HeatMapMT({ campaignSlug }) {
 
   return (
     <div className="map-block">
+      <div className="chip-group" style={{ marginBottom: '0.75rem' }}>
+        <button
+          type="button"
+          className={`chip ${funnel === 'todos' ? 'active' : ''}`}
+          onClick={() => setFunnel('todos')}
+        >
+          Todos ({heatmap.funnel_totals?.total ?? heatmap.points?.length ?? 0})
+        </button>
+        <button
+          type="button"
+          className={`chip ${funnel === 'coordenador' ? 'active' : ''}`}
+          onClick={() => setFunnel('coordenador')}
+        >
+          Coordenador ({heatmap.funnel_totals?.coordenador ?? 0})
+        </button>
+        <button
+          type="button"
+          className={`chip ${funnel === 'mobilizador' ? 'active' : ''}`}
+          onClick={() => setFunnel('mobilizador')}
+        >
+          Mobilizador ({heatmap.funnel_totals?.mobilizador ?? 0})
+        </button>
+      </div>
+
       <div className="map-toolbar">
         <label className="map-filter">
           <span>Localizar município (142)</span>
@@ -187,8 +212,9 @@ export default function HeatMapMT({ campaignSlug }) {
 
       <p className="map-legend">
         O calor vem dos <strong>cadastros</strong> (pessoas), não das lideranças.
-        Quanto mais gente cadastrada na região, mais intensa a mancha. Os círculos
-        também crescem com os cadastros; lideranças aparecem ao clicar no município.
+        Use os funis: <strong>Coordenador</strong> (território / link de liderança e eventos de coordenador)
+        e <strong>Mobilizador</strong> (eventos, reuniões e códigos pessoais de mobilizador).
+        Eventos precisam ter município vinculado para aparecer no mapa.
       </p>
 
       <div className="map-wrap">

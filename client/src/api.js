@@ -58,7 +58,8 @@ export const api = {
   getCampaign: (slug) => request(`/api/campaigns/${slug}`),
   getCampaignPublic: (slug) => request(`/api/campaigns/${slug}/public`),
   createCampaign: (body) => request('/api/campaigns', { method: 'POST', body: JSON.stringify(body) }),
-  getHeatmap: (slug) => request(`/api/campaigns/${slug}/heatmap`),
+  getHeatmap: (slug, funnel) =>
+    request(`/api/campaigns/${slug}/heatmap${funnel && funnel !== 'todos' ? `?funnel=${encodeURIComponent(funnel)}` : ''}`),
   getMunicipality: (slug, id) => request(`/api/campaigns/${slug}/municipalities/${id}`),
   getRanking: (slug, type) => request(`/api/campaigns/${slug}/ranking${type ? `?type=${type}` : ''}`),
   getLeaders: (slug) => request(`/api/campaigns/${slug}/leaders`),

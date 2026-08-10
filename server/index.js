@@ -32,6 +32,22 @@ function getCampaignBySlug(slug) {
   return db.prepare('SELECT * FROM campaigns WHERE slug = ?').get(slug);
 }
 
+/** Coordenada perto do centro do município (para o mapa de calor). */
+function geoNearMunicipality(muni) {
+  if (!muni || muni.lat == null || muni.lng == null) {
+    return { lat: null, lng: null };
+  }
+  return {
+    lat: Number(muni.lat) + (Math.random() - 0.5) * 0.06,
+    lng: Number(muni.lng) + (Math.random() - 0.5) * 0.06,
+  };
+}
+
+/** Funil do mapa: coordenador (território/evento de coord.) ou mobilizador (evento/código pessoal). */
+function funnelFromEventRole(role) {
+  return role === 'coordinator' ? 'coordenador' : 'mobilizador';
+}
+
 function leaderScoreSql() {
   return `
     SELECT
@@ -215,26 +231,72 @@ app.get('/api/campaigns/:slug/heatmap', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const points = db.prepare(`
-    SELECT lat, lng FROM registrations
-    WHERE campaign_id = ? AND lat IS NOT NULL AND lng IS NOT NULL
-  `).all(campaign.id);
+  const funnelRaw = String(req.query.funnel || '').trim().toLowerCase();
+  const funnel = funnelRaw === 'coordenador' || funnelRaw === 'mobilizador' ? funnelRaw : null;
 
-  const municipalities = db.prepare(`
+  const points = funnel
+    ? db.prepare(`
+        SELECT lat, lng, funnel FROM registrations
+        WHERE campaign_id = ?
+          AND lat IS NOT NULL AND lng IS NOT NULL
+          AND funnel = ?
+      `).all(campaign.id, funnel)
+    : db.prepare(`
+        SELECT lat, lng, funnel FROM registrations
+        WHERE campaign_id = ? AND lat IS NOT NULL AND lng IS NOT NULL
+      `).all(campaign.id);
+
+  const municipalities = funnel
+    ? db.prepare(`
+        SELECT
+          m.*,
+          COALESCE(COUNT(DISTINCT r.id), 0) AS registrations_count,
+          COALESCE((
+            SELECT COUNT(*) FROM leaders l
+            WHERE l.municipality_id = m.id AND l.campaign_id = ?
+          ), 0) AS leaders_count
+        FROM municipalities m
+        LEFT JOIN registrations r
+          ON r.municipality_id = m.id
+          AND r.campaign_id = ?
+          AND r.funnel = ?
+        GROUP BY m.id
+        ORDER BY registrations_count DESC, m.name ASC
+      `).all(campaign.id, campaign.id, funnel)
+    : db.prepare(`
+        SELECT
+          m.*,
+          COALESCE(COUNT(DISTINCT r.id), 0) AS registrations_count,
+          COALESCE((
+            SELECT COUNT(*) FROM leaders l
+            WHERE l.municipality_id = m.id AND l.campaign_id = ?
+          ), 0) AS leaders_count
+        FROM municipalities m
+        LEFT JOIN registrations r ON r.municipality_id = m.id AND r.campaign_id = ?
+        GROUP BY m.id
+        ORDER BY registrations_count DESC, m.name ASC
+      `).all(campaign.id, campaign.id);
+
+  const funnelTotals = db.prepare(`
     SELECT
-      m.*,
-      COALESCE(COUNT(DISTINCT r.id), 0) AS registrations_count,
-      COALESCE((
-        SELECT COUNT(*) FROM leaders l
-        WHERE l.municipality_id = m.id AND l.campaign_id = ?
-      ), 0) AS leaders_count
-    FROM municipalities m
-    LEFT JOIN registrations r ON r.municipality_id = m.id AND r.campaign_id = ?
-    GROUP BY m.id
-    ORDER BY registrations_count DESC, m.name ASC
-  `).all(campaign.id, campaign.id);
+      COALESCE(SUM(CASE WHEN funnel = 'coordenador' THEN 1 ELSE 0 END), 0) AS coordenador,
+      COALESCE(SUM(CASE WHEN funnel = 'mobilizador' THEN 1 ELSE 0 END), 0) AS mobilizador,
+      COUNT(*) AS total
+    FROM registrations
+    WHERE campaign_id = ?
+      AND lat IS NOT NULL AND lng IS NOT NULL
+  `).get(campaign.id);
 
-  res.json({ points, municipalities });
+  res.json({
+    points,
+    municipalities,
+    funnel: funnel || 'todos',
+    funnel_totals: {
+      coordenador: Number(funnelTotals?.coordenador) || 0,
+      mobilizador: Number(funnelTotals?.mobilizador) || 0,
+      total: Number(funnelTotals?.total) || 0,
+    },
+  });
 });
 
 app.get('/api/campaigns/:slug/municipalities/:id', (req, res) => {
@@ -506,9 +568,9 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, mobilizer_name
+      source, referral_code, lat, lng, mobilizer_name, funnel
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     leader?.id || null,
@@ -521,6 +583,7 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     muni ? muni.lat + (Math.random() - 0.5) * 0.06 : null,
     muni ? muni.lng + (Math.random() - 0.5) * 0.06 : null,
     leader?.name || null,
+    leader ? 'coordenador' : null,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid));
@@ -533,8 +596,10 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
 
   const events = db.prepare(`
     SELECT e.*,
+      m.name AS municipality_name,
       (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) AS attendees
     FROM events e
+    LEFT JOIN municipalities m ON m.id = e.municipality_id
     WHERE e.campaign_id = ?
     ORDER BY e.event_date ASC
   `).all(campaign.id);
@@ -557,6 +622,7 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     coordinator_id,
     channel_link,
     channel_name,
+    municipality_id,
   } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Nome e data são obrigatórios' });
 
@@ -581,21 +647,32 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     return res.status(400).json({ error: 'Informe o nome do mobilizador' });
   }
 
+  let resolvedMuniId = municipality_id ? Number(municipality_id) : null;
+  if (resolvedMuniId) {
+    const muni = db.prepare('SELECT id FROM municipalities WHERE id = ?').get(resolvedMuniId);
+    if (!muni) return res.status(400).json({ error: 'Município inválido' });
+  } else {
+    return res.status(400).json({ error: 'Selecione o município do evento (para o mapa de calor)' });
+  }
+
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
   const channelLink = channel_link ? String(channel_link).trim() : null;
   const channelName = channel_name ? String(channel_name).trim() : null;
 
+  const muniRow = db.prepare('SELECT * FROM municipalities WHERE id = ?').get(resolvedMuniId);
+  const locationText = location || muniRow?.name || '';
+
   const result = db.prepare(`
     INSERT INTO events (
       campaign_id, name, description, location, event_date, event_time,
-      slug, organizer_name, organizer_role, coordinator_id, channel_link, channel_name
+      slug, organizer_name, organizer_role, coordinator_id, channel_link, channel_name, municipality_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     name,
     description || '',
-    location || '',
+    locationText,
     event_date,
     event_time || '',
     slug,
@@ -604,6 +681,7 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     resolvedCoordinatorId,
     channelLink || null,
     channelName || null,
+    resolvedMuniId,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid));
@@ -653,6 +731,15 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
     ? (req.body.channel_name ? String(req.body.channel_name).trim() : null)
     : event.channel_name;
 
+  let resolvedMuniId = event.municipality_id || null;
+  if (req.body.municipality_id !== undefined) {
+    resolvedMuniId = req.body.municipality_id ? Number(req.body.municipality_id) : null;
+    if (resolvedMuniId) {
+      const muni = db.prepare('SELECT id FROM municipalities WHERE id = ?').get(resolvedMuniId);
+      if (!muni) return res.status(400).json({ error: 'Município inválido' });
+    }
+  }
+
   db.prepare(`
     UPDATE events SET
       name = ?,
@@ -664,7 +751,8 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
       organizer_role = ?,
       coordinator_id = ?,
       channel_link = ?,
-      channel_name = ?
+      channel_name = ?,
+      municipality_id = ?
     WHERE id = ?
   `).run(
     name,
@@ -677,6 +765,7 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
     resolvedCoordinatorId,
     channelLink || null,
     channelName || null,
+    resolvedMuniId,
     event.id,
   );
 
@@ -685,9 +774,11 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
 
 app.get('/api/events/:slug', (req, res) => {
   const event = db.prepare(`
-    SELECT e.*, c.name AS campaign_name, c.slug AS campaign_slug, c.whatsapp_url, c.accent_color
+    SELECT e.*, c.name AS campaign_name, c.slug AS campaign_slug, c.whatsapp_url, c.accent_color,
+      m.name AS municipality_name
     FROM events e
     JOIN campaigns c ON c.id = e.campaign_id
+    LEFT JOIN municipalities m ON m.id = e.municipality_id
     WHERE e.slug = ?
   `).get(req.params.slug);
 
@@ -736,27 +827,36 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const mobilizer = event.organizer_name ? String(event.organizer_name).trim() : null;
   // Organiz./Coord. = critério do município (texto livre no formulário público)
   const organizer = organizer_name ? String(organizer_name).trim() : null;
+  const funnel = funnelFromEventRole(event.organizer_role);
+  const muni = event.municipality_id
+    ? db.prepare('SELECT * FROM municipalities WHERE id = ?').get(event.municipality_id)
+    : null;
+  const geo = geoNearMunicipality(muni);
 
   const result = db.prepare(`
     INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0, organizer);
 
-  // Também entra no Registro de Cadastros da campanha (origem = evento)
+  // Também entra no Registro de Cadastros da campanha (origem = evento) + mapa de calor
   const reg = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, funnel
     )
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+    VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
   `).run(
     event.campaign_id,
+    muni?.id || null,
     full_name,
     phone,
     email || null,
     `evento/${event.slug}`,
+    geo.lat,
+    geo.lng,
     organizer,
     mobilizer,
+    funnel,
   );
 
   res.status(201).json({
@@ -994,9 +1094,9 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id, funnel
     )
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)
   `).run(
     campaign.id,
     full_name,
@@ -1006,6 +1106,7 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
     organizer,
     mobilizer.name,
     mobilizer.id,
+    'mobilizador',
   );
 
   res.status(201).json({

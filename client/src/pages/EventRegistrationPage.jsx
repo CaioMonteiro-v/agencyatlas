@@ -63,7 +63,7 @@ export default function EventRegistrationPage() {
 
   const hasChannel = Boolean(String(event?.channel_link || '').trim());
   const channelHref = hasChannel ? normalizeExternalUrl(event.channel_link) : '';
-  const municipio = String(event?.location || '').trim() || 'Mato Grosso';
+  const municipio = String(event?.municipality_name || event?.location || '').trim() || 'Mato Grosso';
   const channelLabel = String(event?.channel_name || '').trim() || 'nosso grupo de elite';
 
   const waMessage = event
@@ -134,7 +134,9 @@ export default function EventRegistrationPage() {
             <p>
               {new Date(event.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}
               {event.event_time ? ` · ${event.event_time}` : ''}
-              {event.location ? ` · ${event.location}` : ''}
+              {event.municipality_name || event.location
+                ? ` · ${event.municipality_name || event.location}`
+                : ''}
             </p>
             {event.organizer_name && (
               <p>

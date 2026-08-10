@@ -32,6 +32,7 @@ function emptyForm() {
     coordinator_id: '',
     channel_link: '',
     channel_name: '',
+    municipality_id: '',
   };
 }
 
@@ -42,6 +43,7 @@ function roleLabel(role) {
 export default function EventsPanel({ campaignSlug }) {
   const [events, setEvents] = useState([]);
   const [coordinators, setCoordinators] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
   const [qrMap, setQrMap] = useState({});
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -57,12 +59,14 @@ export default function EventsPanel({ campaignSlug }) {
   async function load(base = publicBase) {
     try {
       setError('');
-      const [list, coordsRes] = await Promise.all([
+      const [list, coordsRes, munis] = await Promise.all([
         api.getEvents(campaignSlug),
         api.getCoordinators(campaignSlug).catch(() => ({ coordinators: [] })),
+        api.getMunicipalities().catch(() => []),
       ]);
       setEvents(list);
       setCoordinators(coordsRes?.coordinators || []);
+      setMunicipalities(Array.isArray(munis) ? munis : []);
       const origin = (base || window.location.origin).replace(/\/$/, '');
       const entries = await Promise.all(
         list.map(async (event) => {
@@ -119,6 +123,10 @@ export default function EventsPanel({ campaignSlug }) {
       setToast('Informe o nome do mobilizador');
       return;
     }
+    if (!form.municipality_id) {
+      setToast('Selecione o município do evento (mapa de calor)');
+      return;
+    }
     try {
       await api.createEvent(campaignSlug, {
         name: form.name,
@@ -131,6 +139,7 @@ export default function EventsPanel({ campaignSlug }) {
         coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
         channel_link: form.channel_link.trim() || null,
         channel_name: form.channel_name.trim() || null,
+        municipality_id: Number(form.municipality_id),
       });
       setShowForm(false);
       setForm(emptyForm());
@@ -148,6 +157,7 @@ export default function EventsPanel({ campaignSlug }) {
       [event.id]: {
         channel_link: event.channel_link || '',
         channel_name: event.channel_name || '',
+        municipality_id: event.municipality_id ? String(event.municipality_id) : '',
       },
     }));
   }
@@ -158,9 +168,10 @@ export default function EventsPanel({ campaignSlug }) {
       await api.updateEvent(campaignSlug, event.id, {
         channel_link: (draft.channel_link || '').trim() || null,
         channel_name: (draft.channel_name || '').trim() || null,
+        municipality_id: draft.municipality_id ? Number(draft.municipality_id) : null,
       });
       setEditingId(null);
-      setToast('Canal do WhatsApp atualizado');
+      setToast('Evento atualizado (canal / município)');
       await load(publicBase);
     } catch (err) {
       setToast(err.message);
@@ -227,12 +238,31 @@ export default function EventsPanel({ campaignSlug }) {
             <textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </label>
           <label>
-            Local / município
+            Município do evento *
+            <select
+              className="select"
+              required
+              value={form.municipality_id}
+              onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
+            >
+              <option value="">Selecione o município</option>
+              {municipalities.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+            Quem se cadastrar neste evento entra no mapa de calor deste município,
+            no funil <strong>{form.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador'}</strong>.
+          </p>
+
+          <label>
+            Local / ponto (opcional)
             <input
               className="input"
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
-              placeholder="Ex.: Cuiabá"
+              placeholder="Ex.: Praça da Matriz"
             />
           </label>
 
@@ -348,7 +378,16 @@ export default function EventsPanel({ campaignSlug }) {
                   {new Date(event.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                   {event.event_time ? ` · ${event.event_time}` : ''}
                 </p>
-                <p style={{ marginBottom: 0 }}>{event.location}</p>
+                <p style={{ marginBottom: 0 }}>
+                  {event.municipality_name || event.location || 'Município não informado'}
+                  {event.location && event.municipality_name && event.location !== event.municipality_name
+                    ? ` · ${event.location}`
+                    : ''}
+                </p>
+                <p style={{ marginBottom: 0 }}>
+                  <strong>Funil:</strong>{' '}
+                  {event.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador'}
+                </p>
                 {event.organizer_name && (
                   <p style={{ marginBottom: 0 }}>
                     <strong>Mobilizador ({roleLabel(event.organizer_role).toLowerCase()}):</strong>{' '}
@@ -388,6 +427,27 @@ export default function EventsPanel({ campaignSlug }) {
                   }}
                 >
                   <label>
+                    Município (mapa de calor)
+                    <select
+                      className="select"
+                      value={channelDrafts[event.id]?.municipality_id || ''}
+                      onChange={(e) =>
+                        setChannelDrafts((prev) => ({
+                          ...prev,
+                          [event.id]: {
+                            ...(prev[event.id] || {}),
+                            municipality_id: e.target.value,
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">Selecione</option>
+                      {municipalities.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
                     Link do Canal (WhatsApp)
                     <input
                       className="input"
@@ -424,7 +484,7 @@ export default function EventsPanel({ campaignSlug }) {
                   </label>
                   <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
                     <button className="btn btn-primary btn-sm" type="submit">
-                      Salvar canal
+                      Salvar
                     </button>
                     <button
                       className="btn btn-soft btn-sm"
@@ -451,7 +511,7 @@ export default function EventsPanel({ campaignSlug }) {
                   Ver inscritos ({event.attendees || 0})
                 </button>
                 <button type="button" className="btn btn-soft btn-sm" onClick={() => startEditChannel(event)}>
-                  {event.channel_link ? 'Editar canal' : 'Vincular canal'}
+                  {event.channel_link || event.municipality_id ? 'Editar canal/município' : 'Vincular canal/município'}
                 </button>
                 {qr && (
                   <button type="button" className="btn btn-soft btn-sm" onClick={() => copy(qr.url)}>

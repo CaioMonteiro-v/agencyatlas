@@ -173,6 +173,7 @@ function initSqliteSchema(db) {
       organizer_name TEXT,
       mobilizer_name TEXT,
       mobilizer_id INTEGER,
+      funnel TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),
@@ -194,9 +195,11 @@ function initSqliteSchema(db) {
       coordinator_id INTEGER,
       channel_link TEXT,
       channel_name TEXT,
+      municipality_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS event_registrations (
