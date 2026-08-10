@@ -13,6 +13,105 @@ function ensureColumn(db, table, column, definition) {
   }
 }
 
+function normalizePlaceName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Usa o Local/nome do evento (já preenchido com município) para:
+ * 1) setar events.municipality_id
+ * 2) colocar cadastros do evento no mapa (lat/lng + funnel)
+ */
+function backfillEventMunicipalitiesFromLocation(db) {
+  const municipalities = db.prepare('SELECT id, name, lat, lng FROM municipalities').all();
+  if (!municipalities.length) return;
+
+  const byNorm = new Map();
+  for (const m of municipalities) {
+    const key = normalizePlaceName(m.name);
+    if (key) byNorm.set(key, m);
+  }
+
+  function findMunicipality(event) {
+    if (event.municipality_id) {
+      return municipalities.find((m) => m.id === event.municipality_id) || null;
+    }
+
+    const locationKey = normalizePlaceName(event.location);
+    if (locationKey && byNorm.has(locationKey)) return byNorm.get(locationKey);
+
+    // "Reunião ... - Cláudia" / "Evento em Cuiabá"
+    const haystack = normalizePlaceName(`${event.location || ''} ${event.name || ''}`);
+    if (!haystack) return null;
+
+    let best = null;
+    let bestLen = 0;
+    for (const [key, muni] of byNorm.entries()) {
+      if (key.length < 3) continue;
+      if (haystack === key || haystack.includes(` ${key} `) || haystack.endsWith(` ${key}`) || haystack.startsWith(`${key} `) || haystack.includes(key)) {
+        if (key.length > bestLen) {
+          best = muni;
+          bestLen = key.length;
+        }
+      }
+    }
+    return best;
+  }
+
+  const events = db.prepare('SELECT * FROM events').all();
+  const updEvent = db.prepare('UPDATE events SET municipality_id = ? WHERE id = ?');
+  const regsStmt = db.prepare(`
+    SELECT id, lat, lng, municipality_id, funnel
+    FROM registrations
+    WHERE source = ?
+  `);
+  const updReg = db.prepare(`
+    UPDATE registrations SET
+      municipality_id = ?,
+      lat = ?,
+      lng = ?,
+      funnel = COALESCE(funnel, ?)
+    WHERE id = ?
+  `);
+
+  let linkedEvents = 0;
+  let linkedRegs = 0;
+
+  for (const event of events) {
+    const muni = findMunicipality(event);
+    if (!muni) continue;
+
+    if (!event.municipality_id) {
+      updEvent.run(muni.id, event.id);
+      linkedEvents += 1;
+    }
+
+    const funnel = event.organizer_role === 'coordinator' ? 'coordenador' : 'mobilizador';
+    const regs = regsStmt.all(`evento/${event.slug}`);
+    for (const reg of regs) {
+      const needsGeo = reg.lat == null || reg.lng == null || !reg.municipality_id;
+      const needsFunnel = !reg.funnel;
+      if (!needsGeo && !needsFunnel) continue;
+      const lat = reg.lat != null ? reg.lat : Number(muni.lat) + (Math.random() - 0.5) * 0.06;
+      const lng = reg.lng != null ? reg.lng : Number(muni.lng) + (Math.random() - 0.5) * 0.06;
+      updReg.run(muni.id, lat, lng, funnel, reg.id);
+      linkedRegs += 1;
+    }
+  }
+
+  if (linkedEvents || linkedRegs) {
+    console.log(
+      `Backfill eventos→mapa: ${linkedEvents} evento(s) com município, ${linkedRegs} cadastro(s) no calor`,
+    );
+  }
+}
+
 function migrateAnalyticsSchema(db) {
   // Mobilizers (código pessoal) — criar antes da FK em registrations
   if (db.dialect === 'postgres') {
@@ -152,6 +251,13 @@ function migrateAnalyticsSchema(db) {
     }
   } catch (err) {
     console.warn('migrate mobilizer_name backfill:', err.message);
+  }
+
+  // Backfill: eventos com Local = nome do município → municipality_id + geo nos cadastros
+  try {
+    backfillEventMunicipalitiesFromLocation(db);
+  } catch (err) {
+    console.warn('migrate event municipality backfill:', err.message);
   }
 
   if (db.dialect !== 'postgres') {
@@ -319,4 +425,4 @@ function migrateAnalyticsSchema(db) {
   }
 }
 
-module.exports = { migrateAnalyticsSchema, ensureColumn };
+module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };
