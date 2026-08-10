@@ -192,6 +192,8 @@ function initSqliteSchema(db) {
       organizer_name TEXT,
       organizer_role TEXT DEFAULT 'mobilizer',
       coordinator_id INTEGER,
+      channel_link TEXT,
+      channel_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL

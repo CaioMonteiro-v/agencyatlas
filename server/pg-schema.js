@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS events (
   organizer_name TEXT,
   organizer_role TEXT DEFAULT 'mobilizer',
   coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  channel_link TEXT,
+  channel_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

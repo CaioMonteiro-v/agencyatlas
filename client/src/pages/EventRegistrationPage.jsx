@@ -21,6 +21,13 @@ function buildWhatsAppLink(baseUrl, text) {
   return fallback;
 }
 
+function normalizeExternalUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+}
+
 export default function EventRegistrationPage() {
   const { eventSlug } = useParams();
   const [event, setEvent] = useState(null);
@@ -54,15 +61,21 @@ export default function EventRegistrationPage() {
       });
   }, [eventSlug]);
 
+  const hasChannel = Boolean(String(event?.channel_link || '').trim());
+  const channelHref = hasChannel ? normalizeExternalUrl(event.channel_link) : '';
+  const municipio = String(event?.location || '').trim() || 'Mato Grosso';
+  const channelLabel = String(event?.channel_name || '').trim() || 'nosso grupo de elite';
+
   const waMessage = event
     ? `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event.name}". Quero apoiar a campanha a vice-governador.`
     : '';
 
-  const waHref = buildWhatsAppLink(event?.whatsapp_url, waMessage);
+  const fabioHref = buildWhatsAppLink(event?.whatsapp_url, waMessage);
+  const ctaHref = hasChannel ? channelHref : fabioHref;
 
-  function openWhatsApp() {
+  function openCta() {
     setWaOpened(true);
-    window.open(waHref, '_blank', 'noopener,noreferrer');
+    window.open(ctaHref, '_blank', 'noopener,noreferrer');
   }
 
   async function onSubmit(e) {
@@ -85,11 +98,15 @@ export default function EventRegistrationPage() {
       });
       setDone(true);
       setToast('Presença confirmada');
-      const href = buildWhatsAppLink(
-        event?.whatsapp_url,
-        `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a vice-governador.`,
-      );
-      // Abre o WhatsApp na sequência do cadastro (melhor no celular)
+
+      const href = hasChannel
+        ? normalizeExternalUrl(event.channel_link)
+        : buildWhatsAppLink(
+          event?.whatsapp_url,
+          `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a vice-governador.`,
+        );
+
+      // Abre o destino na sequência do cadastro (melhor no celular)
       window.setTimeout(() => {
         try {
           window.location.href = href;
@@ -133,31 +150,63 @@ export default function EventRegistrationPage() {
                   Obrigado, {firstName(form.full_name)}! Seu cadastro foi registrado
                   {event.organizer_name ? ` com ${event.organizer_name}` : ''}.
                 </p>
-                <p className="event-done__lead">
-                  Agora leve o contato do Fábio Garcia no WhatsApp — assim você sai do evento já conectado à campanha a vice-governador.
-                </p>
-                <a
-                  className="btn btn-whatsapp event-done__cta"
-                  href={waHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setWaOpened(true)}
-                >
-                  Falar com Fábio no WhatsApp
-                </a>
-                <button type="button" className="btn btn-soft" onClick={openWhatsApp}>
-                  Abrir de novo
-                </button>
-                <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
-                  {waOpened
-                    ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
-                    : 'Link: bit.ly/FalaFabio · mensagem pronta se o app permitir.'}
-                </p>
+
+                {hasChannel ? (
+                  <>
+                    <p className="event-done__lead">
+                      Você acabou de fazer parte da nossa história em {municipio}.
+                      Quero te convidar para o nosso grupo de elite, {channelLabel} —
+                      aqui só entra quem realmente faz parte da mudança.
+                    </p>
+                    <a
+                      className="btn btn-whatsapp event-done__cta"
+                      href={ctaHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setWaOpened(true)}
+                    >
+                      Entrar no canal
+                    </a>
+                    <button type="button" className="btn btn-soft" onClick={openCta}>
+                      Abrir de novo
+                    </button>
+                    <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
+                      {waOpened
+                        ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
+                        : 'Convite exclusivo do canal municipal deste evento.'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="event-done__lead">
+                      Agora leve o contato do Fábio Garcia no WhatsApp — assim você sai do evento já conectado à campanha a vice-governador.
+                    </p>
+                    <a
+                      className="btn btn-whatsapp event-done__cta"
+                      href={fabioHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setWaOpened(true)}
+                    >
+                      Falar com Fábio no WhatsApp
+                    </a>
+                    <button type="button" className="btn btn-soft" onClick={openCta}>
+                      Abrir de novo
+                    </button>
+                    <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
+                      {waOpened
+                        ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
+                        : 'Link: bit.ly/FalaFabio · mensagem pronta se o app permitir.'}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <>
                 <p style={{ fontSize: '0.92rem' }}>
-                  Confirme sua presença. Em seguida você já pode falar com o Fábio no WhatsApp.
+                  {hasChannel
+                    ? 'Confirme sua presença. Em seguida você recebe o convite do canal municipal.'
+                    : 'Confirme sua presença. Em seguida você já pode falar com o Fábio no WhatsApp.'}
                 </p>
                 <form className="form-grid" onSubmit={onSubmit}>
                   <label>
@@ -203,7 +252,7 @@ export default function EventRegistrationPage() {
                     />
                   </label>
                   <button className="btn btn-primary" type="submit">
-                    Confirmar e falar com o Fábio
+                    {hasChannel ? 'Confirmar presença' : 'Confirmar e falar com o Fábio'}
                   </button>
                 </form>
               </>

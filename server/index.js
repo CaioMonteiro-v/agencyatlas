@@ -555,6 +555,8 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     organizer_name,
     organizer_role,
     coordinator_id,
+    channel_link,
+    channel_name,
   } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Nome e data são obrigatórios' });
 
@@ -580,13 +582,15 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   }
 
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
+  const channelLink = channel_link ? String(channel_link).trim() : null;
+  const channelName = channel_name ? String(channel_name).trim() : null;
 
   const result = db.prepare(`
     INSERT INTO events (
       campaign_id, name, description, location, event_date, event_time,
-      slug, organizer_name, organizer_role, coordinator_id
+      slug, organizer_name, organizer_role, coordinator_id, channel_link, channel_name
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     name,
@@ -598,9 +602,85 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     resolvedName,
     role,
     resolvedCoordinatorId,
+    channelLink || null,
+    channelName || null,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM events WHERE id = ?').get(result.lastInsertRowid));
+});
+
+app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const event = db.prepare(
+    'SELECT * FROM events WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
+
+  const name = req.body.name != null ? String(req.body.name).trim() : event.name;
+  if (!name) return res.status(400).json({ error: 'Nome inválido' });
+
+  let role = event.organizer_role || 'mobilizer';
+  let resolvedName = event.organizer_name || '';
+  let resolvedCoordinatorId = event.coordinator_id || null;
+
+  if (req.body.organizer_role != null || req.body.organizer_name != null || req.body.coordinator_id != null) {
+    role = req.body.organizer_role === 'coordinator' ? 'coordinator' : 'mobilizer';
+    resolvedName = req.body.organizer_name != null
+      ? String(req.body.organizer_name).trim()
+      : (event.organizer_name || '');
+    resolvedCoordinatorId = null;
+
+    if (role === 'coordinator') {
+      const cid = Number(req.body.coordinator_id != null ? req.body.coordinator_id : event.coordinator_id);
+      if (!cid) return res.status(400).json({ error: 'Selecione um coordenador cadastrado' });
+      const coord = db.prepare(
+        'SELECT id, name FROM coordinators WHERE id = ? AND campaign_id = ?'
+      ).get(cid, campaign.id);
+      if (!coord) return res.status(400).json({ error: 'Coordenador não encontrado nesta campanha' });
+      resolvedCoordinatorId = coord.id;
+      resolvedName = coord.name;
+    } else if (!resolvedName) {
+      return res.status(400).json({ error: 'Informe o nome do mobilizador' });
+    }
+  }
+
+  const channelLink = req.body.channel_link !== undefined
+    ? (req.body.channel_link ? String(req.body.channel_link).trim() : null)
+    : event.channel_link;
+  const channelName = req.body.channel_name !== undefined
+    ? (req.body.channel_name ? String(req.body.channel_name).trim() : null)
+    : event.channel_name;
+
+  db.prepare(`
+    UPDATE events SET
+      name = ?,
+      description = ?,
+      location = ?,
+      event_date = ?,
+      event_time = ?,
+      organizer_name = ?,
+      organizer_role = ?,
+      coordinator_id = ?,
+      channel_link = ?,
+      channel_name = ?
+    WHERE id = ?
+  `).run(
+    name,
+    req.body.description !== undefined ? (req.body.description || '') : event.description,
+    req.body.location !== undefined ? (req.body.location || '') : event.location,
+    req.body.event_date !== undefined ? req.body.event_date : event.event_date,
+    req.body.event_time !== undefined ? (req.body.event_time || '') : event.event_time,
+    resolvedName,
+    role,
+    resolvedCoordinatorId,
+    channelLink || null,
+    channelName || null,
+    event.id,
+  );
+
+  res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(event.id));
 });
 
 app.get('/api/events/:slug', (req, res) => {

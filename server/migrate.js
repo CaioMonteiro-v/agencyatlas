@@ -71,6 +71,8 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'events', 'organizer_name', 'TEXT');
   ensureColumn(db, 'events', 'organizer_role', "TEXT DEFAULT 'mobilizer'");
   ensureColumn(db, 'events', 'coordinator_id', 'INTEGER');
+  ensureColumn(db, 'events', 'channel_link', 'TEXT');
+  ensureColumn(db, 'events', 'channel_name', 'TEXT');
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');

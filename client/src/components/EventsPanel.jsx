@@ -30,6 +30,8 @@ function emptyForm() {
     organizer_role: 'mobilizer',
     organizer_name: '',
     coordinator_id: '',
+    channel_link: '',
+    channel_name: '',
   };
 }
 
@@ -49,6 +51,8 @@ export default function EventsPanel({ campaignSlug }) {
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [channelDrafts, setChannelDrafts] = useState({});
 
   async function load(base = publicBase) {
     try {
@@ -125,11 +129,39 @@ export default function EventsPanel({ campaignSlug }) {
         organizer_role: form.organizer_role,
         organizer_name: form.organizer_name,
         coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
+        channel_link: form.channel_link.trim() || null,
+        channel_name: form.channel_name.trim() || null,
       });
       setShowForm(false);
       setForm(emptyForm());
       setToast('Evento criado');
       load(publicBase);
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  function startEditChannel(event) {
+    setEditingId(event.id);
+    setChannelDrafts((prev) => ({
+      ...prev,
+      [event.id]: {
+        channel_link: event.channel_link || '',
+        channel_name: event.channel_name || '',
+      },
+    }));
+  }
+
+  async function saveChannel(event) {
+    const draft = channelDrafts[event.id] || {};
+    try {
+      await api.updateEvent(campaignSlug, event.id, {
+        channel_link: (draft.channel_link || '').trim() || null,
+        channel_name: (draft.channel_name || '').trim() || null,
+      });
+      setEditingId(null);
+      setToast('Canal do WhatsApp atualizado');
+      await load(publicBase);
     } catch (err) {
       setToast(err.message);
     }
@@ -195,9 +227,38 @@ export default function EventsPanel({ campaignSlug }) {
             <textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </label>
           <label>
-            Local
-            <input className="input" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            Local / município
+            <input
+              className="input"
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              placeholder="Ex.: Cuiabá"
+            />
           </label>
+
+          <label>
+            Link do Canal (WhatsApp)
+            <input
+              className="input"
+              type="url"
+              value={form.channel_link}
+              onChange={(e) => setForm({ ...form, channel_link: e.target.value })}
+              placeholder="https://chat.whatsapp.com/..."
+            />
+          </label>
+          <label>
+            Nome do canal (opcional)
+            <input
+              className="input"
+              value={form.channel_name}
+              onChange={(e) => setForm({ ...form, channel_name: e.target.value })}
+              placeholder="Ex.: Canal Elite Cuiabá"
+            />
+          </label>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+            Se preencher o link do canal, a confirmação de presença convida a pessoa para esse canal
+            em vez do bit.ly/FalaFabio. Sem link, o fluxo atual permanece.
+          </p>
 
           <div>
             <strong style={{ display: 'block', marginBottom: 8 }}>
@@ -295,6 +356,19 @@ export default function EventsPanel({ campaignSlug }) {
                     {event.organizer_role === 'coordinator' ? ' · vinculado' : ''}
                   </p>
                 )}
+                {event.channel_link ? (
+                  <p style={{ marginBottom: 0 }}>
+                    <strong>Canal WhatsApp:</strong>{' '}
+                    {event.channel_name ? `${event.channel_name} · ` : ''}
+                    <a href={event.channel_link} target="_blank" rel="noreferrer">
+                      link cadastrado
+                    </a>
+                  </p>
+                ) : (
+                  <p style={{ marginBottom: 0, color: 'var(--muted)' }}>
+                    Sem canal municipal — CTA pós-cadastro usa bit.ly/FalaFabio
+                  </p>
+                )}
                 <p>{event.description}</p>
                 <span className="badge">{event.attendees || 0} inscritos</span>
               </div>
@@ -304,6 +378,65 @@ export default function EventsPanel({ campaignSlug }) {
                   <code style={{ fontSize: '0.75rem', wordBreak: 'break-all', textAlign: 'center' }}>{qr.url}</code>
                 </div>
               )}
+
+              {editingId === event.id ? (
+                <form
+                  className="form-grid"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveChannel(event);
+                  }}
+                >
+                  <label>
+                    Link do Canal (WhatsApp)
+                    <input
+                      className="input"
+                      type="url"
+                      value={channelDrafts[event.id]?.channel_link || ''}
+                      onChange={(e) =>
+                        setChannelDrafts((prev) => ({
+                          ...prev,
+                          [event.id]: {
+                            ...(prev[event.id] || {}),
+                            channel_link: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="https://chat.whatsapp.com/..."
+                    />
+                  </label>
+                  <label>
+                    Nome do canal
+                    <input
+                      className="input"
+                      value={channelDrafts[event.id]?.channel_name || ''}
+                      onChange={(e) =>
+                        setChannelDrafts((prev) => ({
+                          ...prev,
+                          [event.id]: {
+                            ...(prev[event.id] || {}),
+                            channel_name: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="Ex.: Canal Elite Cuiabá"
+                    />
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary btn-sm" type="submit">
+                      Salvar canal
+                    </button>
+                    <button
+                      className="btn btn-soft btn-sm"
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : null}
+
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <Link className="btn btn-soft btn-sm" to={`/evento/${event.slug}`}>
                   Página de inscrição
@@ -316,6 +449,9 @@ export default function EventsPanel({ campaignSlug }) {
                 </Link>
                 <button type="button" className="btn btn-accent btn-sm" onClick={() => viewAttendees(event)}>
                   Ver inscritos ({event.attendees || 0})
+                </button>
+                <button type="button" className="btn btn-soft btn-sm" onClick={() => startEditChannel(event)}>
+                  {event.channel_link ? 'Editar canal' : 'Vincular canal'}
                 </button>
                 {qr && (
                   <button type="button" className="btn btn-soft btn-sm" onClick={() => copy(qr.url)}>
