@@ -43,7 +43,7 @@ docker run --rm -p 3000:3000 atlas-agency
 ## Funcionalidades
 
 - Página principal da Atlas Agency com missão, serviços e dashboard
-- Módulo da campanha **Fábio Garcia (Vice-Governador / majoritária MT)** com abas Visão Geral, Mobilização, Coordenadores, Relatório e Conteúdo
+- Módulo da campanha **Fábio Garcia (Deputado Federal / MT)** com abas Visão Geral, Mobilização, Coordenadores, Relatório e Conteúdo
 - Mapa de calor interativo de Mato Grosso com detalhe por município
 - Ranking de lideranças em tempo real (políticas × multiplicadores)
 - Links parametrizados rastreáveis

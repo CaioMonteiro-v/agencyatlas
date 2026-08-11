@@ -60,7 +60,7 @@ function daysAgo(n) {
 function ensureBaseCampaign(db) {
   let campaign = db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
   if (campaign) {
-    // Majoritária 2026 — atualiza identidade sem quebrar slug/URLs
+    // Federal 2026 — atualiza identidade sem quebrar slug/URLs
     db.prepare(`
       UPDATE campaigns SET
         name = ?,
@@ -69,10 +69,10 @@ function ensureBaseCampaign(db) {
         mission = ?
       WHERE slug = 'fabio-garcia'
     `).run(
-      'Campanha Fábio Garcia — Vice-Governador',
-      'Fábio Garcia · Vice-Governador de Mato Grosso',
-      'Mobilização majoritária em todo o Mato Grosso: território, lideranças e conversão digital.',
-      'Articular os 142 municípios, conectar coordenadores e transformar presença em voto majoritário.',
+      'Campanha Fábio Garcia — Deputado Federal',
+      'Fábio Garcia · Deputado Federal por Mato Grosso',
+      'Mobilização federal em todo o Mato Grosso: território, lideranças e conversão digital.',
+      'Articular os 142 municípios, conectar coordenadores e transformar presença em voto federal.',
     );
     return db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
   }
@@ -82,10 +82,10 @@ function ensureBaseCampaign(db) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     'fabio-garcia',
-    'Campanha Fábio Garcia — Vice-Governador',
-    'Fábio Garcia · Vice-Governador de Mato Grosso',
-    'Mobilização majoritária em todo o Mato Grosso: território, lideranças e conversão digital.',
-    'Articular os 142 municípios, conectar coordenadores e transformar presença em voto majoritário.',
+    'Campanha Fábio Garcia — Deputado Federal',
+    'Fábio Garcia · Deputado Federal por Mato Grosso',
+    'Mobilização federal em todo o Mato Grosso: território, lideranças e conversão digital.',
+    'Articular os 142 municípios, conectar coordenadores e transformar presença em voto federal.',
     'ativa',
     '#0033A0',
     '/logos/fabio-garcia.png',

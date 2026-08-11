@@ -67,7 +67,7 @@ export default function EventRegistrationPage() {
   const channelLabel = String(event?.channel_name || '').trim() || 'nosso grupo de elite';
 
   const waMessage = event
-    ? `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event.name}". Quero apoiar a campanha a vice-governador.`
+    ? `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event.name}". Quero apoiar a campanha a deputado federal.`
     : '';
 
   const fabioHref = buildWhatsAppLink(event?.whatsapp_url, waMessage);
@@ -103,7 +103,7 @@ export default function EventRegistrationPage() {
         ? normalizeExternalUrl(event.channel_link)
         : buildWhatsAppLink(
           event?.whatsapp_url,
-          `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a vice-governador.`,
+          `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a deputado federal.`,
         );
 
       // Abre o destino na sequência do cadastro (melhor no celular)
@@ -181,7 +181,7 @@ export default function EventRegistrationPage() {
                 ) : (
                   <>
                     <p className="event-done__lead">
-                      Agora leve o contato do Fábio Garcia no WhatsApp — assim você sai do evento já conectado à campanha a vice-governador.
+                      Agora leve o contato do Fábio Garcia no WhatsApp — assim você sai do evento já conectado à campanha a deputado federal.
                     </p>
                     <a
                       className="btn btn-whatsapp event-done__cta"

@@ -80,7 +80,7 @@ async function enrichWithOpenAI(localText, report) {
   }
 
   try {
-    const prompt = `Você é a Atlas Assistente, analista de campanha majoritária em Mato Grosso (Fábio Garcia — Vice-Governador).
+    const prompt = `Você é a Atlas Assistente, analista de campanha federal em Mato Grosso (Fábio Garcia — Deputado Federal).
 Reescreva o briefing abaixo em português brasileiro, tom direto e operacional para ligar para coordenadores.
 Foque em cobertura estadual, municípios estratégicos e conversão. Mantenha números e nomes. No máximo 700 palavras. Inclua seções claras.
 
