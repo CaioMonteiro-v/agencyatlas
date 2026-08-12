@@ -2182,6 +2182,34 @@ th {
   object-fit: cover;
 }
 
+.demand-print__missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.demand-storage-warn {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 123, 134, 0.35);
+  background: rgba(217, 167, 176, 0.16);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.demand-storage-warn code {
+  font-size: 0.82rem;
+}
+
 @media (max-width: 640px) {
   .demand-print {
     width: calc(50% - 0.3rem);

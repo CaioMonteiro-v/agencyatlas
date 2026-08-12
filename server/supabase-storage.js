@@ -13,13 +13,13 @@ const DEFAULT_BUCKET = 'atlas-demands';
 
 function configured() {
   return Boolean(
-    process.env.SUPABASE_URL
-    && process.env.SUPABASE_SERVICE_ROLE_KEY,
+    String(process.env.SUPABASE_URL || '').trim()
+    && String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
   );
 }
 
 function baseUrl() {
-  return String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  return String(process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
 }
 
 function bucketName() {
@@ -27,7 +27,7 @@ function bucketName() {
 }
 
 function headers(extra = {}) {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   return {
     apikey: key,
     Authorization: `Bearer ${key}`,

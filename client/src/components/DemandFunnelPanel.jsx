@@ -35,6 +35,7 @@ function listTitle(filter) {
 export default function DemandFunnelPanel({ campaignSlug }) {
   const [tree, setTree] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [storageInfo, setStorageInfo] = useState(null);
   const [coordinator, setCoordinator] = useState(null);
   const [municipality, setMunicipality] = useState(null);
   const [listFilter, setListFilter] = useState(null);
@@ -43,6 +44,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [addingPrintsId, setAddingPrintsId] = useState(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -66,6 +68,15 @@ export default function DemandFunnelPanel({ campaignSlug }) {
       });
       return fresh;
     });
+  }
+
+  async function loadStorageStatus() {
+    try {
+      const health = await api.getHealth();
+      setStorageInfo(health.storage || null);
+    } catch {
+      setStorageInfo(null);
+    }
   }
 
   async function loadDemandsForMunicipality(coordId, muniId) {
@@ -100,6 +111,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
 
   useEffect(() => {
     loadTree().catch((err) => setToast(err.message));
+    loadStorageStatus();
   }, [campaignSlug]);
 
   function openCoordinator(coord) {
@@ -248,6 +260,24 @@ export default function DemandFunnelPanel({ campaignSlug }) {
     }
   }
 
+  async function addPrints(demand, fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setAddingPrintsId(demand.id);
+    try {
+      const attachments = await readFilesAsDataUrls(files);
+      await api.updateDemand(campaignSlug, demand.id, {
+        add_attachments: attachments,
+      });
+      setToast('Prints adicionados ao relatório');
+      await refreshCurrentView();
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setAddingPrintsId(null);
+    }
+  }
+
   function renderDemandCard(demand, { showPlace = false } = {}) {
     return (
       <article
@@ -272,7 +302,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
               </p>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {demand.status !== 'resolvido' ? (
               <>
                 <button
@@ -299,6 +329,20 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                 Reabrir
               </button>
             )}
+            <label className="btn btn-soft btn-sm" style={{ margin: 0, cursor: addingPrintsId === demand.id ? 'wait' : 'pointer' }}>
+              {addingPrintsId === demand.id ? 'Enviando…' : 'Reenviar prints'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                disabled={addingPrintsId === demand.id}
+                onChange={(e) => {
+                  addPrints(demand, e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </label>
             <button
               type="button"
               className="btn btn-danger btn-sm"
@@ -334,7 +378,18 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                 className="demand-print"
                 title={att.original_name || 'Print'}
               >
-                <img src={att.url} alt={att.original_name || 'Print WhatsApp'} />
+                <img
+                  src={att.url}
+                  alt={att.original_name || 'Print WhatsApp'}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling;
+                    if (fallback) fallback.hidden = false;
+                  }}
+                />
+                <span className="demand-print__missing" hidden>
+                  Print indisponível — use “Reenviar prints”
+                </span>
               </a>
             ))}
           </div>
@@ -388,6 +443,14 @@ export default function DemandFunnelPanel({ campaignSlug }) {
           </div>
         )}
       </div>
+
+      {storageInfo && storageInfo.provider !== 'supabase' && (
+        <div className="demand-storage-warn" role="status">
+          Prints ainda estão no disco temporário do Render (Storage não configurado).
+          Confira no Render: <code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_ROLE_KEY</code>,
+          salve e faça Manual Deploy. Texto do relatório não some — só as imagens.
+        </div>
+      )}
 
       <div className="demand-breadcrumb">
         <button type="button" className={`chip ${showingCoordinators ? 'active' : ''}`} onClick={backToCoordinators}>

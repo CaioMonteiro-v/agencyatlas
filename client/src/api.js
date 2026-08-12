@@ -118,6 +118,7 @@ export const api = {
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
+  getHealth: () => request('/api/health'),
   getDemandTree: (slug) => request(`/api/campaigns/${slug}/demands/tree`),
   getDemands: (slug, { coordinator_id, municipality_id, status } = {}) => {
     const qs = new URLSearchParams();
