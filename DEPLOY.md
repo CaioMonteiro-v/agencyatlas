@@ -5,14 +5,17 @@ Este app agora sobe com **Docker**. Isso evita o erro de `better-sqlite3`/`vite`
 ## Login da equipe
 
 Acesse `/login`:
-1. **Primeiro acesso:** tela “Criar conta” (nome, usuário, senha) — libera o painel
-2. **Depois:** Entrar com usuário/senha
-3. **Novos membros (opcional):** no Render, defina `ATLAS_INVITE_CODE=seu-codigo` para permitir “Criar conta” com convite
+1. **Criar perfil:** nome, usuário e senha (ex.: Caio e Bianca, cada um o seu)
+2. **Entrar:** com o usuário já criado
+3. Cadastro de perfil **só adiciona** linhas em `team_users` — não apaga campanha, funil, lideranças nem mobilizadores
+4. Sem `ATLAS_INVITE_CODE`, a equipe pode se cadastrar até `ATLAS_MAX_TEAM_USERS` (padrão **10**)
+5. Com `ATLAS_INVITE_CODE` no Render, novos perfis precisam do código
 
 Variáveis úteis:
 ```text
 ATLAS_AUTH_SECRET=um-segredo-longo-aleatorio
 ATLAS_INVITE_CODE=atlas-mt-2026
+ATLAS_MAX_TEAM_USERS=10
 ```
 
 Opcional (legado): `ATLAS_TEAM_USER` + `ATLAS_TEAM_PASSWORD` ainda funcionam como login de emergência.

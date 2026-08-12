@@ -12,7 +12,7 @@ const {
 } = require('./analytics');
 const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
 const { runAssistant } = require('./assistant');
-const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
+const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, inviteRequiredForSignup, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 const { listContentWeek, buildContentDetail } = require('./content');
 const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
 const { bitlyStatus, syncMobilizedFromBitly } = require('./bitly');
@@ -108,7 +108,7 @@ app.get('/api/auth/status', (_req, res) => {
     auth_configured: authConfigured(),
     can_register: canSelfRegister(),
     needs_first_user: !hasTeamUsers(),
-    invite_required: Boolean(process.env.ATLAS_INVITE_CODE) && hasTeamUsers(),
+    invite_required: inviteRequiredForSignup(),
   });
 });
 

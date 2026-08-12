@@ -3,7 +3,7 @@ import { NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../auth';
 
 export default function Header({ compact = false }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -46,9 +46,21 @@ export default function Header({ compact = false }) {
 
         <div className="site-header__actions">
           {isAuthenticated ? (
-            <Link to="/campanha/fabio-garcia/mobilizacao" className="btn btn-primary btn-sm header-cta">
-              Abrir painel
-            </Link>
+            <>
+              <span className="header-user" title={user?.username || ''}>
+                {user?.name || user?.username || 'Equipe'}
+              </span>
+              <Link to="/campanha/fabio-garcia/mobilizacao" className="btn btn-primary btn-sm header-cta">
+                Abrir painel
+              </Link>
+              <button
+                type="button"
+                className="btn btn-soft btn-sm header-logout"
+                onClick={() => logout()}
+              >
+                Sair
+              </button>
+            </>
           ) : (
             <Link to="/login" className="btn btn-primary btn-sm header-cta">
               Entrar
@@ -104,8 +116,20 @@ export default function Header({ compact = false }) {
             className="btn btn-primary"
             onClick={closeMenu}
           >
-            {isAuthenticated ? 'Abrir painel' : 'Entrar'}
+            {isAuthenticated ? 'Abrir painel' : 'Entrar / Criar perfil'}
           </Link>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              className="btn btn-soft"
+              onClick={() => {
+                logout();
+                closeMenu();
+              }}
+            >
+              Sair ({user?.name || user?.username || 'equipe'})
+            </button>
+          ) : null}
         </nav>
       </div>
 

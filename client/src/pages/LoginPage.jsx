@@ -44,7 +44,7 @@ export default function LoginPage() {
           password: form.password,
           invite_code: form.invite_code.trim(),
         });
-        setToast('Conta criada — bem-vindo à equipe');
+        setToast('Perfil criado — bem-vindo à equipe');
       } else {
         await login(form.username.trim(), form.password);
       }
@@ -59,27 +59,28 @@ export default function LoginPage() {
   }
 
   const showInvite = mode === 'register' && status?.invite_required;
+  const canRegister = status?.can_register || status?.needs_first_user;
 
   return (
     <div className="public-page login-page">
       <div className="public-card login-card">
         <div className="login-card__brand">
           <img src="/logos/atlas-agency-mark.png" alt="Atlas Agency" />
-          <p className="eyebrow">Equipe interna</p>
-          <h1>{mode === 'register' ? 'Criar conta' : 'Entrar no Atlas'}</h1>
+          <p className="eyebrow">Atlas Agency · Equipe</p>
+          <h1>{mode === 'register' ? 'Criar seu perfil' : 'Entrar'}</h1>
           <p>
             {status?.needs_first_user
-              ? 'Primeiro acesso: cadastre seu nome e senha para liberar o painel da equipe.'
-              : 'Acesso só para a equipe de mobilização. QR e links públicos não precisam de login.'}
+              ? 'Primeiro acesso: cadastre seu nome, usuário e senha. Cadastros da campanha não são afetados.'
+              : 'Cada pessoa da equipe (Caio, Bianca…) cria o próprio perfil. Dados da campanha, funil e cadastros permanecem intactos.'}
           </p>
         </div>
 
-        {loading ? (
+        {loading || !status ? (
           <EmptyState>Verificando sessão…</EmptyState>
         ) : (
           <>
-            {!status?.needs_first_user && status?.can_register && (
-              <div className="chip-group" style={{ marginBottom: '0.85rem' }}>
+            {canRegister && (
+              <div className="chip-group login-card__tabs" style={{ marginBottom: '0.85rem' }}>
                 <button
                   type="button"
                   className={`chip ${mode === 'login' ? 'active' : ''}`}
@@ -92,9 +93,15 @@ export default function LoginPage() {
                   className={`chip ${mode === 'register' ? 'active' : ''}`}
                   onClick={() => setMode('register')}
                 >
-                  Criar conta
+                  Criar perfil
                 </button>
               </div>
+            )}
+
+            {!canRegister && mode === 'login' && (
+              <p className="login-card__hint">
+                Cadastro aberto desativado. Se você já tem usuário, entre abaixo.
+              </p>
             )}
 
             <form className="form-grid" onSubmit={onSubmit}>
@@ -107,7 +114,7 @@ export default function LoginPage() {
                     autoComplete="name"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Ex.: Caio Monteiro"
+                    placeholder="Ex.: Caio Monteiro ou Bianca"
                   />
                 </label>
               )}
@@ -119,7 +126,7 @@ export default function LoginPage() {
                   autoComplete="username"
                   value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="Ex.: caio"
+                  placeholder="Ex.: caio ou bianca"
                 />
               </label>
               <label>
@@ -143,22 +150,22 @@ export default function LoginPage() {
                     required
                     value={form.invite_code}
                     onChange={(e) => setForm({ ...form, invite_code: e.target.value })}
-                    placeholder="Código da equipe"
+                    placeholder="Código da equipe no Render"
                   />
                 </label>
               )}
               <button className="btn btn-primary" type="submit" disabled={busy}>
                 {busy
-                  ? (mode === 'register' ? 'Criando…' : 'Entrando…')
-                  : (mode === 'register' ? 'Criar conta e entrar' : 'Entrar')}
+                  ? (mode === 'register' ? 'Criando perfil…' : 'Entrando…')
+                  : (mode === 'register' ? 'Criar perfil e entrar' : 'Entrar no painel')}
               </button>
             </form>
           </>
         )}
 
-        <p style={{ marginBottom: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          Evento ou link de mobilizador? Use o QR / link pessoal — sem login.{' '}
-          <Link to="/">Voltar</Link>
+        <p className="login-card__foot">
+          QR de evento e link de mobilizador continuam públicos — sem login.{' '}
+          <Link to="/">Voltar ao início</Link>
         </p>
       </div>
       <Toast message={toast} onClose={() => setToast('')} />

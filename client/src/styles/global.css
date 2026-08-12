@@ -1933,6 +1933,49 @@ th {
   margin-bottom: 0.5rem;
 }
 
+.login-card__tabs {
+  justify-content: center;
+}
+
+.login-card__hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.login-card__foot {
+  margin: 1rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.header-user {
+  display: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+@media (min-width: 900px) {
+  .header-user {
+    display: inline-block;
+  }
+}
+
+.header-logout {
+  display: none;
+}
+
+@media (min-width: 720px) {
+  .header-logout {
+    display: inline-flex;
+  }
+}
+
 .radar-page {
   max-width: 920px;
   margin: 0 auto;

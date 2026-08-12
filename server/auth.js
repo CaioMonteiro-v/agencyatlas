@@ -2,7 +2,16 @@ const crypto = require('crypto');
 
 const TEAM_USER = process.env.ATLAS_TEAM_USER || 'equipe';
 const TEAM_PASSWORD = process.env.ATLAS_TEAM_PASSWORD || null;
+/** Se definido, novos cadastros (após o 1º) exigem este código. */
 const INVITE_CODE = process.env.ATLAS_INVITE_CODE || null;
+/**
+ * Sem convite configurado, ainda permite a equipe pequena se cadastrar
+ * (ex.: Caio + Bianca) sem abrir o sistema para o público indefinidamente.
+ */
+const MAX_TEAM_USERS = Math.max(
+  2,
+  Math.min(50, parseInt(process.env.ATLAS_MAX_TEAM_USERS || '10', 10) || 10),
+);
 const AUTH_SECRET = process.env.ATLAS_AUTH_SECRET
   || process.env.DATABASE_URL
   || 'atlas-dev-secret-change-me';
@@ -107,7 +116,14 @@ function authConfigured() {
 }
 
 function canSelfRegister() {
-  return countUsers() === 0 || Boolean(INVITE_CODE);
+  const total = countUsers();
+  if (total === 0) return true;
+  if (INVITE_CODE) return true;
+  return total < MAX_TEAM_USERS;
+}
+
+function inviteRequiredForSignup() {
+  return Boolean(INVITE_CODE) && countUsers() > 0;
 }
 
 function login(username, password) {
@@ -123,7 +139,7 @@ function login(username, password) {
     return { ok: true, token: issueToken(user), user };
   }
 
-  // Fallback: senha da equipe no ambiente (legado)
+  // Fallback: senha da equipe no ambiente (legado) — não apaga contas existentes
   const envUser = TEAM_USER;
   const envPass = TEAM_PASSWORD
     || (process.env.NODE_ENV !== 'production' ? 'atlas' : null);
@@ -135,7 +151,7 @@ function login(username, password) {
   if (!authConfigured()) {
     return {
       ok: false,
-      error: 'Nenhuma conta ainda. Use Criar conta na tela de login.',
+      error: 'Nenhuma conta ainda. Use Criar perfil na tela de login.',
       can_register: true,
     };
   }
@@ -163,21 +179,24 @@ function register({ name, username, password, invite_code }, actor = null) {
   if (total > 0) {
     const adminOk = actor && actor.role === 'admin';
     const inviteOk = INVITE_CODE && String(invite_code || '') === INVITE_CODE;
-    if (!adminOk && !inviteOk) {
-      if (!INVITE_CODE) {
-        return {
-          ok: false,
-          error: 'Peça ao admin para cadastrar você, ou configure ATLAS_INVITE_CODE no Render.',
-        };
+    const openSlot = !INVITE_CODE && total < MAX_TEAM_USERS;
+
+    if (!adminOk && !inviteOk && !openSlot) {
+      if (INVITE_CODE) {
+        return { ok: false, error: 'Código de convite inválido' };
       }
-      return { ok: false, error: 'Código de convite inválido' };
+      return {
+        ok: false,
+        error: `Limite de ${MAX_TEAM_USERS} perfis da equipe atingido. Peça ao admin ou configure ATLAS_INVITE_CODE.`,
+      };
     }
   }
 
   if (findUserByUsername(cleanUser)) {
-    return { ok: false, error: 'Este usuário já existe' };
+    return { ok: false, error: 'Este usuário já existe — faça login com ele' };
   }
 
+  // Só INSERT — nunca apaga campanhas, cadastros ou outros usuários
   const role = total === 0 ? 'admin' : 'equipe';
   const result = dbRef.prepare(`
     INSERT INTO team_users (name, username, password_hash, role)
@@ -247,6 +266,8 @@ module.exports = {
   requireAuth,
   authConfigured,
   canSelfRegister,
+  inviteRequiredForSignup,
   hasTeamUsers,
   TEAM_USER,
+  MAX_TEAM_USERS,
 };
