@@ -113,9 +113,17 @@ Abra: http://localhost:3000
    - No Supabase → **Connect → Connection pooling → Session**
    - Formato típico:
      `postgresql://postgres.[PROJECT]:[SENHA]@aws-0-....pooler.supabase.com:5432/postgres`
-6. **Manual Deploy**
+6. Para **prints do funil de demandas** não sumirem no redeploy, adicione também
+   (Settings → API no Supabase):
+   - `SUPABASE_URL` = Project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` = service_role (secret)
+7. **Manual Deploy**
 
-Com `DATABASE_URL` o Atlas usa Postgres/Supabase automaticamente. Os dados **não somem** no redeploy.
+Com `DATABASE_URL` o Atlas usa Postgres/Supabase automaticamente.
+Cadastros de lideranças/mobilizadores **não somem** no redeploy.
+
+Com `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, prints vão para o **Storage** (1 GB free),
+quota separada do banco (500 MB). Ver `SUPABASE.md`.
 
 Sem `DATABASE_URL`, continua SQLite local (só para desenvolvimento).
 

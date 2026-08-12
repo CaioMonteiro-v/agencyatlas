@@ -210,6 +210,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
           <p>
             Clique no coordenador → município → registre o que houve (texto, data, prints).
             Resolvido vai para OK; se não, fica em standby com o motivo.
+            Texto fica no banco; prints vão ao Supabase Storage quando configurado.
           </p>
         </div>
         {summary && (

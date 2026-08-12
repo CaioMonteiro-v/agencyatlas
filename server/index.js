@@ -23,6 +23,7 @@ const {
   createDemand,
   updateDemand,
 } = require('./demands');
+const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
@@ -79,6 +80,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     service: 'atlas-agency',
     database: db?.dialect || (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL ? 'postgres' : 'sqlite'),
+    storage: supabaseStorage.status(),
     auth: authConfigured(),
   });
 });
@@ -1564,7 +1566,7 @@ app.get('/api/campaigns/:slug/demands/tree', (req, res) => {
   }
 });
 
-app.post('/api/campaigns/:slug/demands', (req, res) => {
+app.post('/api/campaigns/:slug/demands', async (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
@@ -1587,7 +1589,7 @@ app.post('/api/campaigns/:slug/demands', (req, res) => {
     `).get(coordinatorId, municipalityId);
     if (!link) return res.status(400).json({ error: 'Município não vinculado a este coordenador' });
 
-    const created = createDemand(db, {
+    const created = await createDemand(db, {
       campaign_id: campaign.id,
       coordinator_id: coordinatorId,
       municipality_id: municipalityId,
@@ -1606,7 +1608,7 @@ app.post('/api/campaigns/:slug/demands', (req, res) => {
   }
 });
 
-app.patch('/api/campaigns/:slug/demands/:id', (req, res) => {
+app.patch('/api/campaigns/:slug/demands/:id', async (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
@@ -1625,7 +1627,7 @@ app.patch('/api/campaigns/:slug/demands/:id', (req, res) => {
       }
     }
 
-    const updated = updateDemand(db, demand.id, {
+    const updated = await updateDemand(db, demand.id, {
       title: req.body.title,
       description: req.body.description,
       occurred_at: req.body.occurred_at,

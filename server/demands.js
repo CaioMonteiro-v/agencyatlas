@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { customAlphabet } = require('nanoid');
+const storage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 10);
 const UPLOAD_DIR = path.join(__dirname, 'uploads', 'demands');
@@ -96,8 +97,7 @@ function demandSummary(db, campaignId) {
   };
 }
 
-function saveDataUrlAttachment(dataUrl, originalName = 'print.png') {
-  ensureUploadDir();
+async function saveDataUrlAttachment(dataUrl, originalName = 'print.png') {
   const match = String(dataUrl || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) {
     const err = new Error('Print inválido — envie imagem (PNG/JPG/WEBP)');
@@ -116,27 +116,47 @@ function saveDataUrlAttachment(dataUrl, originalName = 'print.png') {
       : mime.includes('gif') ? 'gif'
         : 'jpg';
   const filename = `${Date.now()}-${nano()}.${ext}`;
-  const abs = path.join(UPLOAD_DIR, filename);
   const buf = Buffer.from(match[2], 'base64');
   if (buf.length > 6 * 1024 * 1024) {
     const err = new Error('Imagem muito grande (máx. 6MB)');
     err.status = 400;
     throw err;
   }
+
+  // Preferência: Supabase Storage (persiste no free, 1 GB). Fallback: disco local.
+  if (storage.configured()) {
+    const uploaded = await storage.uploadPublicImage(buf, {
+      mimeType: mime,
+      filename,
+      folder: 'demands',
+    });
+    return {
+      url: uploaded.url,
+      path: uploaded.path,
+      provider: 'supabase',
+      original_name: String(originalName || filename).slice(0, 180),
+      mime_type: mime,
+      size: buf.length,
+    };
+  }
+
+  ensureUploadDir();
+  const abs = path.join(UPLOAD_DIR, filename);
   fs.writeFileSync(abs, buf);
   return {
     url: `/uploads/demands/${filename}`,
+    provider: 'local',
     original_name: String(originalName || filename).slice(0, 180),
     mime_type: mime,
     size: buf.length,
   };
 }
 
-function createDemand(db, payload) {
+async function createDemand(db, payload) {
   const attachments = [];
   for (const item of payload.attachments || []) {
     if (item?.data_url) {
-      attachments.push(saveDataUrlAttachment(item.data_url, item.name));
+      attachments.push(await saveDataUrlAttachment(item.data_url, item.name));
     } else if (item?.url) {
       attachments.push({
         url: item.url,
@@ -175,7 +195,7 @@ function createDemand(db, payload) {
   return enrichDemand(row);
 }
 
-function updateDemand(db, demandId, patch) {
+async function updateDemand(db, demandId, patch) {
   const current = db.prepare('SELECT * FROM territory_demands WHERE id = ?').get(demandId);
   if (!current) return null;
 
@@ -183,7 +203,7 @@ function updateDemand(db, demandId, patch) {
   if (Array.isArray(patch.add_attachments) && patch.add_attachments.length) {
     for (const item of patch.add_attachments) {
       if (item?.data_url) {
-        attachments.push(saveDataUrlAttachment(item.data_url, item.name));
+        attachments.push(await saveDataUrlAttachment(item.data_url, item.name));
       }
     }
   }
