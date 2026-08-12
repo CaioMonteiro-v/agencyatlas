@@ -2065,7 +2065,8 @@ th {
   flex-wrap: wrap;
 }
 
-.demand-summary > div {
+.demand-summary > div,
+.demand-summary__btn {
   min-width: 72px;
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--line);
@@ -2074,13 +2075,30 @@ th {
   display: grid;
   gap: 0.1rem;
   text-align: center;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
-.demand-summary strong {
+.demand-summary__btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(61, 107, 90, 0.4);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.demand-summary__btn.is-active {
+  border-color: rgba(61, 107, 90, 0.55);
+  background: rgba(61, 107, 90, 0.1);
+}
+
+.demand-summary strong,
+.demand-summary__btn strong {
   font-size: 1.15rem;
 }
 
-.demand-summary span {
+.demand-summary span,
+.demand-summary__btn span {
   font-size: 0.75rem;
   color: var(--muted);
 }

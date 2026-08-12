@@ -21,12 +21,25 @@ function readFilesAsDataUrls(fileList) {
   );
 }
 
+function formatDemandDate(value) {
+  if (!value) return '—';
+  return new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR');
+}
+
+function listTitle(filter) {
+  if (filter === 'standby') return 'Todas em standby';
+  if (filter === 'resolvido') return 'Todas resolvidas';
+  return 'Todos os relatórios';
+}
+
 export default function DemandFunnelPanel({ campaignSlug }) {
   const [tree, setTree] = useState([]);
   const [summary, setSummary] = useState(null);
   const [coordinator, setCoordinator] = useState(null);
   const [municipality, setMunicipality] = useState(null);
+  const [listFilter, setListFilter] = useState(null);
   const [demands, setDemands] = useState([]);
+  const [loadingList, setLoadingList] = useState(false);
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +68,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
     });
   }
 
-  async function loadDemands(coordId, muniId) {
+  async function loadDemandsForMunicipality(coordId, muniId) {
     const res = await api.getDemands(campaignSlug, {
       coordinator_id: coordId,
       municipality_id: muniId,
@@ -63,11 +76,34 @@ export default function DemandFunnelPanel({ campaignSlug }) {
     setDemands(res.items || []);
   }
 
+  async function loadDemandsByFilter(filter) {
+    setLoadingList(true);
+    try {
+      const res = await api.getDemands(campaignSlug, {
+        status: filter === 'all' ? undefined : filter,
+      });
+      setDemands(res.items || []);
+      if (res.summary) setSummary(res.summary);
+    } finally {
+      setLoadingList(false);
+    }
+  }
+
+  async function refreshCurrentView() {
+    await loadTree();
+    if (listFilter) {
+      await loadDemandsByFilter(listFilter);
+    } else if (coordinator && municipality) {
+      await loadDemandsForMunicipality(coordinator.id, municipality.id);
+    }
+  }
+
   useEffect(() => {
     loadTree().catch((err) => setToast(err.message));
   }, [campaignSlug]);
 
   function openCoordinator(coord) {
+    setListFilter(null);
     setCoordinator(coord);
     setMunicipality(null);
     setDemands([]);
@@ -75,16 +111,18 @@ export default function DemandFunnelPanel({ campaignSlug }) {
   }
 
   async function openMunicipality(muni) {
+    setListFilter(null);
     setMunicipality(muni);
     setShowForm(false);
     try {
-      await loadDemands(coordinator.id, muni.id);
+      await loadDemandsForMunicipality(coordinator.id, muni.id);
     } catch (err) {
       setToast(err.message);
     }
   }
 
   function backToCoordinators() {
+    setListFilter(null);
     setCoordinator(null);
     setMunicipality(null);
     setDemands([]);
@@ -93,10 +131,24 @@ export default function DemandFunnelPanel({ campaignSlug }) {
   }
 
   function backToMunicipalities() {
+    setListFilter(null);
     setMunicipality(null);
     setDemands([]);
     setShowForm(false);
     loadTree().catch((err) => setToast(err.message));
+  }
+
+  async function openSummaryList(filter) {
+    setListFilter(filter);
+    setCoordinator(null);
+    setMunicipality(null);
+    setShowForm(false);
+    setDemands([]);
+    try {
+      await loadDemandsByFilter(filter);
+    } catch (err) {
+      setToast(err.message);
+    }
   }
 
   async function onCreate(e) {
@@ -126,8 +178,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
       });
       setShowForm(false);
       setToast('Demanda registrada no funil');
-      await loadDemands(coordinator.id, municipality.id);
-      await loadTree();
+      await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
     } finally {
@@ -145,8 +196,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         unresolved_reason: null,
       });
       setToast('Demanda marcada como resolvida');
-      await loadDemands(coordinator.id, municipality.id);
-      await loadTree();
+      await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
     }
@@ -168,8 +218,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         unresolved_reason: String(reason).trim(),
       });
       setToast('Demanda mantida em standby');
-      await loadDemands(coordinator.id, municipality.id);
-      await loadTree();
+      await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
     }
@@ -182,8 +231,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         unresolved_reason: demand.unresolved_reason || 'Reaberta — aguardando situação',
       });
       setToast('Demanda reaberta em standby');
-      await loadDemands(coordinator.id, municipality.id);
-      await loadTree();
+      await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
     }
@@ -194,12 +242,111 @@ export default function DemandFunnelPanel({ campaignSlug }) {
     try {
       await api.deleteDemand(campaignSlug, demand.id);
       setToast('Demanda removida');
-      await loadDemands(coordinator.id, municipality.id);
-      await loadTree();
+      await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
     }
   }
+
+  function renderDemandCard(demand, { showPlace = false } = {}) {
+    return (
+      <article
+        key={demand.id}
+        className={`mission-card demand-item demand-item--${demand.status}`}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div>
+            <span className={`badge badge--${demand.status === 'resolvido' ? 'ok' : 'warn'}`}>
+              {demand.status === 'resolvido' ? 'Resolvido' : 'Standby'}
+            </span>
+            <h4 style={{ margin: '0.45rem 0 0.2rem' }}>
+              {demand.title || 'Demanda sem título'}
+            </h4>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem' }}>
+              {formatDemandDate(demand.occurred_at)}
+              {demand.created_by ? ` · por ${demand.created_by}` : ''}
+            </p>
+            {showPlace && (
+              <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)', fontSize: '0.88rem' }}>
+                {demand.coordinator_name || 'Coordenador'} · {demand.municipality_name || 'Município'}
+              </p>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+            {demand.status !== 'resolvido' ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => markResolved(demand)}
+                >
+                  OK · Resolvido
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-soft btn-sm"
+                  onClick={() => keepStandby(demand)}
+                >
+                  Atualizar standby
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                onClick={() => reopen(demand)}
+              >
+                Reabrir
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={() => removeDemand(demand)}
+            >
+              Remover
+            </button>
+          </div>
+        </div>
+
+        <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.75rem' }}>{demand.description}</p>
+
+        {demand.status === 'standby' && demand.unresolved_reason ? (
+          <p className="demand-reason">
+            <strong>Por que não resolveu:</strong> {demand.unresolved_reason}
+          </p>
+        ) : null}
+
+        {demand.status === 'resolvido' && demand.resolution_notes ? (
+          <p className="demand-reason demand-reason--ok">
+            <strong>Resolução:</strong> {demand.resolution_notes}
+          </p>
+        ) : null}
+
+        {demand.attachments?.length ? (
+          <div className="demand-prints">
+            {demand.attachments.map((att) => (
+              <a
+                key={att.url}
+                href={att.url}
+                target="_blank"
+                rel="noreferrer"
+                className="demand-print"
+                title={att.original_name || 'Print'}
+              >
+                <img src={att.url} alt={att.original_name || 'Print WhatsApp'} />
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
+  const showingList = Boolean(listFilter);
+  const showingMunicipality = Boolean(coordinator && municipality && !listFilter);
+  const showingMunicipalities = Boolean(coordinator && !municipality && !listFilter);
+  const showingCoordinators = !coordinator && !listFilter;
 
   return (
     <section className="panel panel-pad demand-funnel">
@@ -209,24 +356,50 @@ export default function DemandFunnelPanel({ campaignSlug }) {
           <h3 style={{ marginTop: 0 }}>Demandas por coordenador</h3>
           <p>
             Clique no coordenador → município → registre o que houve (texto, data, prints).
-            Resolvido vai para OK; se não, fica em standby com o motivo.
-            Texto fica no banco; prints vão ao Supabase Storage quando configurado.
+            Ou clique em <strong>standby</strong> / <strong>resolvidas</strong> / <strong>total</strong> para ver a lista geral dos relatórios.
           </p>
         </div>
         {summary && (
-          <div className="demand-summary">
-            <div><strong>{summary.standby}</strong><span>standby</span></div>
-            <div><strong>{summary.resolvido}</strong><span>resolvidas</span></div>
-            <div><strong>{summary.total}</strong><span>total</span></div>
+          <div className="demand-summary" role="group" aria-label="Filtros do funil">
+            <button
+              type="button"
+              className={`demand-summary__btn ${listFilter === 'standby' ? 'is-active' : ''}`}
+              onClick={() => openSummaryList('standby')}
+            >
+              <strong>{summary.standby}</strong>
+              <span>standby</span>
+            </button>
+            <button
+              type="button"
+              className={`demand-summary__btn ${listFilter === 'resolvido' ? 'is-active' : ''}`}
+              onClick={() => openSummaryList('resolvido')}
+            >
+              <strong>{summary.resolvido}</strong>
+              <span>resolvidas</span>
+            </button>
+            <button
+              type="button"
+              className={`demand-summary__btn ${listFilter === 'all' ? 'is-active' : ''}`}
+              onClick={() => openSummaryList('all')}
+            >
+              <strong>{summary.total}</strong>
+              <span>total</span>
+            </button>
           </div>
         )}
       </div>
 
       <div className="demand-breadcrumb">
-        <button type="button" className="chip" onClick={backToCoordinators}>
+        <button type="button" className={`chip ${showingCoordinators ? 'active' : ''}`} onClick={backToCoordinators}>
           Coordenadores
         </button>
-        {coordinator && (
+        {showingList && (
+          <>
+            <span>/</span>
+            <span className="chip active">{listTitle(listFilter)}</span>
+          </>
+        )}
+        {coordinator && !showingList && (
           <>
             <span>/</span>
             <button type="button" className="chip active" onClick={backToMunicipalities}>
@@ -234,7 +407,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
             </button>
           </>
         )}
-        {municipality && (
+        {municipality && !showingList && (
           <>
             <span>/</span>
             <span className="chip active">{municipality.name}</span>
@@ -242,7 +415,31 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         )}
       </div>
 
-      {!coordinator && (
+      {showingList && (
+        <div style={{ marginTop: '1rem' }}>
+          <h4 style={{ margin: '0 0 0.75rem' }}>{listTitle(listFilter)}</h4>
+          {loadingList ? (
+            <EmptyState>Carregando relatórios…</EmptyState>
+          ) : (
+            <>
+              <div className="stack">
+                {demands.map((demand) => renderDemandCard(demand, { showPlace: true }))}
+              </div>
+              {!demands.length && (
+                <EmptyState>
+                  {listFilter === 'standby'
+                    ? 'Nenhuma demanda em standby no momento.'
+                    : listFilter === 'resolvido'
+                      ? 'Nenhuma demanda resolvida ainda.'
+                      : 'Nenhum relatório registrado ainda.'}
+                </EmptyState>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {showingCoordinators && (
         <div className="demand-grid" style={{ marginTop: '1rem' }}>
           {tree.map((coord) => (
             <button
@@ -266,7 +463,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         </div>
       )}
 
-      {coordinator && !municipality && (
+      {showingMunicipalities && (
         <div className="demand-grid" style={{ marginTop: '1rem' }}>
           {coordinator.municipalities.map((muni) => (
             <button
@@ -287,7 +484,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         </div>
       )}
 
-      {coordinator && municipality && (
+      {showingMunicipality && (
         <div style={{ marginTop: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
             <div>
@@ -366,95 +563,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
           )}
 
           <div className="stack" style={{ marginTop: '1.1rem' }}>
-            {demands.map((demand) => (
-              <article
-                key={demand.id}
-                className={`mission-card demand-item demand-item--${demand.status}`}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <div>
-                    <span className={`badge badge--${demand.status === 'resolvido' ? 'ok' : 'warn'}`}>
-                      {demand.status === 'resolvido' ? 'Resolvido' : 'Standby'}
-                    </span>
-                    <h4 style={{ margin: '0.45rem 0 0.2rem' }}>
-                      {demand.title || 'Demanda sem título'}
-                    </h4>
-                    <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem' }}>
-                      {demand.occurred_at
-                        ? new Date(`${demand.occurred_at}T00:00:00`).toLocaleDateString('pt-BR')
-                        : '—'}
-                      {demand.created_by ? ` · por ${demand.created_by}` : ''}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {demand.status !== 'resolvido' ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => markResolved(demand)}
-                        >
-                          OK · Resolvido
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-soft btn-sm"
-                          onClick={() => keepStandby(demand)}
-                        >
-                          Atualizar standby
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-soft btn-sm"
-                        onClick={() => reopen(demand)}
-                      >
-                        Reabrir
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={() => removeDemand(demand)}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                </div>
-
-                <p style={{ whiteSpace: 'pre-wrap', marginTop: '0.75rem' }}>{demand.description}</p>
-
-                {demand.status === 'standby' && demand.unresolved_reason ? (
-                  <p className="demand-reason">
-                    <strong>Por que não resolveu:</strong> {demand.unresolved_reason}
-                  </p>
-                ) : null}
-
-                {demand.status === 'resolvido' && demand.resolution_notes ? (
-                  <p className="demand-reason demand-reason--ok">
-                    <strong>Resolução:</strong> {demand.resolution_notes}
-                  </p>
-                ) : null}
-
-                {demand.attachments?.length ? (
-                  <div className="demand-prints">
-                    {demand.attachments.map((att) => (
-                      <a
-                        key={att.url}
-                        href={att.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="demand-print"
-                        title={att.original_name || 'Print'}
-                      >
-                        <img src={att.url} alt={att.original_name || 'Print WhatsApp'} />
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-            ))}
+            {demands.map((demand) => renderDemandCard(demand))}
           </div>
 
           {!demands.length && (
