@@ -118,6 +118,21 @@ export const api = {
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
+  getDemandTree: (slug) => request(`/api/campaigns/${slug}/demands/tree`),
+  getDemands: (slug, { coordinator_id, municipality_id, status } = {}) => {
+    const qs = new URLSearchParams();
+    if (coordinator_id) qs.set('coordinator_id', coordinator_id);
+    if (municipality_id) qs.set('municipality_id', municipality_id);
+    if (status) qs.set('status', status);
+    const q = qs.toString();
+    return request(`/api/campaigns/${slug}/demands${q ? `?${q}` : ''}`);
+  },
+  createDemand: (slug, body) =>
+    request(`/api/campaigns/${slug}/demands`, { method: 'POST', body: JSON.stringify(body) }),
+  updateDemand: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/demands/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteDemand: (slug, id) =>
+    request(`/api/campaigns/${slug}/demands/${id}`, { method: 'DELETE' }),
   getContent: (slug) => request(`/api/campaigns/${slug}/content`),
   createContent: (slug, body) =>
     request(`/api/campaigns/${slug}/content`, { method: 'POST', body: JSON.stringify(body) }),

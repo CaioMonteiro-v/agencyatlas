@@ -16,14 +16,22 @@ const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister
 const { listContentWeek, buildContentDetail } = require('./content');
 const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
 const { bitlyStatus, syncMobilizedFromBitly } = require('./bitly');
+const {
+  listDemands,
+  demandCountsByMunicipality,
+  demandSummary,
+  createDemand,
+  updateDemand,
+} = require('./demands');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 app.use('/logos', express.static(path.join(__dirname, '../public/logos')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(requireAuth);
 
 let db;
@@ -537,6 +545,7 @@ app.get('/api/campaigns/:slug/backup', (req, res) => {
       JOIN mobilized_contents mc ON mc.id = ch.mobilized_content_id
       WHERE mc.campaign_id = ?
     `).all(campaign.id),
+    territory_demands: db.prepare('SELECT * FROM territory_demands WHERE campaign_id = ?').all(campaign.id),
   };
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1483,6 +1492,165 @@ app.post('/api/campaigns/:slug/assistant', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || 'Falha na assistente' });
   }
+});
+
+/* ---------- Funil de demandas (coordenador → município) ---------- */
+app.get('/api/campaigns/:slug/demands', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const items = listDemands(db, {
+      campaignId: campaign.id,
+      coordinatorId: req.query.coordinator_id,
+      municipalityId: req.query.municipality_id,
+      status: req.query.status,
+    });
+    res.json({
+      items,
+      summary: demandSummary(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('GET demands:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar demandas' });
+  }
+});
+
+app.get('/api/campaigns/:slug/demands/tree', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    const coordinators = db.prepare(`
+      SELECT * FROM coordinators WHERE campaign_id = ? ORDER BY name ASC
+    `).all(campaign.id);
+
+    const tree = coordinators.map((coord) => {
+      const munis = db.prepare(`
+        SELECT m.id, m.name
+        FROM coordinator_municipalities cm
+        JOIN municipalities m ON m.id = cm.municipality_id
+        WHERE cm.coordinator_id = ?
+        ORDER BY m.name ASC
+      `).all(coord.id);
+
+      const counts = demandCountsByMunicipality(db, campaign.id, coord.id);
+      const byMuni = Object.fromEntries(counts.map((c) => [c.municipality_id, c]));
+
+      const municipalities = munis.map((m) => ({
+        ...m,
+        demands_total: Number(byMuni[m.id]?.total) || 0,
+        demands_standby: Number(byMuni[m.id]?.standby) || 0,
+        demands_resolvido: Number(byMuni[m.id]?.resolvido) || 0,
+      }));
+
+      return {
+        id: coord.id,
+        name: coord.name,
+        phone: coord.phone,
+        municipalities,
+        demands_total: municipalities.reduce((s, m) => s + m.demands_total, 0),
+        demands_standby: municipalities.reduce((s, m) => s + m.demands_standby, 0),
+        demands_resolvido: municipalities.reduce((s, m) => s + m.demands_resolvido, 0),
+      };
+    });
+
+    res.json({
+      coordinators: tree,
+      summary: demandSummary(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('GET demands tree:', err);
+    res.status(500).json({ error: err.message || 'Erro ao montar funil' });
+  }
+});
+
+app.post('/api/campaigns/:slug/demands', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    const coordinatorId = Number(req.body.coordinator_id);
+    const municipalityId = Number(req.body.municipality_id);
+    const description = String(req.body.description || '').trim();
+    if (!coordinatorId) return res.status(400).json({ error: 'Selecione o coordenador' });
+    if (!municipalityId) return res.status(400).json({ error: 'Selecione o município' });
+    if (!description) return res.status(400).json({ error: 'Descreva o que houve' });
+
+    const coord = db.prepare(
+      'SELECT id FROM coordinators WHERE id = ? AND campaign_id = ?'
+    ).get(coordinatorId, campaign.id);
+    if (!coord) return res.status(400).json({ error: 'Coordenador inválido' });
+
+    const link = db.prepare(`
+      SELECT 1 FROM coordinator_municipalities
+      WHERE coordinator_id = ? AND municipality_id = ?
+    `).get(coordinatorId, municipalityId);
+    if (!link) return res.status(400).json({ error: 'Município não vinculado a este coordenador' });
+
+    const created = createDemand(db, {
+      campaign_id: campaign.id,
+      coordinator_id: coordinatorId,
+      municipality_id: municipalityId,
+      title: req.body.title ? String(req.body.title).trim() : null,
+      description,
+      occurred_at: req.body.occurred_at || new Date().toISOString().slice(0, 10),
+      unresolved_reason: req.body.unresolved_reason || null,
+      created_by: req.user?.name || req.user?.username || null,
+      attachments: Array.isArray(req.body.attachments) ? req.body.attachments : [],
+    });
+
+    res.status(201).json(created);
+  } catch (err) {
+    console.error('POST demands:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar demanda' });
+  }
+});
+
+app.patch('/api/campaigns/:slug/demands/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    const demand = db.prepare(
+      'SELECT * FROM territory_demands WHERE id = ? AND campaign_id = ?'
+    ).get(req.params.id, campaign.id);
+    if (!demand) return res.status(404).json({ error: 'Demanda não encontrada' });
+
+    if (req.body.status === 'resolvido' && !String(req.body.resolution_notes || demand.resolution_notes || '').trim()) {
+      // OK button can resolve without notes, but encourage optional notes - allow empty
+    }
+    if (req.body.status === 'standby' && req.body.unresolved_reason !== undefined) {
+      if (!String(req.body.unresolved_reason || '').trim() && demand.status === 'standby') {
+        /* allow clearing */
+      }
+    }
+
+    const updated = updateDemand(db, demand.id, {
+      title: req.body.title,
+      description: req.body.description,
+      occurred_at: req.body.occurred_at,
+      status: req.body.status,
+      unresolved_reason: req.body.unresolved_reason,
+      resolution_notes: req.body.resolution_notes,
+      add_attachments: Array.isArray(req.body.add_attachments) ? req.body.add_attachments : [],
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error('PATCH demands:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar demanda' });
+  }
+});
+
+app.delete('/api/campaigns/:slug/demands/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const demand = db.prepare(
+    'SELECT * FROM territory_demands WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!demand) return res.status(404).json({ error: 'Demanda não encontrada' });
+  db.prepare('DELETE FROM territory_demands WHERE id = ?').run(demand.id);
+  res.json({ ok: true });
 });
 
 app.get('/api/campaigns/:slug/meta/status', (req, res) => {

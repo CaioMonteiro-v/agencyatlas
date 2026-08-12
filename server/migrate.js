@@ -423,6 +423,59 @@ function migrateAnalyticsSchema(db) {
   } catch (err) {
     console.warn('migrate mobilized analytics columns:', err.message);
   }
+
+  // Funil de demandas territoriais (coordenador → município)
+  try {
+    if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS territory_demands (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          coordinator_id INTEGER NOT NULL REFERENCES coordinators(id) ON DELETE CASCADE,
+          municipality_id INTEGER NOT NULL REFERENCES municipalities(id),
+          title TEXT,
+          description TEXT NOT NULL,
+          occurred_at TEXT,
+          status TEXT DEFAULT 'standby',
+          unresolved_reason TEXT,
+          resolution_notes TEXT,
+          resolved_at TIMESTAMPTZ,
+          created_by TEXT,
+          attachments TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS territory_demands (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          coordinator_id INTEGER NOT NULL,
+          municipality_id INTEGER NOT NULL,
+          title TEXT,
+          description TEXT NOT NULL,
+          occurred_at TEXT,
+          status TEXT DEFAULT 'standby',
+          unresolved_reason TEXT,
+          resolution_notes TEXT,
+          resolved_at TEXT,
+          created_by TEXT,
+          attachments TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+          FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE CASCADE,
+          FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
+        )
+      `);
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_demands_campaign ON territory_demands(campaign_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_demands_coord ON territory_demands(coordinator_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id)');
+  } catch (err) {
+    console.warn('migrate territory_demands:', err.message);
+  }
 }
 
 module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };

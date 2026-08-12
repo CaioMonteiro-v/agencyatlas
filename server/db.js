@@ -326,12 +326,36 @@ function initSqliteSchema(db) {
       FOREIGN KEY (mobilized_content_id) REFERENCES mobilized_contents(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS territory_demands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      coordinator_id INTEGER NOT NULL,
+      municipality_id INTEGER NOT NULL,
+      title TEXT,
+      description TEXT NOT NULL,
+      occurred_at TEXT,
+      status TEXT DEFAULT 'standby',
+      unresolved_reason TEXT,
+      resolution_notes TEXT,
+      resolved_at TEXT,
+      created_by TEXT,
+      attachments TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE CASCADE,
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
     CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
     CREATE INDEX IF NOT EXISTS idx_leaders_campaign ON leaders(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_leaders_code ON leaders(referral_code);
     CREATE INDEX IF NOT EXISTS idx_coord_campaign ON coordinators(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_demands_campaign ON territory_demands(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_demands_coord ON territory_demands(coordinator_id);
+    CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id);
   `);
 }
 
