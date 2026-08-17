@@ -170,8 +170,8 @@ Na aba **Mobilização → Conteúdos mobilizados**, o painel mostra análise es
 BITLY_ACCESS_TOKEN=seu-token-bitly
 ```
 
-Com o token: botão **Atualizar do Bitly** puxa total de cliques e série dos últimos 30 dias.  
-Sem o token: informe o total de cliques manualmente (como no painel do Bitly) e cadastre os grupos/canais.
+Com o token: botão **Atualizar do Bitly** puxa cliques e **Criar links em massa** encurta várias URLs de uma vez (plano Bitly com create).  
+Sem o token: informe o Bitly já pronto + total de cliques manualmente.
 
 ### Atlas Assistente (IA)
 

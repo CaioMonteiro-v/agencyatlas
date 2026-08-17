@@ -476,6 +476,14 @@ function migrateAnalyticsSchema(db) {
   } catch (err) {
     console.warn('migrate territory_demands:', err.message);
   }
+
+  // Snapshot da conta Instagram (totais reais, separados do rateio municipal)
+  try {
+    ensureColumn(db, 'campaign_meta_config', 'last_ig_sync_at', db.dialect === 'postgres' ? 'TIMESTAMPTZ' : 'TEXT');
+    ensureColumn(db, 'campaign_meta_config', 'last_ig_totals', 'TEXT');
+  } catch (err) {
+    console.warn('migrate campaign_meta_config ig snapshot:', err.message);
+  }
 }
 
 module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };

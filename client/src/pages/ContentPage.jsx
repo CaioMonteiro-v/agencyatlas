@@ -143,12 +143,23 @@ export default function ContentPage() {
     setSyncing(true);
     try {
       const res = await api.syncMeta(campaign.slug);
-      setToast(`Instagram sync: ${res.content_posts || 0} posts · ${res.municipalities_updated || 0} municípios`);
+      setToast(
+        `Instagram sync · conta ${res.totals?.comments ?? 0} comentários · ${res.municipalities_updated || 0} municípios (estimativa)`,
+      );
       await load();
     } catch (err) {
       setToast(err.message || 'API Meta ainda não conectada — use cadastro manual');
     } finally {
       setSyncing(false);
+    }
+  }
+
+  function formatSync(iso) {
+    if (!iso) return null;
+    try {
+      return new Date(iso).toLocaleString('pt-BR');
+    } catch {
+      return iso;
     }
   }
 
@@ -200,6 +211,47 @@ export default function ContentPage() {
           </p>
         )}
       </div>
+
+      {data.ig_account && (
+        <section className="panel panel-pad ig-account-panel" style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div>
+              <p className="eyebrow">Instagram da campanha</p>
+              <h3 style={{ marginTop: 0 }}>Totais da conta (reais)</h3>
+              <p style={{ marginBottom: 0, color: 'var(--muted)' }}>
+                {data.ig_account.note}
+              </p>
+            </div>
+            {data.ig_account.last_sync_at && (
+              <p className="meta-hint" style={{ margin: 0 }}>
+                Última sync: {formatSync(data.ig_account.last_sync_at)}
+              </p>
+            )}
+          </div>
+          {data.ig_account.totals ? (
+            <div className="radar-stats" style={{ marginTop: '0.85rem' }}>
+              <article>
+                <strong>{data.ig_account.totals.comments ?? 0}</strong>
+                <span>Comentários</span>
+              </article>
+              <article>
+                <strong>{data.ig_account.totals.likes ?? 0}</strong>
+                <span>Likes</span>
+              </article>
+              <article>
+                <strong>{data.ig_account.totals.reach ?? 0}</strong>
+                <span>Reach</span>
+              </article>
+              <article>
+                <strong>{data.ig_account.totals.posts ?? 0}</strong>
+                <span>Posts lidos</span>
+              </article>
+            </div>
+          ) : (
+            <EmptyState>Ainda sem sync. Clique em Sincronizar Instagram.</EmptyState>
+          )}
+        </section>
+      )}
 
       <div className="radar-stats" style={{ marginBottom: '1.1rem' }}>
         <article>
@@ -291,6 +343,12 @@ export default function ContentPage() {
                   {post.permalink && (
                     <p style={{ marginBottom: 0 }}>
                       <a href={post.permalink} target="_blank" rel="noreferrer">Abrir post</a>
+                    </p>
+                  )}
+                  {(post.likes != null || post.comments != null || post.reach != null) && (
+                    <p style={{ marginBottom: 0, color: 'var(--muted)' }}>
+                      IG: {Number(post.likes || 0)} likes · {Number(post.comments || 0)} comentários
+                      {post.reach ? ` · reach ${Number(post.reach)}` : ''}
                     </p>
                   )}
                   <p style={{ marginBottom: 0, color: 'var(--muted)' }}>

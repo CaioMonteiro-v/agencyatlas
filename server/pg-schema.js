@@ -156,6 +156,8 @@ CREATE TABLE IF NOT EXISTS campaign_meta_config (
   content_views_threshold DOUBLE PRECISION DEFAULT 0.5,
   vote_progress_threshold DOUBLE PRECISION DEFAULT 0.15,
   notes TEXT,
+  last_ig_sync_at TIMESTAMPTZ,
+  last_ig_totals TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

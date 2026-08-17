@@ -73,8 +73,11 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
   const [bitly, setBitly] = useState(null);
   const [toast, setToast] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [form, setForm] = useState(emptyContent);
+  const [bulkForm, setBulkForm] = useState({ title_prefix: '', urls: '' });
   const [channelForms, setChannelForms] = useState({});
   const [metricsEdit, setMetricsEdit] = useState({});
 
@@ -111,6 +114,34 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
       }
     } catch (err) {
       setToast(err.message);
+    }
+  }
+
+  async function onBulkCreate(e) {
+    e.preventDefault();
+    if (!bulkForm.urls.trim()) {
+      setToast('Cole as URLs (uma por linha)');
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const res = await api.createMobilizedBulk(campaignSlug, {
+        title_prefix: bulkForm.title_prefix.trim() || undefined,
+        urls: bulkForm.urls,
+      });
+      setBulkForm({ title_prefix: '', urls: '' });
+      setShowBulk(false);
+      await load();
+      const errN = res.error_count || 0;
+      setToast(
+        errN
+          ? `${res.created_count} link(s) criados · ${errN} falha(s)`
+          : `${res.created_count} link(s) Bitly criados em massa`,
+      );
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -228,7 +259,24 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
               {syncing ? 'Sincronizando…' : 'Atualizar do Bitly'}
             </button>
           ) : null}
-          <button type="button" className="btn btn-accent btn-sm" onClick={() => setShowForm((v) => !v)}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              setShowBulk((v) => !v);
+              setShowForm(false);
+            }}
+          >
+            {showBulk ? 'Fechar massa' : 'Criar links em massa'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-accent btn-sm"
+            onClick={() => {
+              setShowForm((v) => !v);
+              setShowBulk(false);
+            }}
+          >
             {showForm ? 'Fechar' : 'Novo link'}
           </button>
         </div>
@@ -237,8 +285,8 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
       {bitly && (
         <p className={`bitly-mode ${bitly.configured ? 'bitly-mode--live' : ''}`}>
           {bitly.configured
-            ? 'Modo ao vivo: cliques vêm da API do Bitly.'
-            : 'Modo manual: cole o total de cliques do Bitly (ou configure BITLY_ACCESS_TOKEN no Render).'}
+            ? 'Modo ao vivo: o Atlas cria/encurta no Bitly e puxa cliques automaticamente.'
+            : 'Modo manual: cole um Bitly já pronto, ou configure BITLY_ACCESS_TOKEN no Render para criar em massa.'}
         </p>
       )}
 
@@ -332,6 +380,44 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
             />
           </label>
           <button className="btn btn-primary" type="submit">Salvar na análise</button>
+        </form>
+      )}
+
+      {showBulk && (
+        <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={onBulkCreate}>
+          <h4 style={{ margin: 0 }}>Criar links Bitly em massa</h4>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+            Cole uma URL longa por linha. Opcional: <code>https://...|Título do conteúdo</code>.
+            Requer <code>BITLY_ACCESS_TOKEN</code> no Render (plano com criação de links).
+          </p>
+          <label>
+            Prefixo do título (opcional)
+            <input
+              className="input"
+              value={bulkForm.title_prefix}
+              onChange={(e) => setBulkForm({ ...bulkForm, title_prefix: e.target.value })}
+              placeholder="Ex.: Reel semana 12"
+            />
+          </label>
+          <label>
+            URLs *
+            <textarea
+              className="textarea"
+              required
+              rows={8}
+              value={bulkForm.urls}
+              onChange={(e) => setBulkForm({ ...bulkForm, urls: e.target.value })}
+              placeholder={'https://instagram.com/reel/...\nhttps://youtube.com/...\nhttps://drive.google.com/...|Vídeo Cuiabá'}
+            />
+          </label>
+          <button className="btn btn-primary" type="submit" disabled={bulkBusy || !bitly?.configured}>
+            {bulkBusy ? 'Criando…' : 'Criar bitlinks'}
+          </button>
+          {!bitly?.configured && (
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem' }}>
+              Sem token Bitly no Render, a criação em massa fica desabilitada.
+            </p>
+          )}
         </form>
       )}
 

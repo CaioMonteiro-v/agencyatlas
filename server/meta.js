@@ -13,9 +13,60 @@ function metaStatus() {
     ig_user_id: process.env.META_IG_USER_ID || null,
     mode: metaConfigured() ? 'live' : 'manual',
     hint: metaConfigured()
-      ? 'Token Meta ativo — sincronização disponível'
+      ? 'Token Meta ativo — sincronização disponível. Totais da conta são reais; números por município são estimativa.'
       : 'Configure META_ACCESS_TOKEN e META_IG_USER_ID no ambiente para puxar Instagram automaticamente. Enquanto isso, use métricas manuais.',
   };
+}
+
+function parseIgTotals(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function readIgAccountSnapshot(db, campaignId) {
+  const cfg = db.prepare('SELECT * FROM campaign_meta_config WHERE campaign_id = ?').get(campaignId);
+  if (!cfg) {
+    return {
+      last_sync_at: null,
+      totals: null,
+      note: 'Totais da conta Instagram aparecem após a primeira sincronização.',
+    };
+  }
+  return {
+    last_sync_at: cfg.last_ig_sync_at || null,
+    totals: parseIgTotals(cfg.last_ig_totals),
+    ig_username: cfg.ig_username || null,
+    note: 'Totais da conta (@oficial) são reais. Valores por município são estimativa proporcional às metas — o Instagram não informa de qual cidade veio o comentário.',
+  };
+}
+
+function saveIgAccountSnapshot(db, campaignId, totals, syncedAt) {
+  const existing = db.prepare('SELECT campaign_id FROM campaign_meta_config WHERE campaign_id = ?').get(campaignId);
+  const payload = JSON.stringify({
+    comments: Number(totals?.comments) || 0,
+    likes: Number(totals?.likes) || 0,
+    reach: Number(totals?.reach) || 0,
+    posts: Number(totals?.posts) || 0,
+  });
+  if (existing) {
+    db.prepare(`
+      UPDATE campaign_meta_config SET
+        last_ig_sync_at = ?,
+        last_ig_totals = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE campaign_id = ?
+    `).run(syncedAt, payload, campaignId);
+  } else {
+    db.prepare(`
+      INSERT INTO campaign_meta_config (campaign_id, last_ig_sync_at, last_ig_totals)
+      VALUES (?, ?, ?)
+    `).run(campaignId, syncedAt, payload);
+  }
 }
 
 async function fetchInstagramSnapshot() {
@@ -117,4 +168,6 @@ module.exports = {
   metaStatus,
   fetchInstagramSnapshot,
   distributeIgTotals,
+  readIgAccountSnapshot,
+  saveIgAccountSnapshot,
 };

@@ -2265,3 +2265,7 @@ th {
     height: 140px;
   }
 }
+
+.ig-account-panel {
+  border-color: rgba(61, 107, 90, 0.28);
+}

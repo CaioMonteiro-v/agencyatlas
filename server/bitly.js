@@ -54,6 +54,63 @@ async function bitlyGet(path) {
   return body;
 }
 
+async function bitlyPost(path, payload) {
+  const token = process.env.BITLY_ACCESS_TOKEN;
+  const res = await fetch(`https://api-ssl.bitly.com/v4${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body?.description || body?.message || `Bitly HTTP ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+/**
+ * Cria um bitlink a partir da URL longa (requer plano Bitly com create).
+ */
+async function createBitlink(longUrl, { title } = {}) {
+  if (!bitlyConfigured()) {
+    const err = new Error('Configure BITLY_ACCESS_TOKEN no Render para criar links');
+    err.status = 503;
+    throw err;
+  }
+  const url = String(longUrl || '').trim();
+  if (!url || !/^https?:\/\//i.test(url)) {
+    const err = new Error('URL de destino inválida (use https://...)');
+    err.status = 400;
+    throw err;
+  }
+
+  const payload = { long_url: url };
+  if (title) payload.title = String(title).slice(0, 120);
+
+  const created = await bitlyPost('/bitlinks', payload);
+  const link = created?.link || (created?.id ? `https://${created.id}` : null);
+  if (!link) {
+    const err = new Error('Bitly não retornou o link encurtado');
+    err.status = 502;
+    throw err;
+  }
+
+  return {
+    bitly_url: link,
+    bitlink: created.id || parseBitlink(link),
+    destination_url: created.long_url || url,
+    title: created.title || title || null,
+  };
+}
+
 /**
  * Busca total de cliques + série diária (30 dias) de um Bitlink.
  */
@@ -130,4 +187,5 @@ module.exports = {
   parseBitlink,
   fetchBitlinkAnalytics,
   syncMobilizedFromBitly,
+  createBitlink,
 };

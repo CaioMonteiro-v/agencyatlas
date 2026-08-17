@@ -154,6 +154,8 @@ export const api = {
   getMobilized: (slug) => request(`/api/campaigns/${slug}/mobilized`),
   createMobilized: (slug, body) =>
     request(`/api/campaigns/${slug}/mobilized`, { method: 'POST', body: JSON.stringify(body) }),
+  createMobilizedBulk: (slug, body) =>
+    request(`/api/campaigns/${slug}/mobilized/bulk`, { method: 'POST', body: JSON.stringify(body) }),
   updateMobilized: (slug, id, body) =>
     request(`/api/campaigns/${slug}/mobilized/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteMobilized: (slug, id) =>

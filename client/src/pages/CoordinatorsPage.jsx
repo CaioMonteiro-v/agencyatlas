@@ -115,7 +115,12 @@ export default function CoordinatorsPage() {
     setSyncing(true);
     try {
       const res = await api.syncMeta(campaign.slug);
-      setToast(`Instagram sincronizado · ${res.municipalities_updated} municípios atualizados`);
+      const comments = res.totals?.comments ?? res.ig_account?.totals?.comments;
+      setToast(
+        comments != null
+          ? `Instagram sincronizado · ${comments} comentários na conta · ${res.municipalities_updated} municípios (estimativa)`
+          : `Instagram sincronizado · ${res.municipalities_updated} municípios atualizados`,
+      );
       await load();
     } catch (err) {
       setToast(err.message);
@@ -166,6 +171,36 @@ export default function CoordinatorsPage() {
           </p>
         )}
       </div>
+
+      {data.ig_account?.totals && (
+        <section className="panel panel-pad" style={{ marginBottom: '1rem' }}>
+          <p className="eyebrow">Conta Instagram (real)</p>
+          <h3 style={{ marginTop: 0 }}>Não confundir com o número por município</h3>
+          <p style={{ color: 'var(--muted)' }}>{data.ig_account.note}</p>
+          <div className="stats-row">
+            <div className="stat">
+              <strong>{data.ig_account.totals.comments ?? 0}</strong>
+              <span>Comentários na conta</span>
+            </div>
+            <div className="stat">
+              <strong>{data.ig_account.totals.likes ?? 0}</strong>
+              <span>Likes</span>
+            </div>
+            <div className="stat">
+              <strong>{data.ig_account.totals.reach ?? 0}</strong>
+              <span>Reach</span>
+            </div>
+            <div className="stat">
+              <strong>
+                {data.ig_account.last_sync_at
+                  ? new Date(data.ig_account.last_sync_at).toLocaleString('pt-BR')
+                  : '—'}
+              </strong>
+              <span>Última sync</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="stats-row" style={{ marginBottom: '1.25rem' }}>
         <div className="stat">

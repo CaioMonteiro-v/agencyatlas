@@ -10,12 +10,12 @@ const {
   buildCampaignReport,
   getThresholds,
 } = require('./analytics');
-const { metaStatus, fetchInstagramSnapshot, distributeIgTotals } = require('./meta');
+const { metaStatus, fetchInstagramSnapshot, distributeIgTotals, readIgAccountSnapshot, saveIgAccountSnapshot } = require('./meta');
 const { runAssistant } = require('./assistant');
 const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, inviteRequiredForSignup, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 const { listContentWeek, buildContentDetail } = require('./content');
 const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
-const { bitlyStatus, syncMobilizedFromBitly } = require('./bitly');
+const { bitlyStatus, syncMobilizedFromBitly, createBitlink, bitlyConfigured } = require('./bitly');
 const {
   listDemands,
   demandCountsByMunicipality,
@@ -1300,7 +1300,12 @@ app.get('/api/campaigns/:slug/coordinators', (req, res) => {
     ? Math.round((summary.content_views_actual / summary.content_views_expected) * 1000) / 10
     : null;
 
-  res.json({ coordinators, summary, meta: metaStatus() });
+  res.json({
+    coordinators,
+    summary,
+    meta: metaStatus(),
+    ig_account: readIgAccountSnapshot(db, campaign.id),
+  });
 });
 
 app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
@@ -1669,7 +1674,11 @@ app.get('/api/campaigns/:slug/content', (req, res) => {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const week = listContentWeek(db, campaign.id);
-    res.json({ ...week, meta: metaStatus() });
+    res.json({
+      ...week,
+      meta: metaStatus(),
+      ig_account: readIgAccountSnapshot(db, campaign.id),
+    });
   } catch (err) {
     console.error('GET content:', err);
     res.status(500).json({ error: err.message || 'Erro ao carregar conteúdo' });
@@ -1939,6 +1948,91 @@ app.post('/api/campaigns/:slug/mobilized', (req, res) => {
   res.status(201).json(enrichMobilizedContent(db, row));
 });
 
+/** Cria vários bitlinks a partir de URLs longas (Bitly pago / create). */
+app.post('/api/campaigns/:slug/mobilized/bulk', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    if (!bitlyConfigured()) {
+      return res.status(503).json({
+        error: 'Configure BITLY_ACCESS_TOKEN no Render para criar links em massa',
+        bitly: bitlyStatus(),
+      });
+    }
+
+    const lines = Array.isArray(req.body.items)
+      ? req.body.items
+      : String(req.body.urls || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [url, ...rest] = line.split('|').map((s) => s.trim());
+          return { destination_url: url, title: rest.join(' | ') || null };
+        });
+
+    if (!lines.length) {
+      return res.status(400).json({ error: 'Cole pelo menos uma URL (uma por linha)' });
+    }
+    if (lines.length > 40) {
+      return res.status(400).json({ error: 'Máximo de 40 links por vez' });
+    }
+
+    const created = [];
+    const errors = [];
+    const titlePrefix = req.body.title_prefix ? String(req.body.title_prefix).trim() : '';
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const item = lines[i] || {};
+      const longUrl = String(item.destination_url || item.url || '').trim();
+      const title = String(item.title || '').trim()
+        || (titlePrefix ? `${titlePrefix} ${i + 1}` : `Conteúdo ${i + 1}`);
+      try {
+        const bit = await createBitlink(longUrl, { title });
+        const result = db.prepare(`
+          INSERT INTO mobilized_contents (
+            campaign_id, title, bitly_url, destination_url, clicks, views, notes, status
+          ) VALUES (?, ?, ?, ?, 0, 0, ?, 'ativo')
+        `).run(
+          campaign.id,
+          title,
+          bit.bitly_url,
+          bit.destination_url,
+          item.notes ? String(item.notes).trim() : null,
+        );
+        const row = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(result.lastInsertRowid);
+        let enriched = enrichMobilizedContent(db, row);
+        try {
+          const synced = await syncMobilizedFromBitly(db, row);
+          enriched = enrichMobilizedContent(db, synced.row);
+        } catch {
+          /* ok sem sync imediato */
+        }
+        created.push(enriched);
+      } catch (err) {
+        errors.push({
+          line: i + 1,
+          url: longUrl,
+          error: err.message || 'Falha ao criar bitlink',
+        });
+      }
+    }
+
+    res.status(201).json({
+      ok: true,
+      created_count: created.length,
+      error_count: errors.length,
+      items: created,
+      errors,
+      bitly: bitlyStatus(),
+      summary: listMobilizedContents(db, campaign.id).summary,
+    });
+  } catch (err) {
+    console.error('POST mobilized bulk:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro na criação em massa' });
+  }
+});
+
 app.patch('/api/campaigns/:slug/mobilized/:id', (req, res) => {
   const owned = getMobilizedOwned(req.params.slug, req.params.id);
   if (owned.error) return res.status(owned.error.status).json({ error: owned.error.message });
@@ -2142,6 +2236,7 @@ app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
 
     const distributed = distributeIgTotals(links, snapshot.totals);
     const now = new Date().toISOString();
+    saveIgAccountSnapshot(db, campaign.id, snapshot.totals, now);
     const update = db.prepare(`
       UPDATE coordinator_municipalities SET
         ig_comments = ?,
@@ -2213,15 +2308,18 @@ app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
       ok: true,
       synced_at: now,
       totals: snapshot.totals,
+      ig_account: readIgAccountSnapshot(db, campaign.id),
       municipalities_updated: distributed.length,
       content_posts: week.posts.length,
-      media_sample: (snapshot.media || []).slice(0, 5).map((m) => ({
+      media_sample: (snapshot.media || []).slice(0, 8).map((m) => ({
         id: m.id,
         caption: (m.caption || '').slice(0, 120),
         comments_count: m.comments_count,
         like_count: m.like_count,
+        reach: m.reach || m.impressions || 0,
         permalink: m.permalink,
       })),
+      note: 'Totais da conta são reais. Números por município são estimativa (o Instagram não informa a cidade do comentário).',
       meta: metaStatus(),
     });
   } catch (err) {
