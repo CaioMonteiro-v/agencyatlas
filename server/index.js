@@ -808,8 +808,9 @@ app.get('/api/events/:slug/qrcode', async (req, res) => {
   const url = `${origin}/evento/${event.slug}`;
 
   try {
+    const size = Math.min(2048, Math.max(320, parseInt(req.query.size || '1024', 10) || 1024));
     const dataUrl = await QRCode.toDataURL(url, {
-      width: 320,
+      width: size,
       margin: 2,
       color: { dark: '#2C3E3A', light: '#FFFFFF' },
     });

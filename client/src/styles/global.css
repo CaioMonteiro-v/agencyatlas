@@ -978,6 +978,7 @@ th {
 .qr-box {
   display: grid;
   place-items: center;
+  gap: 0.55rem;
   padding: 0.75rem;
   background: #fff;
   border-radius: var(--radius-sm);
@@ -987,6 +988,11 @@ th {
 .qr-box img {
   width: 160px;
   height: 160px;
+}
+
+.qr-box .btn {
+  width: auto;
+  min-height: 40px;
 }
 
 .under-construction {

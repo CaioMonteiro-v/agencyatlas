@@ -76,8 +76,8 @@ export const api = {
   updateEvent: (slug, id, body) =>
     request(`/api/campaigns/${slug}/events/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getEvent: (eventSlug) => request(`/api/events/${eventSlug}`),
-  getEventQr: (eventSlug, origin) =>
-    request(`/api/events/${eventSlug}/qrcode?origin=${encodeURIComponent(origin)}`),
+  getEventQr: (eventSlug, origin, size = 1024) =>
+    request(`/api/events/${eventSlug}/qrcode?origin=${encodeURIComponent(origin)}&size=${size}`),
   registerEvent: (eventSlug, body) =>
     request(`/api/events/${eventSlug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getEventAttendees: (slug, eventId) => request(`/api/campaigns/${slug}/events/${eventId}/attendees`),

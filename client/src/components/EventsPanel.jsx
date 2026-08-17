@@ -104,6 +104,28 @@ export default function EventsPanel({ campaignSlug }) {
     setTimeout(() => setToast(''), 2500);
   }
 
+  function downloadQr(event, qr) {
+    if (!qr?.qrcode) {
+      setToast('QR Code ainda não gerado');
+      return;
+    }
+    const safe = String(event.name || event.slug || 'evento')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9-_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'evento';
+    const a = document.createElement('a');
+    a.href = qr.qrcode;
+    a.download = `qr-${safe}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setToast('QR Code baixado — pode imprimir ou mandar no WhatsApp');
+    setTimeout(() => setToast(''), 2500);
+  }
+
   function setRole(role) {
     setForm((prev) => ({
       ...prev,
@@ -415,6 +437,13 @@ export default function EventsPanel({ campaignSlug }) {
                 <div className="qr-box">
                   <img src={qr.qrcode} alt={`QR Code ${event.name}`} />
                   <code style={{ fontSize: '0.75rem', wordBreak: 'break-all', textAlign: 'center' }}>{qr.url}</code>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => downloadQr(event, qr)}
+                  >
+                    Baixar QR (PNG)
+                  </button>
                 </div>
               )}
 
@@ -514,9 +543,14 @@ export default function EventsPanel({ campaignSlug }) {
                   {event.channel_link || event.municipality_id ? 'Editar canal/município' : 'Vincular canal/município'}
                 </button>
                 {qr && (
-                  <button type="button" className="btn btn-soft btn-sm" onClick={() => copy(qr.url)}>
-                    Copiar link
-                  </button>
+                  <>
+                    <button type="button" className="btn btn-soft btn-sm" onClick={() => copy(qr.url)}>
+                      Copiar link
+                    </button>
+                    <button type="button" className="btn btn-accent btn-sm" onClick={() => downloadQr(event, qr)}>
+                      Baixar QR
+                    </button>
+                  </>
                 )}
               </div>
             </article>
