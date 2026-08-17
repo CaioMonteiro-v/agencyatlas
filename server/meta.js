@@ -34,38 +34,115 @@ function readIgAccountSnapshot(db, campaignId) {
     return {
       last_sync_at: null,
       totals: null,
+      previous_totals: null,
+      engagement: null,
       note: 'Totais da conta Instagram aparecem após a primeira sincronização.',
+    };
+  }
+  const totals = parseIgTotals(cfg.last_ig_totals);
+  const previous = parseIgTotals(cfg.prev_ig_totals);
+  let engagement = null;
+  if (totals && previous) {
+    const commentsDelta = (totals.comments || 0) - (previous.comments || 0);
+    const likesDelta = (totals.likes || 0) - (previous.likes || 0);
+    const reachDelta = (totals.reach || 0) - (previous.reach || 0);
+    let label = 'Estável desde a sync anterior';
+    let tone = 'stable';
+    if (commentsDelta > 0 || likesDelta > 0 || reachDelta > 0) {
+      label = 'Engajamento subiu desde a sync anterior';
+      tone = 'up';
+    } else if (commentsDelta < 0 || likesDelta < 0 || reachDelta < 0) {
+      label = 'Engajamento ficou mais baixo que na sync anterior — reforçar dobra do conteúdo';
+      tone = 'down';
+    }
+    engagement = {
+      tone,
+      label,
+      comments_delta: commentsDelta,
+      likes_delta: likesDelta,
+      reach_delta: reachDelta,
     };
   }
   return {
     last_sync_at: cfg.last_ig_sync_at || null,
-    totals: parseIgTotals(cfg.last_ig_totals),
+    totals,
+    previous_totals: previous,
+    engagement,
     ig_username: cfg.ig_username || null,
     note: 'Totais da conta (@oficial) são reais. Valores por município são estimativa proporcional às metas — o Instagram não informa de qual cidade veio o comentário.',
   };
 }
 
-function saveIgAccountSnapshot(db, campaignId, totals, syncedAt) {
-  const existing = db.prepare('SELECT campaign_id FROM campaign_meta_config WHERE campaign_id = ?').get(campaignId);
+function saveIgAccountSnapshot(db, campaignId, totals, syncedAt, profile = null) {
+  const existing = db.prepare('SELECT * FROM campaign_meta_config WHERE campaign_id = ?').get(campaignId);
   const payload = JSON.stringify({
     comments: Number(totals?.comments) || 0,
     likes: Number(totals?.likes) || 0,
     reach: Number(totals?.reach) || 0,
     posts: Number(totals?.posts) || 0,
+    saved: Number(totals?.saved) || 0,
+    shares: Number(totals?.shares) || 0,
+    followers: Number(totals?.followers || profile?.followers_count) || 0,
   });
+  const username = profile?.username || null;
   if (existing) {
     db.prepare(`
       UPDATE campaign_meta_config SET
+        prev_ig_totals = last_ig_totals,
         last_ig_sync_at = ?,
         last_ig_totals = ?,
+        ig_username = COALESCE(?, ig_username),
         updated_at = CURRENT_TIMESTAMP
       WHERE campaign_id = ?
-    `).run(syncedAt, payload, campaignId);
+    `).run(syncedAt, payload, username, campaignId);
   } else {
     db.prepare(`
-      INSERT INTO campaign_meta_config (campaign_id, last_ig_sync_at, last_ig_totals)
-      VALUES (?, ?, ?)
-    `).run(campaignId, syncedAt, payload);
+      INSERT INTO campaign_meta_config (campaign_id, last_ig_sync_at, last_ig_totals, ig_username)
+      VALUES (?, ?, ?, ?)
+    `).run(campaignId, syncedAt, payload, username);
+  }
+}
+
+async function probeMetaToken() {
+  if (!metaConfigured()) {
+    return {
+      ...metaStatus(),
+      token_ok: false,
+      token_error: 'META_ACCESS_TOKEN / META_IG_USER_ID não configurados',
+    };
+  }
+  const version = process.env.META_GRAPH_VERSION || 'v21.0';
+  const igUserId = process.env.META_IG_USER_ID;
+  const access = process.env.META_ACCESS_TOKEN;
+  try {
+    const fields = 'id,username,name,followers_count,follows_count,media_count,profile_picture_url';
+    const url = `https://graph.facebook.com/${version}/${igUserId}?fields=${fields}&access_token=${encodeURIComponent(access)}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        ...metaStatus(),
+        token_ok: false,
+        token_error: data?.error?.message || `Meta HTTP ${res.status}`,
+      };
+    }
+    return {
+      ...metaStatus(),
+      token_ok: true,
+      ig_username: data.username || null,
+      ig_name: data.name || null,
+      followers_count: Number(data.followers_count) || null,
+      follows_count: Number(data.follows_count) || null,
+      media_count: Number(data.media_count) || null,
+      profile_picture_url: data.profile_picture_url || null,
+      hint: `Meta OK · @${data.username || 'conta'}${data.followers_count != null ? ` · ${Number(data.followers_count).toLocaleString('pt-BR')} seguidores` : ''} — sync liberado. Totais da conta são reais; município é estimativa.`,
+    };
+  } catch (err) {
+    return {
+      ...metaStatus(),
+      token_ok: false,
+      token_error: err.message || 'Falha ao validar token Meta',
+    };
   }
 }
 
@@ -91,6 +168,9 @@ async function fetchInstagramSnapshot() {
     'timestamp',
     'permalink',
     'media_type',
+    'media_product_type',
+    'thumbnail_url',
+    'media_url',
   ].join(',');
 
   const url = `https://graph.facebook.com/${version}/${igUserId}/media?fields=${fields}&limit=25&access_token=${encodeURIComponent(token)}`;
@@ -104,8 +184,28 @@ async function fetchInstagramSnapshot() {
       mode: 'live',
       error: data?.error?.message || `Meta API HTTP ${res.status}`,
       media: [],
-      totals: { comments: 0, reach: 0, likes: 0, posts: 0 },
+      totals: { comments: 0, reach: 0, likes: 0, posts: 0, saved: 0, shares: 0 },
+      profile: null,
     };
+  }
+
+  // Perfil da conta (seguidores etc.)
+  let profile = null;
+  try {
+    const profileUrl = `https://graph.facebook.com/${version}/${igUserId}?fields=id,username,name,followers_count,media_count&access_token=${encodeURIComponent(token)}`;
+    const pr = await fetch(profileUrl);
+    const pdata = await pr.json().catch(() => ({}));
+    if (pr.ok) {
+      profile = {
+        id: pdata.id,
+        username: pdata.username || null,
+        name: pdata.name || null,
+        followers_count: Number(pdata.followers_count) || 0,
+        media_count: Number(pdata.media_count) || 0,
+      };
+    }
+  } catch {
+    /* ok */
   }
 
   const media = data.data || [];
@@ -116,13 +216,13 @@ async function fetchInstagramSnapshot() {
       acc.posts += 1;
       return acc;
     },
-    { comments: 0, reach: 0, likes: 0, posts: 0 },
+    { comments: 0, reach: 0, likes: 0, posts: 0, saved: 0, shares: 0 },
   );
 
-  // Insights de reach (opcional — pode falhar sem permissão)
-  for (const item of media.slice(0, 10)) {
+  // Insights por mídia (reach/impressions/saved/shares — depende de permissão)
+  for (const item of media.slice(0, 12)) {
     try {
-      const insightUrl = `https://graph.facebook.com/${version}/${item.id}/insights?metric=reach,impressions&access_token=${encodeURIComponent(token)}`;
+      const insightUrl = `https://graph.facebook.com/${version}/${item.id}/insights?metric=reach,impressions,saved,shares&access_token=${encodeURIComponent(token)}`;
       const ir = await fetch(insightUrl);
       const idata = await ir.json().catch(() => ({}));
       if (ir.ok && Array.isArray(idata.data)) {
@@ -132,6 +232,14 @@ async function fetchInstagramSnapshot() {
             totals.reach += val;
             item[metric.name] = val;
           }
+          if (metric.name === 'saved') {
+            totals.saved += val;
+            item.saved = val;
+          }
+          if (metric.name === 'shares') {
+            totals.shares += val;
+            item.shares = val;
+          }
         }
       }
     } catch (_) {
@@ -139,7 +247,11 @@ async function fetchInstagramSnapshot() {
     }
   }
 
-  return { ok: true, mode: 'live', media, totals };
+  if (profile) {
+    totals.followers = profile.followers_count;
+  }
+
+  return { ok: true, mode: 'live', media, totals, profile };
 }
 
 /**
@@ -166,6 +278,7 @@ function distributeIgTotals(links, totals) {
 module.exports = {
   metaConfigured,
   metaStatus,
+  probeMetaToken,
   fetchInstagramSnapshot,
   distributeIgTotals,
   readIgAccountSnapshot,

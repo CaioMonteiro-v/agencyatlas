@@ -1,19 +1,51 @@
 /**
- * Integração Bitly Analytics API v4.
- * Sem BITLY_ACCESS_TOKEN, o painel opera com métricas manuais.
+ * Integração Bitly API v4 — criação + analytics.
+ * Sem BITLY_ACCESS_TOKEN o painel roda em modo manual (cola bitlink pronto).
+ * Com token: criar em massa, sync de cliques, território pronto.
+ *
+ * Env opcionais (além de BITLY_ACCESS_TOKEN):
+ *   BITLY_DOMAIN      — domínio branded (ex.: bit.ly ou seu domínio Bitly)
+ *   BITLY_GROUP_GUID  — group_guid da org/workspace Bitly
  */
 
 function bitlyConfigured() {
-  return Boolean(process.env.BITLY_ACCESS_TOKEN);
+  return Boolean(String(process.env.BITLY_ACCESS_TOKEN || '').trim());
 }
 
-function bitlyStatus() {
+function token() {
+  return String(process.env.BITLY_ACCESS_TOKEN || '').trim();
+}
+
+function bitlyDomain() {
+  const d = String(process.env.BITLY_DOMAIN || '').trim();
+  return d || null;
+}
+
+function bitlyGroupGuid() {
+  const g = String(process.env.BITLY_GROUP_GUID || '').trim();
+  return g || null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function bitlyStatus(extra = {}) {
+  const configured = bitlyConfigured();
   return {
-    configured: bitlyConfigured(),
-    mode: bitlyConfigured() ? 'live' : 'manual',
-    hint: bitlyConfigured()
-      ? 'Token Bitly ativo — sincronização de cliques disponível'
-      : 'Configure BITLY_ACCESS_TOKEN no ambiente para puxar a análise do Bitly automaticamente. Enquanto isso, atualize os cliques manualmente.',
+    configured,
+    mode: configured ? 'live' : 'manual',
+    ready: configured && extra.token_ok !== false,
+    token_ok: extra.token_ok,
+    token_error: extra.token_error || null,
+    domain: bitlyDomain(),
+    group_guid: bitlyGroupGuid() ? 'set' : null,
+    hint: configured
+      ? (extra.token_ok === false
+        ? `Token Bitly inválido/expirado: ${extra.token_error || 'verifique no Bitly'}`
+        : 'Token Bitly pronto — criar links em massa e sync de cliques liberados.')
+      : 'Cole BITLY_ACCESS_TOKEN no Render e faça deploy. Até lá, dá para cadastrar bitlinks já prontos manualmente.',
+    ...extra,
   };
 }
 
@@ -35,11 +67,30 @@ function parseBitlink(urlOrPath) {
   }
 }
 
+function friendlyBitlyError(err) {
+  const status = err?.status;
+  const msg = err?.message || 'Erro Bitly';
+  const bodyMsg = err?.body?.description || err?.body?.message || '';
+  const combined = `${msg} ${bodyMsg}`.toLowerCase();
+  if (status === 401 || status === 403) {
+    return 'Token Bitly sem permissão (gere um token com escopo bitly.default / genérico).';
+  }
+  if (status === 402 || combined.includes('upgrade') || combined.includes('plan')) {
+    return 'Plano Bitly não permite criar links via API — use Core/Premium ou cole bitlinks manuais.';
+  }
+  if (status === 429) {
+    return 'Limite de taxa Bitly — aguarde alguns segundos e tente de novo.';
+  }
+  if (combined.includes('already') || combined.includes('duplicate')) {
+    return 'Esse destino já tem bitlink nesta conta Bitly (use o link existente ou outro destino).';
+  }
+  return bodyMsg || msg;
+}
+
 async function bitlyGet(path) {
-  const token = process.env.BITLY_ACCESS_TOKEN;
   const res = await fetch(`https://api-ssl.bitly.com/v4${path}`, {
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${token()}`,
       Accept: 'application/json',
     },
   });
@@ -55,11 +106,10 @@ async function bitlyGet(path) {
 }
 
 async function bitlyPost(path, payload) {
-  const token = process.env.BITLY_ACCESS_TOKEN;
   const res = await fetch(`https://api-ssl.bitly.com/v4${path}`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${token()}`,
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
@@ -76,10 +126,44 @@ async function bitlyPost(path, payload) {
   return body;
 }
 
+/** Valida o token (GET /user). Não quebra o app se falhar. */
+async function probeBitlyToken() {
+  if (!bitlyConfigured()) {
+    return bitlyStatus({ token_ok: false, token_error: 'Token não configurado' });
+  }
+  try {
+    const user = await bitlyGet('/user');
+    let defaultGroup = bitlyGroupGuid();
+    if (!defaultGroup && Array.isArray(user?.default_group_guid)) {
+      defaultGroup = user.default_group_guid;
+    } else if (!defaultGroup && user?.default_group_guid) {
+      defaultGroup = user.default_group_guid;
+    }
+    return bitlyStatus({
+      token_ok: true,
+      login: user?.login || null,
+      is_active: user?.is_active !== false,
+      default_group_guid: defaultGroup || null,
+    });
+  } catch (err) {
+    return bitlyStatus({
+      token_ok: false,
+      token_error: friendlyBitlyError(err),
+    });
+  }
+}
+
 /**
  * Cria um bitlink a partir da URL longa (requer plano Bitly com create).
+ * options: title, tags, domain, group_guid, custom_bitlink (hash only, e.g. FalaFabio)
  */
-async function createBitlink(longUrl, { title } = {}) {
+async function createBitlink(longUrl, {
+  title,
+  tags,
+  domain,
+  group_guid: groupGuid,
+  custom_bitlink: customBitlink,
+} = {}) {
   if (!bitlyConfigured()) {
     const err = new Error('Configure BITLY_ACCESS_TOKEN no Render para criar links');
     err.status = 503;
@@ -93,22 +177,69 @@ async function createBitlink(longUrl, { title } = {}) {
   }
 
   const payload = { long_url: url };
+  const domainToUse = domain || bitlyDomain();
+  const groupToUse = groupGuid || bitlyGroupGuid();
+  if (domainToUse) payload.domain = domainToUse;
+  if (groupToUse) payload.group_guid = groupToUse;
   if (title) payload.title = String(title).slice(0, 120);
-
-  const created = await bitlyPost('/bitlinks', payload);
-  const link = created?.link || (created?.id ? `https://${created.id}` : null);
-  if (!link) {
-    const err = new Error('Bitly não retornou o link encurtado');
-    err.status = 502;
-    throw err;
+  if (Array.isArray(tags) && tags.length) {
+    payload.tags = tags.map((t) => String(t).slice(0, 50)).slice(0, 10);
   }
 
-  return {
-    bitly_url: link,
-    bitlink: created.id || parseBitlink(link),
-    destination_url: created.long_url || url,
-    title: created.title || title || null,
-  };
+  try {
+    let created;
+    const custom = customBitlink ? String(customBitlink).replace(/^\/+/, '').trim() : '';
+    if (custom && domainToUse) {
+      // Bitly branded custom path: POST /custom_bitlinks after creating, or bitlinks with custom
+      created = await bitlyPost('/bitlinks', {
+        ...payload,
+      });
+      try {
+        const bitlinkId = created.id;
+        const customPayload = {
+          custom_bitlink: `${domainToUse}/${custom}`,
+          bitlink_id: bitlinkId,
+        };
+        const customRes = await bitlyPost('/custom_bitlinks', customPayload);
+        const link = customRes?.custom_bitlink
+          ? (customRes.custom_bitlink.startsWith('http')
+            ? customRes.custom_bitlink
+            : `https://${customRes.custom_bitlink}`)
+          : (created?.link || null);
+        return {
+          bitly_url: link,
+          bitlink: customRes?.custom_bitlink || created.id || parseBitlink(link),
+          destination_url: created.long_url || url,
+          title: created.title || title || null,
+          custom: true,
+        };
+      } catch {
+        // Custom falhou — devolve o bitlink padrão criado
+      }
+    } else {
+      created = await bitlyPost('/bitlinks', payload);
+    }
+
+    const link = created?.link || (created?.id ? `https://${created.id}` : null);
+    if (!link) {
+      const err = new Error('Bitly não retornou o link encurtado');
+      err.status = 502;
+      throw err;
+    }
+
+    return {
+      bitly_url: link,
+      bitlink: created.id || parseBitlink(link),
+      destination_url: created.long_url || url,
+      title: created.title || title || null,
+      custom: false,
+    };
+  } catch (err) {
+    const nice = new Error(friendlyBitlyError(err));
+    nice.status = err.status || 502;
+    nice.body = err.body;
+    throw nice;
+  }
 }
 
 /**
@@ -126,50 +257,73 @@ async function fetchBitlinkAnalytics(bitlyUrl) {
 
   const encoded = encodeURIComponent(bitlink);
 
-  const [summaryAll, summary30, clicks30, bitlinkInfo] = await Promise.all([
-    bitlyGet(`/bitlinks/${encoded}/clicks/summary?unit=day&units=-1`),
-    bitlyGet(`/bitlinks/${encoded}/clicks/summary?unit=day&units=30`),
-    bitlyGet(`/bitlinks/${encoded}/clicks?unit=day&units=30`),
-    bitlyGet(`/bitlinks/${encoded}`).catch(() => null),
-  ]);
+  try {
+    const [summaryAll, summary30, clicks30, bitlinkInfo] = await Promise.all([
+      bitlyGet(`/bitlinks/${encoded}/clicks/summary?unit=day&units=-1`),
+      bitlyGet(`/bitlinks/${encoded}/clicks/summary?unit=day&units=30`),
+      bitlyGet(`/bitlinks/${encoded}/clicks?unit=day&units=30`),
+      bitlyGet(`/bitlinks/${encoded}`).catch(() => null),
+    ]);
 
-  const series = Array.isArray(clicks30?.link_clicks)
-    ? clicks30.link_clicks
-      .map((row) => ({
-        date: String(row.date || '').slice(0, 10),
-        clicks: Math.max(0, Number(row.clicks) || 0),
-      }))
-      .filter((r) => r.date)
-      .reverse()
-    : [];
+    const series = Array.isArray(clicks30?.link_clicks)
+      ? clicks30.link_clicks
+        .map((row) => ({
+          date: String(row.date || '').slice(0, 10),
+          clicks: Math.max(0, Number(row.clicks) || 0),
+        }))
+        .filter((r) => r.date)
+        .reverse()
+      : [];
 
-  return {
-    ok: true,
-    mode: 'live',
-    bitlink,
-    total_clicks: Math.max(0, Number(summaryAll?.total_clicks) || 0),
-    clicks_30d: Math.max(0, Number(summary30?.total_clicks) || 0),
-    series,
-    destination_url: bitlinkInfo?.long_url || null,
-    title: bitlinkInfo?.title || null,
-    synced_at: new Date().toISOString(),
-  };
+    return {
+      ok: true,
+      mode: 'live',
+      bitlink,
+      total_clicks: Math.max(0, Number(summaryAll?.total_clicks) || 0),
+      clicks_30d: Math.max(0, Number(summary30?.total_clicks) || 0),
+      series,
+      destination_url: bitlinkInfo?.long_url || null,
+      title: bitlinkInfo?.title || null,
+      tags: Array.isArray(bitlinkInfo?.tags) ? bitlinkInfo.tags : [],
+      synced_at: new Date().toISOString(),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      mode: 'live',
+      error: friendlyBitlyError(err),
+      status: err.status,
+    };
+  }
 }
 
 async function syncMobilizedFromBitly(db, row) {
   const analytics = await fetchBitlinkAnalytics(row.bitly_url);
-  if (!analytics.ok) return { row, analytics };
+  if (!analytics.ok) {
+    try {
+      db.prepare(`
+        UPDATE mobilized_contents SET bitly_last_error = ? WHERE id = ?
+      `).run(String(analytics.error || 'erro').slice(0, 280), row.id);
+    } catch {
+      /* coluna pode não existir ainda em instâncias antigas — migrate cuida */
+    }
+    return { row, analytics };
+  }
 
+  const prevClicks = Math.max(0, Number(row.clicks) || 0);
   db.prepare(`
     UPDATE mobilized_contents SET
       clicks = ?,
+      clicks_prev = ?,
       clicks_30d = ?,
       clicks_series = ?,
       bitly_synced_at = ?,
+      bitly_last_error = NULL,
       destination_url = COALESCE(?, destination_url)
     WHERE id = ?
   `).run(
     analytics.total_clicks,
+    prevClicks,
     analytics.clicks_30d,
     JSON.stringify(analytics.series),
     analytics.synced_at,
@@ -184,8 +338,11 @@ async function syncMobilizedFromBitly(db, row) {
 module.exports = {
   bitlyConfigured,
   bitlyStatus,
+  probeBitlyToken,
   parseBitlink,
   fetchBitlinkAnalytics,
   syncMobilizedFromBitly,
   createBitlink,
+  sleep,
+  friendlyBitlyError,
 };

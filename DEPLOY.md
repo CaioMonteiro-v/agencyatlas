@@ -162,16 +162,28 @@ Sem essas variáveis o sistema funciona em **modo manual**: você informa views,
 
 > O Instagram não entrega geolocalização municipal nativa sem Ads. O sync distribui o engajamento da conta proporcionalmente às metas de views de cada município.
 
-### Bitly Analytics
+### Bitly Analytics / criação em massa
 
-Na aba **Mobilização → Conteúdos mobilizados**, o painel mostra análise estilo Bitly (cliques) + grupos/canais e pessoas.
+Na aba **Mobilização → Conteúdos mobilizados**:
 
 ```bash
 BITLY_ACCESS_TOKEN=seu-token-bitly
+# opcional — domínio branded da conta Bitly
+BITLY_DOMAIN=bit.ly
+# opcional — group_guid do workspace/org Bitly
+BITLY_GROUP_GUID=
 ```
 
-Com o token: botão **Atualizar do Bitly** puxa cliques e **Criar links em massa** encurta várias URLs de uma vez (plano Bitly com create).  
-Sem o token: informe o Bitly já pronto + total de cliques manualmente.
+Com o token no Render + **Manual Deploy**:
+- Faixa **Bitly pronto** (valida o token sozinho via `GET /user`)
+- **Criar links em massa** a partir de URLs longas (até 40/vez, com pausa anti rate-limit)
+- Novo link só com URL de destino — Atlas encurta e faz sync de cliques
+- Tags automáticas com nome do coordenador/município
+- Filtro territorial + delta de cliques + export CSV / copiar todos
+- `/api/health` mostra `bitly.configured` / modo live|manual
+
+Sem o token: ainda dá para colar bitlinks já prontos e informar cliques manualmente.
+Quando pegar a API Bitly (pago/create), só cola o `BITLY_ACCESS_TOKEN` — o terreno já está pronto.
 
 ### Atlas Assistente (IA)
 

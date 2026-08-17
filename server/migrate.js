@@ -481,8 +481,20 @@ function migrateAnalyticsSchema(db) {
   try {
     ensureColumn(db, 'campaign_meta_config', 'last_ig_sync_at', db.dialect === 'postgres' ? 'TIMESTAMPTZ' : 'TEXT');
     ensureColumn(db, 'campaign_meta_config', 'last_ig_totals', 'TEXT');
+    ensureColumn(db, 'campaign_meta_config', 'prev_ig_totals', 'TEXT');
   } catch (err) {
     console.warn('migrate campaign_meta_config ig snapshot:', err.message);
+  }
+
+  // Bitly territorial + deltas
+  try {
+    ensureColumn(db, 'mobilized_contents', 'coordinator_id', 'INTEGER');
+    ensureColumn(db, 'mobilized_contents', 'municipality_id', 'INTEGER');
+    ensureColumn(db, 'mobilized_contents', 'content_post_id', 'INTEGER');
+    ensureColumn(db, 'mobilized_contents', 'clicks_prev', 'INTEGER DEFAULT 0');
+    ensureColumn(db, 'mobilized_contents', 'bitly_last_error', 'TEXT');
+  } catch (err) {
+    console.warn('migrate mobilized territory:', err.message);
   }
 }
 

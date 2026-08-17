@@ -151,7 +151,13 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
-  getMobilized: (slug) => request(`/api/campaigns/${slug}/mobilized`),
+  getMobilized: (slug, { coordinator_id, municipality_id } = {}) => {
+    const qs = new URLSearchParams();
+    if (coordinator_id) qs.set('coordinator_id', coordinator_id);
+    if (municipality_id) qs.set('municipality_id', municipality_id);
+    const q = qs.toString();
+    return request(`/api/campaigns/${slug}/mobilized${q ? `?${q}` : ''}`);
+  },
   createMobilized: (slug, body) =>
     request(`/api/campaigns/${slug}/mobilized`, { method: 'POST', body: JSON.stringify(body) }),
   createMobilizedBulk: (slug, body) =>

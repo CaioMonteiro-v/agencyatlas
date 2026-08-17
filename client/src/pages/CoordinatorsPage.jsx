@@ -179,8 +179,12 @@ export default function CoordinatorsPage() {
           <p style={{ color: 'var(--muted)' }}>{data.ig_account.note}</p>
           <div className="stats-row">
             <div className="stat">
+              <strong>{data.ig_account.totals.followers ?? data.meta?.followers_count ?? '—'}</strong>
+              <span>Seguidores</span>
+            </div>
+            <div className="stat">
               <strong>{data.ig_account.totals.comments ?? 0}</strong>
-              <span>Comentários na conta</span>
+              <span>Comentários (posts)</span>
             </div>
             <div className="stat">
               <strong>{data.ig_account.totals.likes ?? 0}</strong>
@@ -191,6 +195,10 @@ export default function CoordinatorsPage() {
               <span>Reach</span>
             </div>
             <div className="stat">
+              <strong>{data.ig_account.totals.saved ?? 0}</strong>
+              <span>Salvos</span>
+            </div>
+            <div className="stat">
               <strong>
                 {data.ig_account.last_sync_at
                   ? new Date(data.ig_account.last_sync_at).toLocaleString('pt-BR')
@@ -199,6 +207,16 @@ export default function CoordinatorsPage() {
               <span>Última sync</span>
             </div>
           </div>
+          {data.ig_account.engagement && (
+            <p style={{ marginTop: '0.75rem', color: data.ig_account.engagement.tone === 'down' ? '#8a5a64' : 'var(--muted)' }}>
+              {data.ig_account.engagement.label}
+            </p>
+          )}
+          {data.meta?.token_ok === false && (
+            <p style={{ marginTop: '0.5rem', color: '#8a5a64' }}>
+              Token Meta: {data.meta.token_error || 'inválido/expirado'}
+            </p>
+          )}
         </section>
       )}
 

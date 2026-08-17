@@ -8,6 +8,8 @@ const emptyContent = {
   destination_url: '',
   clicks: '',
   notes: '',
+  coordinator_id: '',
+  municipality_id: '',
 };
 
 const emptyChannel = {
@@ -80,23 +82,46 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
   const [bulkForm, setBulkForm] = useState({ title_prefix: '', urls: '' });
   const [channelForms, setChannelForms] = useState({});
   const [metricsEdit, setMetricsEdit] = useState({});
+  const [coordinators, setCoordinators] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
+  const [filter, setFilter] = useState({ coordinator_id: '', municipality_id: '' });
 
-  async function load() {
-    const res = await api.getMobilized(campaignSlug);
+  async function load(nextFilter = filter) {
+    const [res, coordsRes, munis] = await Promise.all([
+      api.getMobilized(campaignSlug, {
+        coordinator_id: nextFilter.coordinator_id || undefined,
+        municipality_id: nextFilter.municipality_id || undefined,
+      }),
+      api.getCoordinators(campaignSlug).catch(() => ({ coordinators: [] })),
+      api.getMunicipalities().catch(() => []),
+    ]);
     setItems(res.items || []);
     setSummary(res.summary || null);
     setBitly(res.bitly || null);
+    setCoordinators(coordsRes?.coordinators || []);
+    setMunicipalities(Array.isArray(munis) ? munis : []);
   }
 
   useEffect(() => {
     load().catch((err) => setToast(err.message));
   }, [campaignSlug]);
 
+  const muniOptions = (() => {
+    const cid = Number(form.coordinator_id || filter.coordinator_id);
+    if (!cid) return municipalities;
+    const coord = coordinators.find((c) => c.id === cid);
+    return coord?.municipalities?.length ? coord.municipalities : municipalities;
+  })();
+
   async function onCreate(e) {
     e.preventDefault();
     try {
       const created = await api.createMobilized(campaignSlug, {
         ...form,
+        bitly_url: form.bitly_url.trim() || undefined,
+        destination_url: form.destination_url.trim() || undefined,
+        coordinator_id: form.coordinator_id || null,
+        municipality_id: form.municipality_id || null,
         clicks: Number(form.clicks) || 0,
       });
       setForm(emptyContent);
@@ -128,6 +153,8 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
       const res = await api.createMobilizedBulk(campaignSlug, {
         title_prefix: bulkForm.title_prefix.trim() || undefined,
         urls: bulkForm.urls,
+        coordinator_id: form.coordinator_id || filter.coordinator_id || undefined,
+        municipality_id: form.municipality_id || filter.municipality_id || undefined,
       });
       setBulkForm({ title_prefix: '', urls: '' });
       setShowBulk(false);
@@ -230,6 +257,42 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
     setTimeout(() => setToast(''), 2200);
   }
 
+  async function copyAllLinks() {
+    const links = items.map((i) => i.bitly_url).filter(Boolean);
+    if (!links.length) {
+      setToast('Nenhum link para copiar');
+      return;
+    }
+    await copy(links.join('\n'));
+    setToast(`${links.length} links copiados`);
+  }
+
+  function exportCsv() {
+    const header = ['titulo', 'bitly', 'destino', 'cliques', 'cliques_30d', 'coordenador', 'municipio', 'grupos', 'audiencia'];
+    const lines = [header.join(',')];
+    for (const item of items) {
+      const row = [
+        item.title,
+        item.bitly_url,
+        item.destination_url || '',
+        item.totals?.people_clicked ?? 0,
+        item.totals?.clicks_30d ?? 0,
+        item.coordinator_name || '',
+        item.municipality_name || '',
+        item.totals?.channels ?? 0,
+        item.totals?.audience ?? 0,
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
+      lines.push(row.join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `bitly-atlas-${campaignSlug}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setToast('CSV exportado');
+  }
+
   function setChannelField(itemId, key, value) {
     setChannelForms((prev) => ({
       ...prev,
@@ -283,12 +346,51 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
       </div>
 
       {bitly && (
-        <p className={`bitly-mode ${bitly.configured ? 'bitly-mode--live' : ''}`}>
-          {bitly.configured
-            ? 'Modo ao vivo: o Atlas cria/encurta no Bitly e puxa cliques automaticamente.'
-            : 'Modo manual: cole um Bitly já pronto, ou configure BITLY_ACCESS_TOKEN no Render para criar em massa.'}
-        </p>
+        <div className={`bitly-ready ${bitly.ready || bitly.token_ok ? 'bitly-ready--ok' : (bitly.configured ? 'bitly-ready--warn' : 'bitly-ready--wait')}`}>
+          <strong>{bitly.ready || bitly.token_ok ? 'Bitly pronto' : (bitly.configured ? 'Token Bitly com problema' : 'Aguardando token Bitly')}</strong>
+          <span>{bitly.hint}</span>
+          {bitly.login ? <span>Conta Bitly: {bitly.login}</span> : null}
+        </div>
       )}
+
+      <div className="bitly-filters" style={{ marginTop: '0.85rem', display: 'flex', gap: '0.55rem', flexWrap: 'wrap', alignItems: 'end' }}>
+        <label style={{ minWidth: 160 }}>
+          Filtrar coordenador
+          <select
+            className="select"
+            value={filter.coordinator_id}
+            onChange={(e) => {
+              const next = { ...filter, coordinator_id: e.target.value, municipality_id: '' };
+              setFilter(next);
+              load(next).catch((err) => setToast(err.message));
+            }}
+          >
+            <option value="">Todos</option>
+            {coordinators.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ minWidth: 160 }}>
+          Filtrar município
+          <select
+            className="select"
+            value={filter.municipality_id}
+            onChange={(e) => {
+              const next = { ...filter, municipality_id: e.target.value };
+              setFilter(next);
+              load(next).catch((err) => setToast(err.message));
+            }}
+          >
+            <option value="">Todos</option>
+            {muniOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn btn-soft btn-sm" onClick={copyAllLinks}>Copiar todos os links</button>
+        <button type="button" className="btn btn-soft btn-sm" onClick={exportCsv}>Exportar CSV</button>
+      </div>
 
       {summary && (
         <div className="bitly-kpis" style={{ marginTop: '1rem' }}>
@@ -320,9 +422,19 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
             <small>cliques no período</small>
           </div>
           <div className="bitly-kpi">
+            <span>Delta desde sync</span>
+            <strong>
+              {summary.clicks_delta > 0 ? '+' : ''}
+              {fmt(summary.clicks_delta)}
+            </strong>
+            <small>novos cliques capturados</small>
+          </div>
+          <div className="bitly-kpi">
             <span>Links ativos</span>
             <strong>{fmt(summary.contents)}</strong>
-            <small>conteúdos mobilizados</small>
+            <small>
+              {fmt(summary.with_territory || 0)} com território
+            </small>
           </div>
         </div>
       )}
@@ -340,22 +452,23 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
             />
           </label>
           <label>
-            Link Bitly *
+            Link Bitly {bitly?.configured ? '(opcional se tiver destino)' : '*'}
             <input
               className="input"
-              required
+              required={!bitly?.configured}
               value={form.bitly_url}
               onChange={(e) => setForm({ ...form, bitly_url: e.target.value })}
               placeholder="https://bit.ly/FalaFabio"
             />
           </label>
           <label>
-            Destino (opcional)
+            URL de destino {bitly?.configured ? '*' : '(opcional)'}
             <input
               className="input"
+              required={Boolean(bitly?.configured) && !form.bitly_url}
               value={form.destination_url}
               onChange={(e) => setForm({ ...form, destination_url: e.target.value })}
-              placeholder="URL completa do vídeo/post"
+              placeholder="https://instagram.com/reel/... ou drive/youtube"
             />
           </label>
           {!bitly?.configured && (
@@ -379,6 +492,35 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </label>
+          <label>
+            Coordenador (território)
+            <select
+              className="select"
+              value={form.coordinator_id}
+              onChange={(e) => setForm({ ...form, coordinator_id: e.target.value, municipality_id: '' })}
+            >
+              <option value="">Sem vínculo</option>
+              {coordinators.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Município
+            <select
+              className="select"
+              value={form.municipality_id}
+              onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
+            >
+              <option value="">Sem vínculo</option>
+              {muniOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem' }}>
+            Com token Bitly: basta a URL de destino — o Atlas cria o bit.ly. Sem token: cole um Bitly já pronto.
+          </p>
           <button className="btn btn-primary" type="submit">Salvar na análise</button>
         </form>
       )}
@@ -410,6 +552,32 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
               placeholder={'https://instagram.com/reel/...\nhttps://youtube.com/...\nhttps://drive.google.com/...|Vídeo Cuiabá'}
             />
           </label>
+          <label>
+            Coordenador padrão (opcional)
+            <select
+              className="select"
+              value={form.coordinator_id}
+              onChange={(e) => setForm({ ...form, coordinator_id: e.target.value, municipality_id: '' })}
+            >
+              <option value="">Sem vínculo</option>
+              {coordinators.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Município padrão (opcional)
+            <select
+              className="select"
+              value={form.municipality_id}
+              onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
+            >
+              <option value="">Sem vínculo</option>
+              {muniOptions.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
           <button className="btn btn-primary" type="submit" disabled={bulkBusy || !bitly?.configured}>
             {bulkBusy ? 'Criando…' : 'Criar bitlinks'}
           </button>
@@ -438,9 +606,23 @@ export default function MobilizedContentsPanel({ campaignSlug }) {
                   {item.destination_url ? (
                     <p className="bitly-card__dest">→ {item.destination_url}</p>
                   ) : null}
+                  {(item.coordinator_name || item.municipality_name) ? (
+                    <p className="bitly-card__sync">
+                      Território: {item.coordinator_name || '—'}
+                      {item.municipality_name ? ` · ${item.municipality_name}` : ''}
+                    </p>
+                  ) : null}
                   {item.bitly_synced_at ? (
                     <p className="bitly-card__sync">
                       Sincronizado {formatWhen(item.bitly_synced_at)}
+                      {item.totals?.clicks_delta
+                        ? ` · ${item.totals.clicks_delta > 0 ? '+' : ''}${item.totals.clicks_delta} desde a sync anterior`
+                        : ''}
+                    </p>
+                  ) : null}
+                  {item.bitly_last_error ? (
+                    <p className="bitly-card__sync" style={{ color: '#8a5a64' }}>
+                      Bitly: {item.bitly_last_error}
                     </p>
                   ) : null}
                 </div>

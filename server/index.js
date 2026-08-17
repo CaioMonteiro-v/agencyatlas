@@ -10,12 +10,12 @@ const {
   buildCampaignReport,
   getThresholds,
 } = require('./analytics');
-const { metaStatus, fetchInstagramSnapshot, distributeIgTotals, readIgAccountSnapshot, saveIgAccountSnapshot } = require('./meta');
+const { metaStatus, probeMetaToken, fetchInstagramSnapshot, distributeIgTotals, readIgAccountSnapshot, saveIgAccountSnapshot } = require('./meta');
 const { runAssistant } = require('./assistant');
 const { login, register, listUsers, requireAuth, authConfigured, canSelfRegister, inviteRequiredForSignup, hasTeamUsers, setAuthDb, TEAM_USER, extractToken, verifyToken } = require('./auth');
 const { listContentWeek, buildContentDetail } = require('./content');
 const { listMobilizedContents, enrichMobilizedContent } = require('./mobilized');
-const { bitlyStatus, syncMobilizedFromBitly, createBitlink, bitlyConfigured } = require('./bitly');
+const { bitlyStatus, probeBitlyToken, syncMobilizedFromBitly, createBitlink, bitlyConfigured, sleep: bitlySleep } = require('./bitly');
 const {
   listDemands,
   demandCountsByMunicipality,
@@ -82,6 +82,8 @@ app.get('/api/health', (_req, res) => {
     database: db?.dialect || (process.env.DATABASE_URL || process.env.SUPABASE_DB_URL ? 'postgres' : 'sqlite'),
     storage: supabaseStorage.status(),
     auth: authConfigured(),
+    bitly: bitlyStatus(),
+    meta: metaStatus(),
   });
 });
 
@@ -1273,7 +1275,7 @@ function detailFor(campaign, coordinator) {
   return buildCoordinatorDetail(db, campaign, coordinator, getThresholds(db, campaign.id));
 }
 
-app.get('/api/campaigns/:slug/coordinators', (req, res) => {
+app.get('/api/campaigns/:slug/coordinators', async (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
@@ -1303,7 +1305,7 @@ app.get('/api/campaigns/:slug/coordinators', (req, res) => {
   res.json({
     coordinators,
     summary,
-    meta: metaStatus(),
+    meta: await probeMetaToken(),
     ig_account: readIgAccountSnapshot(db, campaign.id),
   });
 });
@@ -1661,22 +1663,28 @@ app.delete('/api/campaigns/:slug/demands/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/campaigns/:slug/meta/status', (req, res) => {
+app.get('/api/campaigns/:slug/meta/status', async (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
   const cfg = db.prepare('SELECT * FROM campaign_meta_config WHERE campaign_id = ?').get(campaign.id);
-  res.json({ ...metaStatus(), config: cfg || null });
+  const probed = await probeMetaToken();
+  res.json({
+    ...probed,
+    config: cfg || null,
+    ig_account: readIgAccountSnapshot(db, campaign.id),
+  });
 });
 
 /* ---------- Conteúdo da semana ---------- */
-app.get('/api/campaigns/:slug/content', (req, res) => {
+app.get('/api/campaigns/:slug/content', async (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const week = listContentWeek(db, campaign.id);
+    const probed = await probeMetaToken();
     res.json({
       ...week,
-      meta: metaStatus(),
+      meta: probed,
       ig_account: readIgAccountSnapshot(db, campaign.id),
     });
   } catch (err) {
@@ -1890,62 +1898,113 @@ function getMobilizedOwned(slug, id) {
   return { campaign, row };
 }
 
-app.get('/api/campaigns/:slug/mobilized', (req, res) => {
+app.get('/api/campaigns/:slug/mobilized', async (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
-    res.json({ ...listMobilizedContents(db, campaign.id), bitly: bitlyStatus() });
+    const list = listMobilizedContents(db, campaign.id, {
+      coordinatorId: req.query.coordinator_id,
+      municipalityId: req.query.municipality_id,
+    });
+    const bitly = bitlyConfigured() ? await probeBitlyToken() : bitlyStatus();
+    res.json({ ...list, bitly });
   } catch (err) {
     console.error('GET mobilized:', err);
     res.status(500).json({ error: err.message || 'Erro ao carregar conteúdos mobilizados' });
   }
 });
 
-app.post('/api/campaigns/:slug/mobilized', (req, res) => {
-  const campaign = getCampaignBySlug(req.params.slug);
-  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+app.post('/api/campaigns/:slug/mobilized', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const title = String(req.body.title || '').trim();
-  const bitlyUrl = String(req.body.bitly_url || '').trim();
-  if (!title) return res.status(400).json({ error: 'Título é obrigatório' });
-  if (!bitlyUrl) return res.status(400).json({ error: 'Link Bitly é obrigatório' });
+    const title = String(req.body.title || '').trim();
+    let bitlyUrl = String(req.body.bitly_url || '').trim();
+    let destinationUrl = req.body.destination_url ? String(req.body.destination_url).trim() : null;
+    if (!title) return res.status(400).json({ error: 'Título é obrigatório' });
 
-  const result = db.prepare(`
-    INSERT INTO mobilized_contents (
-      campaign_id, title, bitly_url, destination_url, clicks, views, notes, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo')
-  `).run(
-    campaign.id,
-    title,
-    bitlyUrl,
-    req.body.destination_url ? String(req.body.destination_url).trim() : null,
-    Math.max(0, Number(req.body.clicks) || 0),
-    Math.max(0, Number(req.body.views) || 0),
-    req.body.notes ? String(req.body.notes).trim() : null,
-  );
+    const coordinatorId = req.body.coordinator_id ? Number(req.body.coordinator_id) : null;
+    const municipalityId = req.body.municipality_id ? Number(req.body.municipality_id) : null;
+    const contentPostId = req.body.content_post_id ? Number(req.body.content_post_id) : null;
 
-  const row = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(result.lastInsertRowid);
+    if (!bitlyUrl && destinationUrl && bitlyConfigured()) {
+      const tags = [];
+      if (coordinatorId) {
+        const cName = db.prepare('SELECT name FROM coordinators WHERE id = ?').get(coordinatorId)?.name;
+        if (cName) tags.push(String(cName).slice(0, 40));
+      }
+      if (municipalityId) {
+        const mName = db.prepare('SELECT name FROM municipalities WHERE id = ?').get(municipalityId)?.name;
+        if (mName) tags.push(String(mName).slice(0, 40));
+      }
+      const createdBit = await createBitlink(destinationUrl, {
+        title,
+        tags,
+        custom_bitlink: req.body.custom_bitlink || undefined,
+      });
+      bitlyUrl = createdBit.bitly_url;
+      destinationUrl = createdBit.destination_url || destinationUrl;
+    }
+    if (!bitlyUrl) {
+      return res.status(400).json({
+        error: bitlyConfigured()
+          ? 'Informe o link Bitly ou a URL de destino para encurtar'
+          : 'Link Bitly é obrigatório (ou configure BITLY_ACCESS_TOKEN para criar automaticamente)',
+      });
+    }
 
-  const channels = Array.isArray(req.body.channels) ? req.body.channels : [];
-  const insertCh = db.prepare(`
-    INSERT INTO mobilized_content_channels (
-      mobilized_content_id, channel_type, channel_name, members_count, sent_at, notes
-    ) VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  for (const ch of channels) {
-    const name = String(ch.channel_name || ch.name || '').trim();
-    if (!name) continue;
-    insertCh.run(
-      row.id,
-      ch.channel_type === 'canal' ? 'canal' : 'grupo',
-      name,
-      Math.max(0, Number(ch.members_count) || 0),
-      ch.sent_at || new Date().toISOString().slice(0, 10),
-      ch.notes || null,
+    const result = db.prepare(`
+      INSERT INTO mobilized_contents (
+        campaign_id, title, bitly_url, destination_url, clicks, views, notes, status,
+        coordinator_id, municipality_id, content_post_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ativo', ?, ?, ?)
+    `).run(
+      campaign.id,
+      title,
+      bitlyUrl,
+      destinationUrl,
+      Math.max(0, Number(req.body.clicks) || 0),
+      Math.max(0, Number(req.body.views) || 0),
+      req.body.notes ? String(req.body.notes).trim() : null,
+      coordinatorId,
+      municipalityId,
+      contentPostId,
     );
-  }
 
-  res.status(201).json(enrichMobilizedContent(db, row));
+    let row = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(result.lastInsertRowid);
+
+    const channels = Array.isArray(req.body.channels) ? req.body.channels : [];
+    const insertCh = db.prepare(`
+      INSERT INTO mobilized_content_channels (
+        mobilized_content_id, channel_type, channel_name, members_count, sent_at, notes
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const ch of channels) {
+      const name = String(ch.channel_name || ch.name || '').trim();
+      if (!name) continue;
+      insertCh.run(
+        row.id,
+        ch.channel_type === 'canal' ? 'canal' : 'grupo',
+        name,
+        Math.max(0, Number(ch.members_count) || 0),
+        ch.sent_at || new Date().toISOString().slice(0, 10),
+        ch.notes || null,
+      );
+    }
+
+    if (bitlyConfigured()) {
+      try {
+        const synced = await syncMobilizedFromBitly(db, row);
+        row = synced.row;
+      } catch (_) { /* ok */ }
+    }
+
+    res.status(201).json(enrichMobilizedContent(db, row));
+  } catch (err) {
+    console.error('POST mobilized:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar conteúdo' });
+  }
 });
 
 /** Cria vários bitlinks a partir de URLs longas (Bitly pago / create). */
@@ -1988,17 +2047,36 @@ app.post('/api/campaigns/:slug/mobilized/bulk', async (req, res) => {
       const title = String(item.title || '').trim()
         || (titlePrefix ? `${titlePrefix} ${i + 1}` : `Conteúdo ${i + 1}`);
       try {
-        const bit = await createBitlink(longUrl, { title });
+        if (i > 0) await bitlySleep(220);
+        const tags = [];
+        const coordinatorId = req.body.coordinator_id
+          ? Number(req.body.coordinator_id)
+          : (item.coordinator_id ? Number(item.coordinator_id) : null);
+        const municipalityId = req.body.municipality_id
+          ? Number(req.body.municipality_id)
+          : (item.municipality_id ? Number(item.municipality_id) : null);
+        if (coordinatorId) {
+          const cName = db.prepare('SELECT name FROM coordinators WHERE id = ?').get(coordinatorId)?.name;
+          if (cName) tags.push(String(cName).slice(0, 40));
+        }
+        if (municipalityId) {
+          const mName = db.prepare('SELECT name FROM municipalities WHERE id = ?').get(municipalityId)?.name;
+          if (mName) tags.push(String(mName).slice(0, 40));
+        }
+        const bit = await createBitlink(longUrl, { title, tags });
         const result = db.prepare(`
           INSERT INTO mobilized_contents (
-            campaign_id, title, bitly_url, destination_url, clicks, views, notes, status
-          ) VALUES (?, ?, ?, ?, 0, 0, ?, 'ativo')
+            campaign_id, title, bitly_url, destination_url, clicks, views, notes, status,
+            coordinator_id, municipality_id
+          ) VALUES (?, ?, ?, ?, 0, 0, ?, 'ativo', ?, ?)
         `).run(
           campaign.id,
           title,
           bit.bitly_url,
           bit.destination_url,
           item.notes ? String(item.notes).trim() : null,
+          coordinatorId,
+          municipalityId,
         );
         const row = db.prepare('SELECT * FROM mobilized_contents WHERE id = ?').get(result.lastInsertRowid);
         let enriched = enrichMobilizedContent(db, row);
@@ -2043,10 +2121,18 @@ app.patch('/api/campaigns/:slug/mobilized/:id', (req, res) => {
   if (!title) return res.status(400).json({ error: 'Título inválido' });
   if (!bitlyUrl) return res.status(400).json({ error: 'Link Bitly inválido' });
 
+  const coordinatorId = req.body.coordinator_id !== undefined
+    ? (req.body.coordinator_id ? Number(req.body.coordinator_id) : null)
+    : row.coordinator_id;
+  const municipalityId = req.body.municipality_id !== undefined
+    ? (req.body.municipality_id ? Number(req.body.municipality_id) : null)
+    : row.municipality_id;
+
   db.prepare(`
     UPDATE mobilized_contents SET
       title = ?, bitly_url = ?, destination_url = ?,
-      clicks = ?, views = ?, notes = ?, status = ?
+      clicks = ?, views = ?, notes = ?, status = ?,
+      coordinator_id = ?, municipality_id = ?
     WHERE id = ?
   `).run(
     title,
@@ -2058,6 +2144,8 @@ app.patch('/api/campaigns/:slug/mobilized/:id', (req, res) => {
     req.body.views !== undefined ? Math.max(0, Number(req.body.views) || 0) : row.views,
     req.body.notes !== undefined ? req.body.notes : row.notes,
     req.body.status || row.status,
+    coordinatorId,
+    municipalityId,
     row.id,
   );
 
@@ -2194,8 +2282,10 @@ app.post('/api/campaigns/:slug/mobilized/sync', async (req, res) => {
   `).all(campaign.id);
 
   const results = [];
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
     try {
+      if (i > 0) await bitlySleep(180);
       const { row: updated, analytics } = await syncMobilizedFromBitly(db, row);
       results.push({
         id: row.id,
@@ -2236,7 +2326,7 @@ app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
 
     const distributed = distributeIgTotals(links, snapshot.totals);
     const now = new Date().toISOString();
-    saveIgAccountSnapshot(db, campaign.id, snapshot.totals, now);
+    saveIgAccountSnapshot(db, campaign.id, snapshot.totals, now, snapshot.profile);
     const update = db.prepare(`
       UPDATE coordinator_municipalities SET
         ig_comments = ?,
@@ -2262,7 +2352,7 @@ app.post('/api/campaigns/:slug/meta/sync', async (req, res) => {
         );
       }
 
-      // Importa posts do IG para a aba Conteúdo (ainda sem API, este bloco não roda)
+      // Importa/atualiza posts do IG na aba Conteúdo
       for (const m of snapshot.media || []) {
         const title = ((m.caption || 'Post Instagram').trim().split('\n')[0] || 'Post Instagram').slice(0, 80);
         const existing = db.prepare(`

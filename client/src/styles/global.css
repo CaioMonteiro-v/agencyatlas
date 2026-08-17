@@ -2269,3 +2269,32 @@ th {
 .ig-account-panel {
   border-color: rgba(61, 107, 90, 0.28);
 }
+
+.bitly-ready {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.bitly-ready--ok {
+  border-color: rgba(110, 168, 130, 0.45);
+  background: rgba(110, 168, 130, 0.12);
+}
+
+.bitly-ready--wait {
+  border-color: rgba(201, 160, 90, 0.4);
+  background: rgba(201, 160, 90, 0.12);
+}
+
+.bitly-ready--warn {
+  border-color: rgba(201, 123, 134, 0.4);
+  background: rgba(217, 167, 176, 0.16);
+}
+
+.bitly-ready span {
+  color: var(--muted);
+}

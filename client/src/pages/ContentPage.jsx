@@ -139,6 +139,28 @@ export default function ContentPage() {
     }
   }
 
+  async function createBitlyFromPost(post) {
+    if (!post.permalink) {
+      setToast('Post sem link para encurtar');
+      return;
+    }
+    try {
+      const created = await api.createMobilized(campaign.slug, {
+        title: post.title || 'Post Instagram',
+        destination_url: post.permalink,
+        content_post_id: post.id,
+        notes: 'Criado a partir do conteúdo da semana',
+      });
+      setToast(
+        created?.bitly_url
+          ? `Bitly criado: ${created.bitly_url}`
+          : 'Link cadastrado na análise Bitly (Mobilização)',
+      );
+    } catch (err) {
+      setToast(err.message || 'Falha ao criar Bitly — confira BITLY_ACCESS_TOKEN ou cole o bit.ly em Mobilização');
+    }
+  }
+
   async function syncMeta() {
     setSyncing(true);
     try {
@@ -231,6 +253,10 @@ export default function ContentPage() {
           {data.ig_account.totals ? (
             <div className="radar-stats" style={{ marginTop: '0.85rem' }}>
               <article>
+                <strong>{data.ig_account.totals.followers ?? data.meta?.followers_count ?? '—'}</strong>
+                <span>Seguidores</span>
+              </article>
+              <article>
                 <strong>{data.ig_account.totals.comments ?? 0}</strong>
                 <span>Comentários</span>
               </article>
@@ -243,12 +269,39 @@ export default function ContentPage() {
                 <span>Reach</span>
               </article>
               <article>
+                <strong>{data.ig_account.totals.saved ?? 0}</strong>
+                <span>Salvos</span>
+              </article>
+              <article>
+                <strong>{data.ig_account.totals.shares ?? 0}</strong>
+                <span>Shares</span>
+              </article>
+              <article>
                 <strong>{data.ig_account.totals.posts ?? 0}</strong>
                 <span>Posts lidos</span>
               </article>
             </div>
           ) : (
             <EmptyState>Ainda sem sync. Clique em Sincronizar Instagram.</EmptyState>
+          )}
+          {data.ig_account.engagement && (
+            <p
+              className="meta-hint"
+              style={{
+                marginTop: '0.75rem',
+                color: data.ig_account.engagement.tone === 'down' ? '#8a5a64' : undefined,
+              }}
+            >
+              {data.ig_account.engagement.label}
+              {data.ig_account.engagement.comments_delta != null
+                ? ` · comentários ${data.ig_account.engagement.comments_delta > 0 ? '+' : ''}${data.ig_account.engagement.comments_delta}`
+                : ''}
+            </p>
+          )}
+          {data.meta?.token_ok === false && data.meta?.token_error && (
+            <p className="meta-hint" style={{ marginTop: '0.5rem', color: '#8a5a64' }}>
+              Token Meta: {data.meta.token_error}
+            </p>
           )}
         </section>
       )}
@@ -355,7 +408,18 @@ export default function ContentPage() {
                     {post.totals.assignments} cobrança(s) · {post.totals.actual_views}/{post.totals.target_views} views · {post.totals.critical} crítico(s)
                   </p>
                 </div>
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => removePost(post.id)}>Remover</button>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  {post.permalink ? (
+                    <button
+                      type="button"
+                      className="btn btn-accent btn-sm"
+                      onClick={() => createBitlyFromPost(post)}
+                    >
+                      Criar Bitly
+                    </button>
+                  ) : null}
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removePost(post.id)}>Remover</button>
+                </div>
               </div>
 
               <div className="stack" style={{ marginTop: '0.9rem' }}>
