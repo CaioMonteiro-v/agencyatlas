@@ -276,7 +276,7 @@ function seedProduction(db) {
   ensureBaseCampaign(db);
   seedMunicipalities(db);
   migrateLegacyCoordinators(db);
-  seedDossierInvestments(db);
+  // Dossiê NÃO sobe automático — equipe cola texto / Word / botão oficial
   console.log('Base pronta (campanha + 142 municípios). Sem nomes fake — alimente pelo /admin.');
 }
 

@@ -34,6 +34,7 @@ const {
   getInvestment,
   upsertMunicipalityNote,
   importDossier,
+  clearDossier,
   loadOfficialDossierSeed,
 } = require('./investment');
 const supabaseStorage = require('./supabase-storage');
@@ -1725,7 +1726,7 @@ app.post('/api/campaigns/:slug/investments/import', (req, res) => {
     }
     if (source == null || source === '') {
       return res.status(400).json({
-        error: 'Cole o texto do dossiê (array municipios) ou envie use_official_seed: true',
+        error: 'Cole o texto do dossiê ou envie use_official_seed: true',
       });
     }
 
@@ -1738,6 +1739,37 @@ app.post('/api/campaigns/:slug/investments/import', (req, res) => {
       missing: err.missing || undefined,
       detail: err.detail || undefined,
     });
+  }
+});
+
+/** Zera o dossiê inteiro ou só os municípios de um coordenador */
+app.post('/api/campaigns/:slug/investments/clear', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    let coordinatorId = req.body?.coordinator_id ? Number(req.body.coordinator_id) : null;
+
+    // Atalho: zerar pelo nome (ex.: Valmir)
+    if (!coordinatorId && req.body?.coordinator_name) {
+      const name = String(req.body.coordinator_name).trim();
+      const row = db.prepare(`
+        SELECT id FROM coordinators
+        WHERE campaign_id = ? AND LOWER(name) LIKE LOWER(?)
+        ORDER BY name ASC
+        LIMIT 1
+      `).get(campaign.id, `%${name}%`);
+      if (!row) {
+        return res.status(404).json({ error: `Coordenador não encontrado: ${name}` });
+      }
+      coordinatorId = row.id;
+    }
+
+    const result = clearDossier(db, campaign.id, { coordinatorId });
+    res.json(result);
+  } catch (err) {
+    console.error('POST investments clear:', err);
+    res.status(500).json({ error: err.message || 'Erro ao zerar dossiê' });
   }
 });
 

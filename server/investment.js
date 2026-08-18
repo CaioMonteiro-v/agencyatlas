@@ -725,6 +725,60 @@ function loadOfficialDossierSeed() {
   return require('./data/dossier-investments-seed');
 }
 
+/**
+ * Zera o dossiê inteiro ou só os municípios de um coordenador.
+ */
+function clearDossier(db, campaignId, { coordinatorId } = {}) {
+  let deletedItems = 0;
+  let deletedNotes = 0;
+  let municipalityIds = [];
+
+  if (coordinatorId) {
+    const cid = Number(coordinatorId);
+    municipalityIds = db.prepare(`
+      SELECT DISTINCT cm.municipality_id AS id
+      FROM coordinator_municipalities cm
+      JOIN coordinators c ON c.id = cm.coordinator_id
+      WHERE c.campaign_id = ? AND c.id = ?
+    `).all(campaignId, cid).map((r) => r.id);
+
+    if (!municipalityIds.length) {
+      return {
+        ok: true,
+        deleted_items: 0,
+        deleted_notes: 0,
+        municipalities_cleared: 0,
+        dossier: buildDossier(db, campaignId),
+        tip: 'Esse coordenador não tem municípios vinculados no Atlas.',
+      };
+    }
+
+    const placeholders = municipalityIds.map(() => '?').join(',');
+    const delItems = db.prepare(`
+      DELETE FROM campaign_investments
+      WHERE campaign_id = ? AND municipality_id IN (${placeholders})
+    `).run(campaignId, ...municipalityIds);
+    deletedItems = delItems.changes || 0;
+
+    const delNotes = db.prepare(`
+      DELETE FROM campaign_investment_muni_notes
+      WHERE campaign_id = ? AND municipality_id IN (${placeholders})
+    `).run(campaignId, ...municipalityIds);
+    deletedNotes = delNotes.changes || 0;
+  } else {
+    deletedItems = db.prepare('DELETE FROM campaign_investments WHERE campaign_id = ?').run(campaignId).changes || 0;
+    deletedNotes = db.prepare('DELETE FROM campaign_investment_muni_notes WHERE campaign_id = ?').run(campaignId).changes || 0;
+  }
+
+  return {
+    ok: true,
+    deleted_items: deletedItems,
+    deleted_notes: deletedNotes,
+    municipalities_cleared: coordinatorId ? municipalityIds.length : null,
+    dossier: buildDossier(db, campaignId),
+  };
+}
+
 module.exports = {
   CATEGORIES,
   categoryMeta,
@@ -739,6 +793,7 @@ module.exports = {
   listMunicipalityNotes,
   parseDossierPaste,
   importDossier,
+  clearDossier,
   loadOfficialDossierSeed,
   AMOUNT_UNKNOWN,
 };

@@ -178,6 +178,41 @@ export default function InvestmentReportPage() {
     await runImport({ use_official_seed: true });
   }
 
+  async function clearSelected() {
+    const coord = (dossier?.coordinators || []).find((c) => String(c.id) === String(filterCoord));
+    const label = coord?.name || 'selecionado';
+    if (!filterCoord) {
+      setToast('Selecione o coordenador (ex.: Valmir) para zerar só o dossiê dele');
+      return;
+    }
+    if (!window.confirm(`Zerar o dossiê de ${label}? Os municípios dele saem do relatório.`)) {
+      return;
+    }
+    try {
+      const res = await api.clearInvestments(campaign.slug, { coordinator_id: Number(filterCoord) });
+      setDossier(res.dossier);
+      setToast(`Zerade: ${res.deleted_items} item(ns) de ${label}`);
+      await load(filterCoord);
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  async function clearAll() {
+    if (!window.confirm('Zerar o dossiê INTEIRO da campanha? Isso apaga todos os municípios/itens.')) {
+      return;
+    }
+    try {
+      const res = await api.clearInvestments(campaign.slug, {});
+      setFilterCoord('');
+      setFilterMuni('');
+      setDossier(res.dossier);
+      setToast(`Dossiê zerado: ${res.deleted_items} item(ns) removidos`);
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
   function onPrint() {
     // Garante que o bloco do dossiê está visível mesmo se estiver na aba importar
     if (mode !== 'dossie') setMode('dossie');
@@ -220,6 +255,12 @@ export default function InvestmentReportPage() {
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={loadOfficial} disabled={importing}>
               Carregar dossiê oficial (14 mun.)
+            </button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={clearSelected}>
+              Zerar coordenador
+            </button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={clearAll}>
+              Zerar tudo
             </button>
             <button type="button" className="btn btn-primary btn-sm" onClick={onPrint}>
               Imprimir / PDF
