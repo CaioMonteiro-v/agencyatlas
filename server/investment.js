@@ -409,50 +409,158 @@ function resolveCategory(tagOrId, label) {
 }
 
 /**
- * Aceita JSON, array JS (`const municipios = [...]`) ou HTML com o script embutido.
+ * Aceita texto simples (recomendado), JSON, array JS ou HTML com script.
  */
 function parseDossierPaste(raw) {
   let text = String(raw || '').trim();
   if (!text) {
-    const err = new Error('Cole o texto do dossiê (JSON ou o array municipios do HTML)');
+    const err = new Error('Cole o texto do dossiê (município, categoria, itens e valores)');
     err.status = 400;
     throw err;
   }
 
-  // Extrai do HTML/script se veio a página inteira
+  // HTML / script com const municipios = [...]
   const scriptMatch = text.match(/const\s+municipios\s*=\s*(\[[\s\S]*?\]);\s*(?:function|const|let|var|<\/script>)/i)
     || text.match(/(?:const\s+|let\s+|var\s+)?municipios\s*=\s*(\[[\s\S]*\])/i);
   if (scriptMatch) {
     text = scriptMatch[1];
   }
 
-  // Tenta JSON primeiro
+  // JSON
   try {
     const asJson = JSON.parse(text);
     if (Array.isArray(asJson)) return normalizeMunicipiosInput(asJson);
     if (Array.isArray(asJson?.municipios)) return normalizeMunicipiosInput(asJson.municipios);
   } catch {
-    /* segue para literal JS */
+    /* segue */
   }
 
-  try {
-    // Entrada confiável da própria equipe — avalia literal de array/objeto
-    // eslint-disable-next-line no-new-func
-    const evaluated = Function(`"use strict"; return (${text});`)();
-    if (Array.isArray(evaluated)) return normalizeMunicipiosInput(evaluated);
-    if (Array.isArray(evaluated?.municipios)) return normalizeMunicipiosInput(evaluated.municipios);
-  } catch (err) {
-    const e = new Error(
-      'Não entendi o texto. Cole o array `municipios = [...]` do HTML, ou um JSON com a lista.',
-    );
-    e.status = 400;
-    e.detail = err.message;
-    throw e;
+  // Literal JS (se ainda parecer código)
+  if (/^\s*\[/.test(text) || /^\s*\{/.test(text)) {
+    try {
+      // eslint-disable-next-line no-new-func
+      const evaluated = Function(`"use strict"; return (${text});`)();
+      if (Array.isArray(evaluated)) return normalizeMunicipiosInput(evaluated);
+      if (Array.isArray(evaluated?.municipios)) return normalizeMunicipiosInput(evaluated.municipios);
+    } catch {
+      /* tenta texto simples */
+    }
   }
 
-  const err = new Error('Formato inválido — esperado uma lista de municípios');
+  // Texto simples (o caminho normal da equipe)
+  const plain = parsePlainTextDossier(String(raw || '').trim());
+  if (plain.length) return plain;
+
+  const err = new Error(
+    'Não entendi o texto. Use o formato: nome do município, depois a categoria (Infraestrutura, Saúde…), e cada item com o valor em R$.',
+  );
   err.status = 400;
   throw err;
+}
+
+function parseMoneyToken(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s || /não\s*informado|n\/a|null/i.test(s)) return null;
+  s = s.replace(/R\$\s*/gi, '').replace(/\s/g, '');
+  if (!s) return null;
+  // 1.030.556,00 ou 1030556.00 ou 1030556
+  if (s.includes(',')) {
+    return money(s.replace(/\./g, '').replace(',', '.'));
+  }
+  return money(s);
+}
+
+function isCategoryLine(line) {
+  const clean = line.replace(/^#+\s*/, '').replace(/:$/, '').trim().toLowerCase();
+  return Boolean(TAG_TO_CATEGORY[clean] || CATEGORIES.some((c) => c.label.toLowerCase() === clean));
+}
+
+function parsePlainTextDossier(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^---+/.test(l));
+  if (!lines.length) return [];
+
+  const municipios = [];
+  let current = null;
+  let currentGroup = null;
+
+  function ensureMuni(nome) {
+    current = {
+      nome,
+      nota: null,
+      grupos: [],
+    };
+    municipios.push(current);
+    currentGroup = null;
+  }
+
+  function ensureGroup(labelOrTag) {
+    const category = resolveCategory(labelOrTag, labelOrTag);
+    const meta = categoryMeta(category);
+    currentGroup = {
+      tag: meta.tag || category,
+      label: meta.label,
+      itens: [],
+    };
+    current.grupos.push(currentGroup);
+  }
+
+  for (const line of lines) {
+    // Nota / observação
+    if (/^\*|nota\s*:|observ/i.test(line)) {
+      if (current) {
+        current.nota = line.replace(/^\*\s*/, '').replace(/^nota\s*:\s*/i, '').trim();
+      }
+      continue;
+    }
+
+    // Município: Nome  |  # Nome  |  MUNICÍPIO Nome
+    const muniHeader = line.match(/^(?:munic[ií]pio\s*[:\-–]?\s*|#\s*)(.+)$/i);
+    if (muniHeader) {
+      ensureMuni(muniHeader[1].trim());
+      continue;
+    }
+
+    // Categoria sozinha na linha
+    if (isCategoryLine(line)) {
+      if (!current) continue;
+      ensureGroup(line.replace(/^#+\s*/, '').replace(/:$/, '').trim());
+      continue;
+    }
+
+    // Item com valor: "Descrição — R$ 1.000,00" | "Descrição | 1000" | "Descrição  R$ 1000"
+    const itemMatch = line.match(
+      /^(?:[-•*]\s*)?(.+?)\s*(?:—+|–+|-+|\||\t)\s*(R\$\s*[\d.,]+|[\d.,]+|não\s*informado)\s*$/i,
+    ) || line.match(
+      /^(?:[-•*]\s*)?(.+?)\s+(R\$\s*[\d.,]+)\s*$/i,
+    );
+
+    if (itemMatch) {
+      if (!current) {
+        // Sem município ainda — ignora ou cria genérico
+        continue;
+      }
+      if (!currentGroup) {
+        ensureGroup('infraestrutura');
+      }
+      const desc = itemMatch[1].trim().replace(/^[-•*]\s*/, '');
+      const val = parseMoneyToken(itemMatch[2]);
+      if (!desc) continue;
+      currentGroup.itens.push({ d: desc, v: val });
+      continue;
+    }
+
+    // Linha curta sem valor → provavelmente nome de município (ex.: Alto Araguaia)
+    const looksLikeCode = /[{}\[\]=;]|const\s|function\s|tag:|itens:/.test(line);
+    if (!looksLikeCode && line.length <= 60 && !/\d{3,}/.test(line) && !/^r\$/i.test(line)) {
+      // Se parece título de município
+      if (!isCategoryLine(line)) {
+        ensureMuni(line);
+      }
+    }
+  }
+
+  return municipios.filter((m) => m.nome && m.grupos.some((g) => g.itens.length));
 }
 
 function normalizeMunicipiosInput(list) {

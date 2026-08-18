@@ -80,23 +80,22 @@ function MuniCard({ muni, totalCount }) {
   );
 }
 
-const PASTE_PLACEHOLDER = `Cole aqui o array do dossiê, por exemplo:
+const PASTE_PLACEHOLDER = `Cole o texto assim (sem código):
 
-const municipios = [
-  {
-    nome: "Alto Araguaia",
-    grupos: [
-      { tag: "infra", label: "Infraestrutura", itens: [
-        { d: "Ponte de concreto...", v: 9163754.43 },
-      ]},
-      { tag: "saude", label: "Saúde", itens: [
-        { d: "Custeio da saúde", v: 500000 },
-      ]},
-    ],
-  },
-];
+Alto Araguaia
 
-Também aceita a página HTML inteira ou um JSON.`;
+Infraestrutura
+Doação de maquinários — R$ 1.030.556,00
+Ponte de concreto sobre o Ribeirão Gato Preto — R$ 9.163.754,43
+
+Saúde
+Custeio da saúde — R$ 500.000,00
+
+Alto Garças
+
+Infraestrutura
+Construção de praça — R$ 1.500.000,00
+`;
 
 export default function InvestmentReportPage() {
   const { campaign } = useOutletContext();
@@ -186,9 +185,8 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Só cola o texto com os municípios — o Atlas monta o dossiê.
-            Depois, escolha o <strong>coordenador</strong> já cadastrado para puxar o dossiê completo dele
-            (todos os municípios vinculados a ele).
+            Cola o texto normal (município, categoria, itens e valores) — o Atlas monta o dossiê.
+            Depois escolha o <strong>coordenador</strong> já cadastrado para puxar o dossiê completo dele.
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -223,11 +221,11 @@ export default function InvestmentReportPage() {
 
         {mode === 'importar' && (
           <form className="no-print panel panel-pad dossier-import" onSubmit={onPasteImport}>
-            <h3 style={{ marginTop: 0 }}>Gerar dossiê a partir do texto</h3>
+            <h3 style={{ marginTop: 0 }}>Colar texto e gerar dossiê</h3>
             <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Cole o array <code>municipios = [...]</code> (o nome do município já vem no texto).
-              O Atlas gera os cards e amarra cada município ao <strong>coordenador já cadastrado</strong>
-              na aba Coordenadores. Depois é só selecionar o coordenador para ver o dossiê dele.
+              Não precisa de código. Escreve ou cola: <strong>município</strong>, depois a{' '}
+              <strong>categoria</strong> (Infraestrutura, Saúde, Agricultura…) e cada item com o valor em R$.
+              O Atlas monta os cards e liga no coordenador já cadastrado.
             </p>
             <label>
               Texto do dossiê

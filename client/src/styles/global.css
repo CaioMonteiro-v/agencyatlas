@@ -2592,8 +2592,9 @@ th {
 }
 
 .dossier-import__area {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 0.8rem;
+  font-family: 'IBM Plex Sans', var(--font-body), sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.5;
   min-height: 280px;
   background: #fffef9;
 }
