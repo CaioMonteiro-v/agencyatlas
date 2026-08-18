@@ -18,7 +18,7 @@ function brl(n) {
   });
 }
 
-function MuniCard({ muni, totalCount, defaultOpenCategory = 'infraestrutura' }) {
+function MuniCard({ muni, totalCount, defaultOpenCategory = 'infraestrutura', onAddItem }) {
   const [open, setOpen] = useState(() => {
     const init = {};
     for (const cat of muni.categories || []) {
@@ -33,9 +33,16 @@ function MuniCard({ muni, totalCount, defaultOpenCategory = 'infraestrutura' }) 
 
   return (
     <article className="dossier-card">
-      <p className="dossier-card__index">
-        Município {String(muni.index).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
-      </p>
+      <div className="dossier-card__top">
+        <p className="dossier-card__index">
+          Município {String(muni.index).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
+        </p>
+        {onAddItem ? (
+          <button type="button" className="btn btn-soft btn-sm no-print" onClick={onAddItem}>
+            + Item
+          </button>
+        ) : null}
+      </div>
       <h3 className="dossier-card__title">
         O deputado Federal que mais investiu em{' '}
         <em>{muni.municipality_name}</em>
@@ -95,7 +102,6 @@ export default function InvestmentReportPage() {
   const [municipalities, setMunicipalities] = useState([]);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [filterMuni, setFilterMuni] = useState('');
@@ -126,29 +132,45 @@ export default function InvestmentReportPage() {
 
   const flatItems = dossier?.items || [];
 
+  function parseAmount(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return 0;
+    if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
+    return Number(s) || 0;
+  }
+
+  function goLaunch(municipalityId = '') {
+    setEditingId(null);
+    setForm({
+      ...emptyForm,
+      municipality_id: municipalityId ? String(municipalityId) : '',
+    });
+    setMode('cadastro');
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     try {
       const payload = {
         ...form,
-                    amount: (() => {
-                      const s = String(form.amount || '').trim();
-                      if (!s) return 0;
-                      if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
-                      return Number(s) || 0;
-                    })(),
+        amount: parseAmount(form.amount),
         municipality_id: Number(form.municipality_id),
       };
       if (editingId) {
         await api.updateInvestment(campaign.slug, editingId, payload);
         setToast('Item atualizado');
+        setEditingId(null);
+        setForm({ ...emptyForm, municipality_id: form.municipality_id, category: form.category });
       } else {
         await api.createInvestment(campaign.slug, payload);
-        setToast('Item adicionado ao dossiê');
+        setToast('Item lançado no dossiê');
+        // Mantém município/categoria para lançar o próximo rápido
+        setForm({
+          ...emptyForm,
+          municipality_id: form.municipality_id,
+          category: form.category,
+        });
       }
-      setForm(emptyForm);
-      setEditingId(null);
-      setShowForm(false);
       await load();
     } catch (err) {
       setToast(err.message);
@@ -164,7 +186,6 @@ export default function InvestmentReportPage() {
       amount: String(item.amount ?? ''),
       notes: item.notes || '',
     });
-    setShowForm(true);
     setMode('cadastro');
   }
 
@@ -188,8 +209,8 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Levantamento do que o deputado viabilizou por município — infraestrutura, saúde,
-            agricultura e regularização. Sem Meta/Instagram: só o relatório.
+            Aqui a equipe <strong>lança manualmente</strong> cada obra/emenda/viabilização por município.
+            O dossiê monta sozinho os cards e os totais.
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -197,33 +218,23 @@ export default function InvestmentReportPage() {
               className={`chip ${mode === 'dossie' ? 'active' : ''}`}
               onClick={() => setMode('dossie')}
             >
-              Dossiê
+              Ver dossiê
             </button>
             <button
               type="button"
               className={`chip ${mode === 'cadastro' ? 'active' : ''}`}
-              onClick={() => setMode('cadastro')}
+              onClick={() => goLaunch()}
             >
-              Cadastrar itens
+              Lançar itens
             </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
+            <button type="button" className="btn btn-accent btn-sm" onClick={() => goLaunch()}>
+              + Lançar item
+            </button>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}>
               Imprimir / PDF
             </button>
-            {mode === 'cadastro' && (
-              <button
-                type="button"
-                className="btn btn-accent btn-sm"
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(emptyForm);
-                  setShowForm((v) => !v);
-                }}
-              >
-                {showForm ? 'Fechar formulário' : 'Novo item'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -276,86 +287,116 @@ export default function InvestmentReportPage() {
                   key={muni.municipality_id}
                   muni={muni}
                   totalCount={totalCount}
+                  onAddItem={() => goLaunch(muni.municipality_id)}
                 />
               ))}
             </div>
           ) : (
             <EmptyState>
-              Ainda sem itens no dossiê. Vá em <strong>Cadastrar itens</strong> e lance por município.
+              Ainda sem itens. Clique em <strong>+ Lançar item</strong> e registre município, categoria, descrição e valor.
             </EmptyState>
           )}
         </div>
 
         {/* ===== CADASTRO ===== */}
         {mode === 'cadastro' && (
-          <div className="no-print" style={{ marginTop: '1.25rem' }}>
-            {showForm && (
-              <form className="panel panel-pad form-grid" onSubmit={onSubmit} style={{ marginBottom: '1rem' }}>
-                <h3 style={{ marginTop: 0 }}>{editingId ? 'Editar item' : 'Novo item do dossiê'}</h3>
-                <label>
-                  Município *
-                  <select
-                    className="select"
-                    required
-                    value={form.municipality_id}
-                    onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
-                  >
-                    <option value="">Selecione</option>
-                    {municipalities.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Categoria *
-                  <select
-                    className="select"
-                    required
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  >
-                    {(dossier?.categories || []).map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Valor (R$) *
-                  <input
-                    className="input"
-                    required
-                    inputMode="decimal"
-                    value={form.amount}
-                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    placeholder="Ex.: 1700000 ou 1.700.000,00"
-                  />
-                </label>
-                <label style={{ gridColumn: '1 / -1' }}>
-                  Descrição do item *
-                  <input
-                    className="input"
-                    required
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Ex.: Ponte de concreto sobre o Ribeirão Gato Preto, MT-481 (60 m)"
-                  />
-                </label>
-                <label style={{ gridColumn: '1 / -1' }}>
-                  Observação (opcional)
-                  <input
-                    className="input"
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  />
-                </label>
+          <div className="no-print" style={{ marginTop: '0.5rem' }}>
+            <div className="panel panel-pad dossier-howto" style={{ marginBottom: '1rem' }}>
+              <h3 style={{ marginTop: 0 }}>Como lançar</h3>
+              <ol className="dossier-howto__steps">
+                <li>Escolha o <strong>município</strong> (ex.: Alto Araguaia).</li>
+                <li>Escolha a <strong>categoria</strong>: Infraestrutura, Saúde, Agricultura ou Regularização.</li>
+                <li>Escreva a <strong>descrição</strong> do item (obra, doação, emenda…).</li>
+                <li>Informe o <strong>valor em R$</strong> e clique em <strong>Adicionar ao dossiê</strong>.</li>
+              </ol>
+              <p style={{ margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+                Depois de salvar, o formulário fica pronto para o próximo item do mesmo município.
+                Volte em <strong>Ver dossiê</strong> para conferir o card atualizado.
+              </p>
+            </div>
+
+            <form className="panel panel-pad form-grid" onSubmit={onSubmit} style={{ marginBottom: '1rem' }}>
+              <h3 style={{ marginTop: 0 }}>{editingId ? 'Editar item' : 'Lançar item no dossiê'}</h3>
+              <label>
+                Município *
+                <select
+                  className="select"
+                  required
+                  value={form.municipality_id}
+                  onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
+                >
+                  <option value="">Selecione o município</option>
+                  {municipalities.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Categoria *
+                <select
+                  className="select"
+                  required
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                >
+                  {(dossier?.categories || []).map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Valor (R$) *
+                <input
+                  className="input"
+                  required
+                  inputMode="decimal"
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  placeholder="Ex.: 1700000 ou 1.700.000,00"
+                />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Descrição do item *
+                <input
+                  className="input"
+                  required
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Ex.: Ponte de concreto sobre o Ribeirão Gato Preto, MT-481 (60 m)"
+                />
+              </label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Observação (opcional)
+                <input
+                  className="input"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button className="btn btn-primary" type="submit">
-                  {editingId ? 'Salvar' : 'Adicionar ao dossiê'}
+                  {editingId ? 'Salvar alteração' : 'Adicionar ao dossiê'}
                 </button>
-              </form>
-            )}
+                {editingId && (
+                  <button
+                    type="button"
+                    className="btn btn-soft"
+                    onClick={() => {
+                      setEditingId(null);
+                      setForm(emptyForm);
+                    }}
+                  >
+                    Cancelar edição
+                  </button>
+                )}
+                <button type="button" className="btn btn-soft" onClick={() => setMode('dossie')}>
+                  Ver dossiê
+                </button>
+              </div>
+            </form>
 
             <section className="panel panel-pad">
-              <h3 style={{ marginTop: 0 }}>Itens cadastrados</h3>
+              <h3 style={{ marginTop: 0 }}>Itens já lançados ({flatItems.length})</h3>
               {flatItems.length ? (
                 <div className="table-wrap">
                   <table className="table">
@@ -389,7 +430,7 @@ export default function InvestmentReportPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState>Nenhum item ainda.</EmptyState>
+                <EmptyState>Nenhum item ainda — use o formulário acima.</EmptyState>
               )}
             </section>
           </div>

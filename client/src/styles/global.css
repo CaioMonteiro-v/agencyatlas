@@ -2397,6 +2397,29 @@ th {
   font-family: var(--font-display);
 }
 
+.dossier-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.dossier-card__top .dossier-card__index {
+  margin: 0;
+}
+
+.dossier-howto__steps {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.dossier-howto__steps li {
+  margin-bottom: 0.25rem;
+}
+
 .dossier-card__title {
   margin: 0 0 0.55rem;
   font-family: var(--font-display);
