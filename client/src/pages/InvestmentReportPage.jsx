@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
+import { printDossierDocument } from '../lib/printDossier';
 
 function brl(n, unknown = false) {
   if (unknown || n === null || n === undefined) return 'não informado';
@@ -108,6 +109,7 @@ export default function InvestmentReportPage() {
   const [filterMuni, setFilterMuni] = useState('');
   const [filterCoord, setFilterCoord] = useState('');
   const [lastImport, setLastImport] = useState(null);
+  const printRootRef = useRef(null);
 
   async function load(coordinatorId = filterCoord) {
     try {
@@ -176,6 +178,14 @@ export default function InvestmentReportPage() {
     await runImport({ use_official_seed: true });
   }
 
+  function onPrint() {
+    // Garante que o bloco do dossiê está visível mesmo se estiver na aba importar
+    if (mode !== 'dossie') setMode('dossie');
+    requestAnimationFrame(() => {
+      printDossierDocument(printRootRef.current);
+    });
+  }
+
   const totalCount = dossier?.municipality_count || visibleMunis.length || 0;
 
   return (
@@ -211,7 +221,7 @@ export default function InvestmentReportPage() {
             <button type="button" className="btn btn-soft btn-sm" onClick={loadOfficial} disabled={importing}>
               Carregar dossiê oficial (14 mun.)
             </button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={onPrint}>
               Imprimir / PDF
             </button>
           </div>
@@ -256,7 +266,10 @@ export default function InvestmentReportPage() {
           </form>
         )}
 
-        <div className={mode === 'dossie' ? '' : 'dossier-screen-print-only'}>
+        <div
+          ref={printRootRef}
+          className={`dossier-print-root ${mode === 'dossie' ? '' : 'dossier-screen-print-only'}`}
+        >
           <header className="dossier-hero">
             <p className="dossier-hero__eyebrow">
               Dossiê regional · Estado de Mato Grosso
