@@ -33,6 +33,8 @@ const {
   deleteInvestment,
   getInvestment,
   upsertMunicipalityNote,
+  importDossier,
+  loadOfficialDossierSeed,
 } = require('./investment');
 const supabaseStorage = require('./supabase-storage');
 
@@ -1711,6 +1713,34 @@ app.post('/api/campaigns/:slug/investments', (req, res) => {
   } catch (err) {
     console.error('POST investments:', err);
     res.status(err.status || 500).json({ error: err.message || 'Erro ao lançar investimento' });
+  }
+});
+
+/** Cola o texto/JSON/HTML do dossiê e o sistema monta o relatório */
+app.post('/api/campaigns/:slug/investments/import', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    let source = req.body?.text ?? req.body?.source ?? req.body?.municipios ?? null;
+    if (req.body?.use_official_seed) {
+      source = loadOfficialDossierSeed();
+    }
+    if (source == null || source === '') {
+      return res.status(400).json({
+        error: 'Cole o texto do dossiê (array municipios) ou envie use_official_seed: true',
+      });
+    }
+
+    const result = importDossier(db, campaign.id, source);
+    res.status(201).json(result);
+  } catch (err) {
+    console.error('POST investments import:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Erro ao importar dossiê',
+      missing: err.missing || undefined,
+      detail: err.detail || undefined,
+    });
   }
 });
 

@@ -4,12 +4,28 @@
  */
 
 const CATEGORIES = [
-  { id: 'infraestrutura', label: 'Infraestrutura', color: '#3d5c45' },
-  { id: 'saude', label: 'Saúde', color: '#8b4a3b' },
-  { id: 'agricultura', label: 'Agricultura', color: '#9a6b2f' },
-  { id: 'regularizacao', label: 'Regularização fundiária', color: '#5a6b7a' },
-  { id: 'outros', label: 'Outros', color: '#5a5a5a' },
+  { id: 'infraestrutura', label: 'Infraestrutura', color: '#2F5233', tag: 'infra' },
+  { id: 'saude', label: 'Saúde', color: '#8C3B2E', tag: 'saude' },
+  { id: 'agricultura', label: 'Agricultura', color: '#A9781F', tag: 'agro' },
+  { id: 'regularizacao', label: 'Regularização Fundiária', color: '#345670', tag: 'fundiaria' },
+  { id: 'outros', label: 'Outros', color: '#5a5a5a', tag: 'outros' },
 ];
+
+const TAG_TO_CATEGORY = {
+  infra: 'infraestrutura',
+  infraestrutura: 'infraestrutura',
+  saude: 'saude',
+  saúde: 'saude',
+  agro: 'agricultura',
+  agricultura: 'agricultura',
+  fundiaria: 'regularizacao',
+  regularizacao: 'regularizacao',
+  'regularização': 'regularizacao',
+  'regularização fundiária': 'regularizacao',
+  outros: 'outros',
+};
+
+const AMOUNT_UNKNOWN = '__amount_unknown__';
 
 function categoryMeta(id) {
   return CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
@@ -21,11 +37,14 @@ function money(n) {
 
 function enrichRow(row) {
   const meta = categoryMeta(row.category);
+  const unknown = row.notes === AMOUNT_UNKNOWN || row.amount_unknown;
   return {
     ...row,
-    amount: money(row.amount),
+    amount: unknown ? null : money(row.amount),
+    amount_unknown: Boolean(unknown),
     category_label: meta.label,
     category_color: meta.color,
+    notes: unknown ? null : row.notes,
   };
 }
 
@@ -115,7 +134,7 @@ function buildDossier(db, campaignId) {
       });
     }
     const muni = byMuni.get(item.municipality_id);
-    muni.total = money(muni.total + item.amount);
+    muni.total = money(muni.total + (item.amount_unknown ? 0 : money(item.amount)));
     muni.count += 1;
 
     const catId = item.category || 'outros';
@@ -131,12 +150,13 @@ function buildDossier(db, campaignId) {
       };
     }
     const cat = muni.categories[catId];
-    cat.total = money(cat.total + item.amount);
+    cat.total = money(cat.total + (item.amount_unknown ? 0 : money(item.amount)));
     cat.count += 1;
     cat.items.push({
       id: item.id,
       description: item.description,
       amount: item.amount,
+      amount_unknown: Boolean(item.amount_unknown),
       receipt_ref: item.receipt_ref,
       notes: item.notes,
       sort_order: item.sort_order,
@@ -312,9 +332,214 @@ function deleteInvestment(db, campaignId, id) {
 /** Compat: summary antigo apontando para o dossiê */
 function buildSummary(items) {
   return {
-    total: money(items.reduce((s, r) => s + money(r.amount), 0)),
+    total: money(items.reduce((s, r) => s + (r.amount_unknown ? 0 : money(r.amount)), 0)),
     count: items.length,
   };
+}
+
+function resolveCategory(tagOrId, label) {
+  const raw = String(tagOrId || label || 'outros').trim().toLowerCase();
+  if (TAG_TO_CATEGORY[raw]) return TAG_TO_CATEGORY[raw];
+  const byLabel = CATEGORIES.find((c) => c.label.toLowerCase() === raw);
+  if (byLabel) return byLabel.id;
+  return 'outros';
+}
+
+/**
+ * Aceita JSON, array JS (`const municipios = [...]`) ou HTML com o script embutido.
+ */
+function parseDossierPaste(raw) {
+  let text = String(raw || '').trim();
+  if (!text) {
+    const err = new Error('Cole o texto do dossiê (JSON ou o array municipios do HTML)');
+    err.status = 400;
+    throw err;
+  }
+
+  // Extrai do HTML/script se veio a página inteira
+  const scriptMatch = text.match(/const\s+municipios\s*=\s*(\[[\s\S]*?\]);\s*(?:function|const|let|var|<\/script>)/i)
+    || text.match(/(?:const\s+|let\s+|var\s+)?municipios\s*=\s*(\[[\s\S]*\])/i);
+  if (scriptMatch) {
+    text = scriptMatch[1];
+  }
+
+  // Tenta JSON primeiro
+  try {
+    const asJson = JSON.parse(text);
+    if (Array.isArray(asJson)) return normalizeMunicipiosInput(asJson);
+    if (Array.isArray(asJson?.municipios)) return normalizeMunicipiosInput(asJson.municipios);
+  } catch {
+    /* segue para literal JS */
+  }
+
+  try {
+    // Entrada confiável da própria equipe — avalia literal de array/objeto
+    // eslint-disable-next-line no-new-func
+    const evaluated = Function(`"use strict"; return (${text});`)();
+    if (Array.isArray(evaluated)) return normalizeMunicipiosInput(evaluated);
+    if (Array.isArray(evaluated?.municipios)) return normalizeMunicipiosInput(evaluated.municipios);
+  } catch (err) {
+    const e = new Error(
+      'Não entendi o texto. Cole o array `municipios = [...]` do HTML, ou um JSON com a lista.',
+    );
+    e.status = 400;
+    e.detail = err.message;
+    throw e;
+  }
+
+  const err = new Error('Formato inválido — esperado uma lista de municípios');
+  err.status = 400;
+  throw err;
+}
+
+function normalizeMunicipiosInput(list) {
+  return list.map((m, idx) => {
+    const nome = String(m.nome || m.name || m.municipality || m.municipio || '').trim();
+    const grupos = Array.isArray(m.grupos)
+      ? m.grupos
+      : Array.isArray(m.groups)
+        ? m.groups
+        : Array.isArray(m.categories)
+          ? m.categories
+          : [];
+
+    // Formato flat antigo: { municipality, items:[{category,description,amount}] }
+    if (!grupos.length && Array.isArray(m.items)) {
+      const byCat = {};
+      for (const it of m.items) {
+        const cat = resolveCategory(it.category, it.category_label);
+        if (!byCat[cat]) byCat[cat] = [];
+        byCat[cat].push({
+          d: it.description || it.d || '',
+          v: it.amount != null ? it.amount : it.v,
+        });
+      }
+      return {
+        nome,
+        nota: m.nota || m.footnote || null,
+        sort_order: m.sort_order != null ? m.sort_order : idx + 1,
+        grupos: Object.entries(byCat).map(([cat, itens]) => ({
+          tag: CATEGORIES.find((c) => c.id === cat)?.tag || cat,
+          label: categoryMeta(cat).label,
+          itens,
+        })),
+      };
+    }
+
+    return {
+      nome,
+      nota: m.nota || m.footnote || null,
+      sort_order: m.sort_order != null ? m.sort_order : idx + 1,
+      grupos: grupos.map((g) => ({
+        tag: g.tag || g.category || 'infra',
+        label: g.label || categoryMeta(resolveCategory(g.tag, g.label)).label,
+        itens: (g.itens || g.items || []).map((it) => ({
+          d: it.d || it.description || '',
+          v: it.v !== undefined ? it.v : it.amount,
+        })),
+      })),
+    };
+  }).filter((m) => m.nome);
+}
+
+/**
+ * Substitui o dossiê da campanha pelo conteúdo parseado (apaga e recria).
+ */
+function importDossier(db, campaignId, municipiosInput) {
+  const municipios = Array.isArray(municipiosInput)
+    ? normalizeMunicipiosInput(municipiosInput)
+    : parseDossierPaste(municipiosInput);
+
+  if (!municipios.length) {
+    const err = new Error('Nenhum município encontrado no texto');
+    err.status = 400;
+    throw err;
+  }
+
+  const findMuni = db.prepare('SELECT id, name FROM municipalities WHERE LOWER(name) = LOWER(?)');
+  // removed broken COLLATE approach
+  const missing = [];
+  const resolved = [];
+
+  for (const block of municipios) {
+    const muni = findMuni.get(block.nome);
+    if (!muni) {
+      missing.push(block.nome);
+      continue;
+    }
+    resolved.push({ ...block, municipality_id: muni.id });
+  }
+
+  if (!resolved.length) {
+    const err = new Error(
+      `Nenhum município bateu com a base do Atlas. Confira os nomes (ex.: ${missing.slice(0, 3).join(', ')})`,
+    );
+    err.status = 400;
+    err.missing = missing;
+    throw err;
+  }
+
+  const insertItem = db.prepare(`
+    INSERT INTO campaign_investments (
+      campaign_id, municipality_id, category, description, amount, notes, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  const clearItems = db.prepare('DELETE FROM campaign_investments WHERE campaign_id = ?');
+  const clearNotes = db.prepare('DELETE FROM campaign_investment_muni_notes WHERE campaign_id = ?');
+  const insertNote = db.prepare(`
+    INSERT INTO campaign_investment_muni_notes (campaign_id, municipality_id, footnote, sort_order)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  let inserted = 0;
+  const run = () => {
+    clearItems.run(campaignId);
+    clearNotes.run(campaignId);
+    for (const block of resolved) {
+      if (block.nota || block.sort_order != null) {
+        insertNote.run(campaignId, block.municipality_id, block.nota || null, block.sort_order || 0);
+      }
+      let order = 0;
+      for (const g of block.grupos || []) {
+        const category = resolveCategory(g.tag, g.label);
+        for (const it of g.itens || []) {
+          const desc = String(it.d || '').trim();
+          if (!desc) continue;
+          const unknown = it.v === null || it.v === undefined || it.v === '';
+          const amount = unknown ? 0 : money(it.v);
+          insertItem.run(
+            campaignId,
+            block.municipality_id,
+            category,
+            desc,
+            amount,
+            unknown ? AMOUNT_UNKNOWN : null,
+            order,
+          );
+          order += 1;
+          inserted += 1;
+        }
+      }
+    }
+  };
+
+  if (typeof db.transaction === 'function') {
+    db.transaction(run)();
+  } else {
+    run();
+  }
+
+  return {
+    ok: true,
+    municipalities_imported: resolved.length,
+    municipalities_missing: missing,
+    items_inserted: inserted,
+    dossier: buildDossier(db, campaignId),
+  };
+}
+
+function loadOfficialDossierSeed() {
+  return require('./data/dossier-investments-seed');
 }
 
 module.exports = {
@@ -329,4 +554,8 @@ module.exports = {
   deleteInvestment,
   upsertMunicipalityNote,
   listMunicipalityNotes,
+  parseDossierPaste,
+  importDossier,
+  loadOfficialDossierSeed,
+  AMOUNT_UNKNOWN,
 };

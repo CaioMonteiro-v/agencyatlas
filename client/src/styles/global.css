@@ -2301,51 +2301,66 @@ th {
 
 /* ---------- Dossiê regional · Investimentos por município ---------- */
 .dossier-page {
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 11px,
-      rgba(120, 100, 80, 0.035) 11px,
-      rgba(120, 100, 80, 0.035) 12px
-    ),
-    linear-gradient(180deg, #f3eadc 0%, #ebe0cf 55%, #e7dccb 100%);
-  margin: 0 -0.5rem;
-  padding: 0.5rem 0 2.5rem;
-  border-radius: 0;
+  --dossier-paper: #EFE8D6;
+  --dossier-ink: #1C2A20;
+  --dossier-ink-soft: #4B5346;
+  --dossier-green: #2F5233;
+  --dossier-green-deep: #1F3D2B;
+  --dossier-gold: #A9781F;
+  --dossier-brick: #8C3B2E;
+  --dossier-rule: #C9BFA0;
+  --dossier-white: #FBF8F0;
+  background: var(--dossier-paper);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.015) 0px,
+    rgba(0, 0, 0, 0.015) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  color: var(--dossier-ink);
+  margin: 0 calc(-1 * max(0px, (100vw - var(--max)) / 2));
+  padding: 0.25rem 0 3.5rem;
+  font-family: 'IBM Plex Sans', var(--font-body), sans-serif;
+}
+
+.dossier-page .container {
+  max-width: 1180px;
 }
 
 .dossier-hero {
+  border-bottom: 3px double var(--dossier-ink);
   text-align: center;
   max-width: 720px;
-  margin: 0 auto 1.75rem;
-  padding: 0.5rem 0.5rem 0;
+  margin: 0 auto 2rem;
+  padding: 1.5rem 0.75rem 1.35rem;
 }
 
 .dossier-hero__eyebrow {
-  margin: 0 0 0.55rem;
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
+  margin: 0 0 0.85rem;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: #7a6550;
+  font-size: 0.7rem;
+  color: var(--dossier-green-deep);
 }
 
 .dossier-hero h1 {
   margin: 0 0 0.65rem;
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 4.5vw, 3rem);
-  line-height: 1.1;
-  color: #1f1a16;
-  font-weight: 700;
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: clamp(1.75rem, 4vw, 2.85rem);
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+  color: var(--dossier-ink);
 }
 
 .dossier-hero__lead {
   margin: 0 auto;
-  max-width: 54ch;
-  color: #5c5146;
-  font-size: 1rem;
-  line-height: 1.55;
+  max-width: 62ch;
+  color: var(--dossier-ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 .dossier-hero__sum {
@@ -2355,190 +2370,222 @@ th {
   gap: 0.45rem;
   justify-content: center;
   align-items: baseline;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--dossier-ink-soft);
 }
 
 .dossier-hero__sum strong {
-  font-family: var(--font-display);
-  font-size: 1.45rem;
-  color: #8b4a3b;
-}
-
-.dossier-hero__sum span {
-  color: #7a6550;
-  font-size: 0.92rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.15rem;
+  color: var(--dossier-ink);
 }
 
 .dossier-filter {
   max-width: 280px;
-  margin: 0 0 1.1rem;
+  margin: 0 0 1.25rem;
 }
 
 .dossier-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.15rem;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1.75rem;
   align-items: start;
 }
 
 .dossier-card {
-  background: #fbf7f0;
-  border: 1px solid rgba(90, 70, 50, 0.14);
-  border-radius: 4px;
-  padding: 1.15rem 1.15rem 1.25rem;
-  box-shadow: 0 10px 28px rgba(70, 50, 30, 0.06);
+  background: var(--dossier-white);
+  border: 1px solid var(--dossier-rule);
+  position: relative;
+  padding: 1.55rem 1.4rem 1.3rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  border-radius: 0;
+}
+
+.dossier-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--dossier-green);
 }
 
 .dossier-card__index {
-  margin: 0 0 0.55rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  margin: 0 0 0.65rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  color: var(--dossier-gold);
   text-transform: uppercase;
-  color: #8a7660;
-  font-family: var(--font-display);
-}
-
-.dossier-card__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
-}
-
-.dossier-card__top .dossier-card__index {
-  margin: 0;
-}
-
-.dossier-howto__steps {
-  margin: 0.35rem 0 0;
-  padding-left: 1.2rem;
-  color: var(--ink-soft);
-  line-height: 1.55;
-}
-
-.dossier-howto__steps li {
-  margin-bottom: 0.25rem;
 }
 
 .dossier-card__title {
-  margin: 0 0 0.55rem;
-  font-family: var(--font-display);
-  font-size: clamp(1.2rem, 2.2vw, 1.45rem);
-  line-height: 1.25;
-  color: #1f1a16;
+  margin: 0 0 0.25rem;
+  font-family: 'Fraunces', serif;
   font-weight: 600;
+  font-size: 1.2rem;
+  line-height: 1.28;
+  color: var(--dossier-green-deep);
 }
 
 .dossier-card__title em {
-  font-style: italic;
-  color: #8b4a3b;
-  font-weight: 700;
+  font-style: normal;
+  color: var(--dossier-brick);
 }
 
 .dossier-card__total {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  color: var(--dossier-ink-soft);
   margin: 0 0 1rem;
   padding-bottom: 0.85rem;
-  border-bottom: 1px dotted rgba(90, 70, 50, 0.28);
-  color: #5c5146;
-  font-size: 0.95rem;
+  border-bottom: 1px solid var(--dossier-rule);
 }
 
 .dossier-card__total strong {
-  display: inline;
-  color: #1f1a16;
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 700;
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--dossier-ink);
+  font-size: 1rem;
 }
 
 .dossier-cats {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.15rem;
+}
+
+.dossier-cat {
+  margin: 0;
 }
 
 .dossier-cat__head {
-  width: 100%;
+  cursor: pointer;
+  list-style: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px dashed var(--dossier-rule);
+  font-size: 0.88rem;
 }
 
-.dossier-cat__pill {
-  display: inline-flex;
+.dossier-cat__head::-webkit-details-marker,
+.dossier-cat__head::marker {
+  display: none;
+  content: "";
+}
+
+.dossier-cat__label {
+  display: flex;
   align-items: center;
-  gap: 0.35rem;
-  background: var(--cat-color, #3d5c45);
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 0.35rem 0.65rem;
-  border-radius: 3px;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .dossier-cat__arrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dossier-ink-soft);
+  transition: transform 0.15s ease;
+}
+
+.dossier-cat[open] .dossier-cat__arrow {
+  transform: rotate(90deg);
+}
+
+.dossier-cat__pill {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: #fff;
+  background: var(--cat-color, var(--dossier-green));
+}
+
+.dossier-cat__count {
   font-size: 0.7rem;
-  line-height: 1;
+  color: var(--dossier-ink-soft);
+  font-family: 'IBM Plex Mono', monospace;
 }
 
-.dossier-cat__meta {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  color: #6a5a4a;
-  font-size: 0.86rem;
-}
-
-.dossier-cat__meta strong {
-  color: #1f1a16;
-  font-variant-numeric: tabular-nums;
+.dossier-cat__value {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--dossier-ink);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .dossier-cat__list {
   list-style: none;
-  margin: 0.45rem 0 0.15rem;
-  padding: 0;
+  margin: 0.15rem 0 0.6rem;
+  padding: 0 0 0 0.25rem;
 }
 
 .dossier-cat__list li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.75rem;
-  padding: 0.55rem 0;
-  border-bottom: 1px dotted rgba(90, 70, 50, 0.22);
-  font-size: 0.9rem;
-  color: #3a322c;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--dossier-ink-soft);
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.dossier-cat__list li:last-child {
+  border-bottom: none;
 }
 
 .dossier-cat__list li strong {
-  font-variant-numeric: tabular-nums;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--dossier-ink);
   white-space: nowrap;
-  color: #1f1a16;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .dossier-card__note {
-  margin: 0.9rem 0 0;
-  font-family: var(--font-display);
-  font-size: 0.82rem;
+  margin: 0.7rem 0 0;
+  font-size: 0.72rem;
+  color: var(--dossier-gold);
   font-style: italic;
-  color: #9a6b2f;
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+.dossier-footer-rule {
+  margin: 2.5rem auto 0;
+  padding: 1.15rem 0 0;
+  border-top: 3px double var(--dossier-ink);
+  text-align: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--dossier-ink-soft);
+  letter-spacing: 0.05em;
+}
+
+.dossier-import__area {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  min-height: 280px;
+  background: #fffef9;
+}
+
+.dossier-import__warn {
+  margin: 0.85rem 0 0;
+  color: var(--dossier-brick);
+  font-size: 0.88rem;
 }
 
 .dossier-screen-print-only {
   display: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   .dossier-grid {
     grid-template-columns: 1fr;
   }
@@ -2555,7 +2602,7 @@ th {
   }
 
   .dossier-page {
-    background: #f3eadc !important;
+    background: #EFE8D6 !important;
     margin: 0;
     padding: 0;
   }
@@ -2563,9 +2610,5 @@ th {
   .dossier-card {
     break-inside: avoid;
     box-shadow: none;
-  }
-
-  .dossier-grid {
-    gap: 0.85rem;
   }
 }

@@ -3,52 +3,34 @@ import { useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 
-const emptyForm = {
-  municipality_id: '',
-  category: 'infraestrutura',
-  description: '',
-  amount: '',
-  notes: '',
-};
-
-function brl(n) {
-  return Number(n || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
+function brl(n, unknown = false) {
+  if (unknown || n === null || n === undefined) return 'não informado';
+  return `R$ ${Number(n || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
-function MuniCard({ muni, totalCount, defaultOpenCategory = 'infraestrutura', onAddItem }) {
+function MuniCard({ muni, totalCount }) {
   const [open, setOpen] = useState(() => {
     const init = {};
-    for (const cat of muni.categories || []) {
-      init[cat.category] = cat.category === defaultOpenCategory;
-    }
+    (muni.categories || []).forEach((cat, i) => {
+      init[cat.category] = i === 0;
+    });
     return init;
   });
 
-  function toggle(catId) {
-    setOpen((prev) => ({ ...prev, [catId]: !prev[catId] }));
-  }
-
   return (
     <article className="dossier-card">
-      <div className="dossier-card__top">
-        <p className="dossier-card__index">
-          Município {String(muni.index).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
-        </p>
-        {onAddItem ? (
-          <button type="button" className="btn btn-soft btn-sm no-print" onClick={onAddItem}>
-            + Item
-          </button>
-        ) : null}
-      </div>
+      <p className="dossier-card__index">
+        Município {String(muni.index).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
+      </p>
       <h3 className="dossier-card__title">
         O deputado Federal que mais investiu em{' '}
         <em>{muni.municipality_name}</em>
       </h3>
       <p className="dossier-card__total">
-        Total viabilizado no município{' '}
+        Total viabilizado no município
         <strong>{brl(muni.total)}</strong>
       </p>
 
@@ -56,64 +38,75 @@ function MuniCard({ muni, totalCount, defaultOpenCategory = 'infraestrutura', on
         {(muni.categories || []).map((cat) => {
           const isOpen = Boolean(open[cat.category]);
           return (
-            <div className="dossier-cat" key={cat.category}>
-              <button
-                type="button"
-                className={`dossier-cat__head ${isOpen ? 'is-open' : ''}`}
-                style={{ '--cat-color': cat.category_color }}
-                onClick={() => toggle(cat.category)}
-                aria-expanded={isOpen}
-              >
-                <span className="dossier-cat__pill">
-                  <span className="dossier-cat__arrow" aria-hidden>{isOpen ? '▾' : '▸'}</span>
-                  {String(cat.category_label || '').toUpperCase()}
+            <details
+              key={cat.category}
+              className="dossier-cat"
+              open={isOpen}
+              onToggle={(e) => {
+                setOpen((prev) => ({ ...prev, [cat.category]: e.target.open }));
+              }}
+            >
+              <summary className="dossier-cat__head" style={{ '--cat-color': cat.category_color }}>
+                <span className="dossier-cat__label">
+                  <span className="dossier-cat__arrow" aria-hidden>▸</span>
+                  <span className="dossier-cat__pill">{String(cat.category_label || '').toUpperCase()}</span>
+                  <span className="dossier-cat__count">
+                    {cat.count} {cat.count === 1 ? 'item' : 'itens'}
+                  </span>
                 </span>
-                <span className="dossier-cat__meta">
-                  {cat.count} {cat.count === 1 ? 'item' : 'itens'}
-                  <strong>{brl(cat.total)}</strong>
-                </span>
-              </button>
-              {isOpen && (
-                <ul className="dossier-cat__list">
-                  {cat.items.map((item) => (
-                    <li key={item.id}>
-                      <span>{item.description}</span>
-                      <strong>{brl(item.amount)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                <span className="dossier-cat__value">{brl(cat.total)}</span>
+              </summary>
+              <ul className="dossier-cat__list">
+                {cat.items.map((item) => (
+                  <li key={item.id}>
+                    <span>{item.description}</span>
+                    <strong>{brl(item.amount, item.amount_unknown)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </details>
           );
         })}
       </div>
 
-      {muni.footnote ? (
-        <p className="dossier-card__note">{muni.footnote}</p>
-      ) : null}
+      {muni.footnote ? <p className="dossier-card__note">* {muni.footnote}</p> : null}
     </article>
   );
 }
+
+const PASTE_PLACEHOLDER = `Cole aqui o array do dossiê, por exemplo:
+
+const municipios = [
+  {
+    nome: "Alto Araguaia",
+    grupos: [
+      { tag: "infra", label: "Infraestrutura", itens: [
+        { d: "Ponte de concreto...", v: 9163754.43 },
+      ]},
+      { tag: "saude", label: "Saúde", itens: [
+        { d: "Custeio da saúde", v: 500000 },
+      ]},
+    ],
+  },
+];
+
+Também aceita a página HTML inteira ou um JSON.`;
 
 export default function InvestmentReportPage() {
   const { campaign } = useOutletContext();
   const [mode, setMode] = useState('dossie');
   const [dossier, setDossier] = useState(null);
-  const [municipalities, setMunicipalities] = useState([]);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
+  const [paste, setPaste] = useState('');
+  const [importing, setImporting] = useState(false);
   const [filterMuni, setFilterMuni] = useState('');
+  const [lastImport, setLastImport] = useState(null);
 
   async function load() {
     try {
-      const [res, munis] = await Promise.all([
-        api.getInvestments(campaign.slug),
-        api.getMunicipalities().catch(() => []),
-      ]);
+      const res = await api.getInvestments(campaign.slug);
       setDossier(res);
-      setMunicipalities(Array.isArray(munis) ? munis : []);
       setError('');
     } catch (err) {
       setError(err.message || 'Erro ao carregar dossiê');
@@ -130,76 +123,43 @@ export default function InvestmentReportPage() {
     return list.filter((m) => String(m.municipality_id) === String(filterMuni));
   }, [dossier, filterMuni]);
 
-  const flatItems = dossier?.items || [];
-
-  function parseAmount(raw) {
-    const s = String(raw || '').trim();
-    if (!s) return 0;
-    if (s.includes(',')) return Number(s.replace(/\./g, '').replace(',', '.')) || 0;
-    return Number(s) || 0;
+  async function runImport(body) {
+    setImporting(true);
+    try {
+      const res = await api.importInvestments(campaign.slug, body);
+      setDossier(res.dossier);
+      setLastImport(res);
+      setPaste('');
+      setMode('dossie');
+      const miss = res.municipalities_missing?.length
+        ? ` · ${res.municipalities_missing.length} nome(s) não encontrados`
+        : '';
+      setToast(
+        `Dossiê gerado: ${res.municipalities_imported} município(s), ${res.items_inserted} item(ns)${miss}`,
+      );
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setImporting(false);
+    }
   }
 
-  function goLaunch(municipalityId = '') {
-    setEditingId(null);
-    setForm({
-      ...emptyForm,
-      municipality_id: municipalityId ? String(municipalityId) : '',
-    });
-    setMode('cadastro');
-  }
-
-  async function onSubmit(e) {
+  async function onPasteImport(e) {
     e.preventDefault();
-    try {
-      const payload = {
-        ...form,
-        amount: parseAmount(form.amount),
-        municipality_id: Number(form.municipality_id),
-      };
-      if (editingId) {
-        await api.updateInvestment(campaign.slug, editingId, payload);
-        setToast('Item atualizado');
-        setEditingId(null);
-        setForm({ ...emptyForm, municipality_id: form.municipality_id, category: form.category });
-      } else {
-        await api.createInvestment(campaign.slug, payload);
-        setToast('Item lançado no dossiê');
-        // Mantém município/categoria para lançar o próximo rápido
-        setForm({
-          ...emptyForm,
-          municipality_id: form.municipality_id,
-          category: form.category,
-        });
-      }
-      await load();
-    } catch (err) {
-      setToast(err.message);
+    if (!paste.trim()) {
+      setToast('Cole o texto do dossiê primeiro');
+      return;
     }
+    await runImport({ text: paste });
   }
 
-  function startEdit(item) {
-    setEditingId(item.id);
-    setForm({
-      municipality_id: item.municipality_id || '',
-      category: item.category || 'infraestrutura',
-      description: item.description || '',
-      amount: String(item.amount ?? ''),
-      notes: item.notes || '',
-    });
-    setMode('cadastro');
-  }
-
-  async function removeItem(item) {
-    try {
-      await api.deleteInvestment(campaign.slug, item.id);
-      setToast('Item removido');
-      await load();
-    } catch (err) {
-      setToast(err.message);
+  async function loadOfficial() {
+    if (!window.confirm('Isso substitui o dossiê atual pelos 14 municípios oficiais. Continuar?')) {
+      return;
     }
+    await runImport({ use_official_seed: true });
   }
 
-  const candidate = campaign.candidate || 'Fábio Garcia';
   const totalCount = dossier?.municipality_count || visibleMunis.length || 0;
 
   return (
@@ -209,8 +169,8 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Aqui a equipe <strong>lança manualmente</strong> cada obra/emenda/viabilização por município.
-            O dossiê monta sozinho os cards e os totais.
+            Cole o texto (array <code>municipios</code> ou o HTML) e o Atlas monta o relatório sozinho —
+            cards, totais e categorias.
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -222,15 +182,18 @@ export default function InvestmentReportPage() {
             </button>
             <button
               type="button"
-              className={`chip ${mode === 'cadastro' ? 'active' : ''}`}
-              onClick={() => goLaunch()}
+              className={`chip ${mode === 'importar' ? 'active' : ''}`}
+              onClick={() => setMode('importar')}
             >
-              Lançar itens
+              Colar texto / gerar
             </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
-            <button type="button" className="btn btn-accent btn-sm" onClick={() => goLaunch()}>
-              + Lançar item
+            <button type="button" className="btn btn-accent btn-sm" onClick={() => setMode('importar')}>
+              Colar texto e gerar
+            </button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={loadOfficial} disabled={importing}>
+              Carregar dossiê oficial (14 mun.)
             </button>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => window.print()}>
               Imprimir / PDF
@@ -240,7 +203,42 @@ export default function InvestmentReportPage() {
 
         {error && <EmptyState>{error}</EmptyState>}
 
-        {/* ===== DOSSIÊ ===== */}
+        {mode === 'importar' && (
+          <form className="no-print panel panel-pad dossier-import" onSubmit={onPasteImport}>
+            <h3 style={{ marginTop: 0 }}>Gerar dossiê a partir do texto</h3>
+            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+              1) Cole o array <code>municipios = [...]</code> do seu HTML (ou a página inteira / JSON).
+              2) Clique em <strong>Gerar relatório</strong>. O sistema apaga o dossiê anterior e cria os cards.
+            </p>
+            <label>
+              Texto do dossiê
+              <textarea
+                className="textarea dossier-import__area"
+                rows={16}
+                value={paste}
+                onChange={(e) => setPaste(e.target.value)}
+                placeholder={PASTE_PLACEHOLDER}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="submit" disabled={importing}>
+                {importing ? 'Gerando…' : 'Gerar relatório'}
+              </button>
+              <button type="button" className="btn btn-soft" onClick={loadOfficial} disabled={importing}>
+                Usar dossiê oficial (14 municípios)
+              </button>
+              <button type="button" className="btn btn-soft" onClick={() => setMode('dossie')}>
+                Voltar ao dossiê
+              </button>
+            </div>
+            {lastImport?.municipalities_missing?.length ? (
+              <p className="dossier-import__warn">
+                Municípios não encontrados na base: {lastImport.municipalities_missing.join(', ')}
+              </p>
+            ) : null}
+          </form>
+        )}
+
         <div className={mode === 'dossie' ? '' : 'dossier-screen-print-only'}>
           <header className="dossier-hero">
             <p className="dossier-hero__eyebrow">
@@ -249,14 +247,13 @@ export default function InvestmentReportPage() {
             <h1>{dossier?.title || 'Investimentos por Município'}</h1>
             <p className="dossier-hero__lead">
               {dossier?.subtitle
-                || 'Levantamento organizado por município, com o total viabilizado e a lista item a item.'}
+                || 'Levantamento organizado por município, com o total viabilizado e a relação item a item de cada categoria.'}
             </p>
             {dossier && (
               <p className="dossier-hero__sum">
                 <strong>{brl(dossier.grand_total)}</strong>
                 <span>
                   · {dossier.municipality_count} município(s) · {dossier.item_count} item(ns)
-                  · {candidate}
                 </span>
               </p>
             )}
@@ -270,7 +267,7 @@ export default function InvestmentReportPage() {
                 value={filterMuni}
                 onChange={(e) => setFilterMuni(e.target.value)}
               >
-                <option value="">Todos os do dossiê</option>
+                <option value="">Todos</option>
                 {(dossier?.municipalities || []).map((m) => (
                   <option key={m.municipality_id} value={m.municipality_id}>
                     {m.municipality_name}
@@ -281,160 +278,23 @@ export default function InvestmentReportPage() {
           </div>
 
           {visibleMunis.length ? (
-            <div className="dossier-grid">
-              {visibleMunis.map((muni) => (
-                <MuniCard
-                  key={muni.municipality_id}
-                  muni={muni}
-                  totalCount={totalCount}
-                  onAddItem={() => goLaunch(muni.municipality_id)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="dossier-grid">
+                {visibleMunis.map((muni) => (
+                  <MuniCard key={muni.municipality_id} muni={muni} totalCount={totalCount} />
+                ))}
+              </div>
+              <p className="dossier-footer-rule">
+                Fim do dossiê — {totalCount} município{totalCount === 1 ? '' : 's'} listado{totalCount === 1 ? '' : 's'}
+              </p>
+            </>
           ) : (
             <EmptyState>
-              Ainda sem itens. Clique em <strong>+ Lançar item</strong> e registre município, categoria, descrição e valor.
+              Ainda sem dossiê. Clique em <strong>Colar texto / gerar</strong> ou{' '}
+              <strong>Carregar dossiê oficial (14 mun.)</strong>.
             </EmptyState>
           )}
         </div>
-
-        {/* ===== CADASTRO ===== */}
-        {mode === 'cadastro' && (
-          <div className="no-print" style={{ marginTop: '0.5rem' }}>
-            <div className="panel panel-pad dossier-howto" style={{ marginBottom: '1rem' }}>
-              <h3 style={{ marginTop: 0 }}>Como lançar</h3>
-              <ol className="dossier-howto__steps">
-                <li>Escolha o <strong>município</strong> (ex.: Alto Araguaia).</li>
-                <li>Escolha a <strong>categoria</strong>: Infraestrutura, Saúde, Agricultura ou Regularização.</li>
-                <li>Escreva a <strong>descrição</strong> do item (obra, doação, emenda…).</li>
-                <li>Informe o <strong>valor em R$</strong> e clique em <strong>Adicionar ao dossiê</strong>.</li>
-              </ol>
-              <p style={{ margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-                Depois de salvar, o formulário fica pronto para o próximo item do mesmo município.
-                Volte em <strong>Ver dossiê</strong> para conferir o card atualizado.
-              </p>
-            </div>
-
-            <form className="panel panel-pad form-grid" onSubmit={onSubmit} style={{ marginBottom: '1rem' }}>
-              <h3 style={{ marginTop: 0 }}>{editingId ? 'Editar item' : 'Lançar item no dossiê'}</h3>
-              <label>
-                Município *
-                <select
-                  className="select"
-                  required
-                  value={form.municipality_id}
-                  onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
-                >
-                  <option value="">Selecione o município</option>
-                  {municipalities.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Categoria *
-                <select
-                  className="select"
-                  required
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                >
-                  {(dossier?.categories || []).map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Valor (R$) *
-                <input
-                  className="input"
-                  required
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                  placeholder="Ex.: 1700000 ou 1.700.000,00"
-                />
-              </label>
-              <label style={{ gridColumn: '1 / -1' }}>
-                Descrição do item *
-                <input
-                  className="input"
-                  required
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Ex.: Ponte de concreto sobre o Ribeirão Gato Preto, MT-481 (60 m)"
-                />
-              </label>
-              <label style={{ gridColumn: '1 / -1' }}>
-                Observação (opcional)
-                <input
-                  className="input"
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="btn btn-primary" type="submit">
-                  {editingId ? 'Salvar alteração' : 'Adicionar ao dossiê'}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    className="btn btn-soft"
-                    onClick={() => {
-                      setEditingId(null);
-                      setForm(emptyForm);
-                    }}
-                  >
-                    Cancelar edição
-                  </button>
-                )}
-                <button type="button" className="btn btn-soft" onClick={() => setMode('dossie')}>
-                  Ver dossiê
-                </button>
-              </div>
-            </form>
-
-            <section className="panel panel-pad">
-              <h3 style={{ marginTop: 0 }}>Itens já lançados ({flatItems.length})</h3>
-              {flatItems.length ? (
-                <div className="table-wrap">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Município</th>
-                        <th>Categoria</th>
-                        <th>Descrição</th>
-                        <th>Valor</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {flatItems.map((item) => (
-                        <tr key={item.id}>
-                          <td>{item.municipality_name}</td>
-                          <td>{item.category_label}</td>
-                          <td>{item.description}</td>
-                          <td>{brl(item.amount)}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <button type="button" className="btn btn-soft btn-sm" onClick={() => startEdit(item)}>
-                              Editar
-                            </button>{' '}
-                            <button type="button" className="btn btn-danger btn-sm" onClick={() => removeItem(item)}>
-                              Remover
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <EmptyState>Nenhum item ainda — use o formulário acima.</EmptyState>
-              )}
-            </section>
-          </div>
-        )}
 
         <Toast message={toast} onClose={() => setToast('')} />
       </div>
