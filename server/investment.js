@@ -7,6 +7,7 @@ const CATEGORIES = [
   { id: 'infraestrutura', label: 'Infraestrutura', color: '#2F5233', tag: 'infra' },
   { id: 'saude', label: 'Saúde', color: '#8C3B2E', tag: 'saude' },
   { id: 'agricultura', label: 'Agricultura', color: '#A9781F', tag: 'agro' },
+  { id: 'educacao', label: 'Educação', color: '#4A5F8C', tag: 'educacao' },
   { id: 'regularizacao', label: 'Regularização Fundiária', color: '#345670', tag: 'fundiaria' },
   { id: 'outros', label: 'Outros', color: '#5a5a5a', tag: 'outros' },
 ];
@@ -14,10 +15,19 @@ const CATEGORIES = [
 const TAG_TO_CATEGORY = {
   infra: 'infraestrutura',
   infraestrutura: 'infraestrutura',
+  'infraestrutura / social': 'infraestrutura',
+  'infraestrutura social': 'infraestrutura',
+  social: 'infraestrutura',
   saude: 'saude',
   saúde: 'saude',
   agro: 'agricultura',
   agricultura: 'agricultura',
+  'agricultura / maquinarios': 'agricultura',
+  'agricultura / maquinários': 'agricultura',
+  maquinarios: 'agricultura',
+  maquinários: 'agricultura',
+  educacao: 'educacao',
+  educação: 'educacao',
   fundiaria: 'regularizacao',
   regularizacao: 'regularizacao',
   'regularização': 'regularizacao',
@@ -405,7 +415,69 @@ function resolveCategory(tagOrId, label) {
   if (TAG_TO_CATEGORY[raw]) return TAG_TO_CATEGORY[raw];
   const byLabel = CATEGORIES.find((c) => c.label.toLowerCase() === raw);
   if (byLabel) return byLabel.id;
+
+  // Word criativo: "AGRICULTURA / MAQUINÁRIOS", "INFRAESTRUTURA / SOCIAL"
+  const norm = stripAccents(raw).replace(/\s+/g, ' ');
+  if (TAG_TO_CATEGORY[norm]) return TAG_TO_CATEGORY[norm];
+  if (/educacao/.test(norm)) return 'educacao';
+  if (/saude/.test(norm)) return 'saude';
+  if (/agro|agricultura|maquin/.test(norm)) return 'agricultura';
+  if (/fundiar|regulariz/.test(norm)) return 'regularizacao';
+  if (/infra|social|paviment|ponte/.test(norm) && !/educacao/.test(norm)) return 'infraestrutura';
   return 'outros';
+}
+
+/** "O FEDERAL QUE MAIS INVESTIU EM ALTO TAQUARI" → Alto Taquari */
+function extractMunicipalityFromCriativoTitle(text) {
+  const m = String(text || '').match(
+    /(?:o\s+)?federal\s+que\s+mais\s+investiu\s+em\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s'.-]+?)(?:\s*$|\s{2,}|\n)/i,
+  ) || String(text || '').match(
+    /investiu\s+em\s+([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s'.-]{2,60})/i,
+  );
+  if (!m) return null;
+  return m[1].replace(/\s+/g, ' ').trim().replace(/[.•]+$/, '');
+}
+
+function isNoiseCriativoLine(line) {
+  const s = line.trim();
+  if (!s) return true;
+  if (/^área\s*\/\s*valor$/i.test(s)) return true;
+  if (/^entregas?\s+para\s+o\s+criativo$/i.test(s)) return true;
+  if (/^em\s+investimentos?$/i.test(s)) return true;
+  if (/^rodap[eé]/i.test(s)) return true;
+  if (/f[aá]bio\s+garcia/i.test(s) && /deputado/i.test(s)) return true;
+  if (/^\d{1,2}\s*\/\s*\d{1,2}$/.test(s)) return true; // "1 / 14"
+  if (/^o\s+federal\s+que\s+mais\s+investiu/i.test(s)) return true;
+  return false;
+}
+
+function isCategoryHeading(line) {
+  const clean = line
+    .replace(/^#+\s*/, '')
+    .replace(/:$/, '')
+    .replace(/\s+[—–-]\s*R\$.*$/i, '')
+    .trim();
+  if (!clean || clean.length > 80) return false;
+  // "AGRICULTURA / MAQUINÁRIOS" ou "SAÚDE" ou "EDUCAÇÃO"
+  const norm = stripAccents(clean);
+  if (isCategoryLine(clean)) return true;
+  if (/^(infraestrutura|saude|agricultura|educacao|regularizacao)(\s*\/\s*[\w\s]+)?$/i.test(norm)) {
+    return true;
+  }
+  // Área total colada: "AGRICULTURA / MAQUINÁRIOS R$ 571.800,00"
+  if (/^(infraestrutura|saude|agricultura|educacao|regularizacao)/i.test(norm) && /r\$/i.test(clean)) {
+    return true;
+  }
+  return false;
+}
+
+function categoryHeadingLabel(line) {
+  return line
+    .replace(/^#+\s*/, '')
+    .replace(/\s*[—–-]\s*R\$\s*[\d.,]+.*$/i, '')
+    .replace(/\s+R\$\s*[\d.,]+.*$/i, '')
+    .replace(/:$/, '')
+    .trim();
 }
 
 /**
@@ -501,21 +573,43 @@ function findMunicipalityByName(db, nome) {
 }
 
 function isCategoryLine(line) {
-  const clean = line.replace(/^#+\s*/, '').replace(/:$/, '').trim().toLowerCase();
-  return Boolean(TAG_TO_CATEGORY[clean] || CATEGORIES.some((c) => c.label.toLowerCase() === clean));
+  const clean = line
+    .replace(/^#+\s*/, '')
+    .replace(/:$/, '')
+    .replace(/\s+R\$\s*[\d.,]+.*$/i, '')
+    .trim()
+    .toLowerCase();
+  if (!clean) return false;
+  if (TAG_TO_CATEGORY[clean]) return true;
+  if (CATEGORIES.some((c) => c.label.toLowerCase() === clean)) return true;
+  const norm = stripAccents(clean);
+  if (TAG_TO_CATEGORY[norm]) return true;
+  return /^(infraestrutura|saude|agricultura|educacao|regularizacao)(\s*\/\s*.+)?$/i.test(norm);
 }
 
+/**
+ * Layout do Word do criativo:
+ * "O FEDERAL QUE MAIS INVESTIU EM ALTO TAQUARI"
+ * ÁREA / VALOR | ENTREGAS PARA O CRIATIVO
+ * AGRICULTURA / MAQUINÁRIOS + bullets com R$
+ */
 function parsePlainTextDossier(text) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !/^---+/.test(l));
+  const rawLines = String(text || '').split(/\r?\n/).map((l) => l.trim());
+  const lines = rawLines.filter((l) => l && !/^---+/.test(l));
   if (!lines.length) return [];
 
   const municipios = [];
   let current = null;
   let currentGroup = null;
+  let productionNotes = [];
 
   function ensureMuni(nome) {
+    const clean = String(nome || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+    // Evita recriar o mesmo município se o título repetir
+    if (current && stripAccents(current.nome) === stripAccents(clean)) return;
     current = {
-      nome,
+      nome: clean,
       nota: null,
       grupos: [],
     };
@@ -524,8 +618,15 @@ function parsePlainTextDossier(text) {
   }
 
   function ensureGroup(labelOrTag) {
+    if (!current) return;
     const category = resolveCategory(labelOrTag, labelOrTag);
     const meta = categoryMeta(category);
+    // Reusa grupo se a mesma categoria voltar (ex.: dois blocos INFRA)
+    const existing = current.grupos.find((g) => resolveCategory(g.tag, g.label) === category);
+    if (existing) {
+      currentGroup = existing;
+      return;
+    }
     currentGroup = {
       tag: meta.tag || category,
       label: meta.label,
@@ -534,12 +635,32 @@ function parsePlainTextDossier(text) {
     current.grupos.push(currentGroup);
   }
 
-  for (const line of lines) {
-    // Nota / observação
-    if (/^\*|nota\s*:|observ/i.test(line)) {
-      if (current) {
-        current.nota = line.replace(/^\*\s*/, '').replace(/^nota\s*:\s*/i, '').trim();
+  // Município no título do criativo
+  const fromTitle = extractMunicipalityFromCriativoTitle(lines.join('\n'));
+  if (fromTitle) ensureMuni(fromTitle);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+
+    if (isNoiseCriativoLine(line)) continue;
+
+    // Nota de produção / observação → rodapé do card
+    if (/^nota\s+de\s+produ/i.test(line) || /^nota\s*:/i.test(line) || /^\*/.test(line) || /^observ/i.test(line)) {
+      let note = line
+        .replace(/^\*\s*/, '')
+        .replace(/^nota\s+de\s+produ[cç][aã]o\s*:?\s*/i, '')
+        .replace(/^nota\s*:\s*/i, '')
+        .trim();
+      // Junta linhas seguintes da nota até próxima categoria/item forte
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1];
+        if (isNoiseCriativoLine(next) || isCategoryHeading(next) || /R\$\s*[\d.,]+/.test(next)) break;
+        if (/^rodap/i.test(next) || /^o\s+federal/i.test(next)) break;
+        note = `${note} ${next}`.trim();
+        i += 1;
       }
+      if (note) productionNotes.push(note);
+      if (current) current.nota = productionNotes.join(' ');
       continue;
     }
 
@@ -550,38 +671,48 @@ function parsePlainTextDossier(text) {
       continue;
     }
 
-    // Categoria sozinha na linha
-    if (isCategoryLine(line)) {
-      if (!current) continue;
-      ensureGroup(line.replace(/^#+\s*/, '').replace(/:$/, '').trim());
+    // Título criativo no meio do texto
+    const titleMuni = extractMunicipalityFromCriativoTitle(line);
+    if (titleMuni) {
+      ensureMuni(titleMuni);
       continue;
     }
 
-    // Só valor na linha (Word às vezes quebra descrição / R$)
+    // Categoria (ÁREA): "EDUCAÇÃO", "AGRICULTURA / MAQUINÁRIOS", opcionalmente com total
+    if (isCategoryHeading(line)) {
+      if (!current && fromTitle) ensureMuni(fromTitle);
+      if (!current) continue;
+      ensureGroup(categoryHeadingLabel(line));
+      continue;
+    }
+
+    // Só valor na linha (total da área à esquerda — ignora se não há item pendente)
     if (/^(?:R\$\s*)?[\d.,]+\s*$/i.test(line) || /^não\s*informado$/i.test(line)) {
       if (current && currentGroup && currentGroup.itens.length) {
         const last = currentGroup.itens[currentGroup.itens.length - 1];
         if (last.v == null) last.v = parseMoneyToken(line);
       }
+      // Totais de área / hero total sozinhos: ignorar
       continue;
     }
 
-    // Item com valor: "Descrição — R$ 1.000,00" | "Descrição | 1000" | "Descrição  R$ 1000"
+    // Item com valor: "Descrição — R$ 1.000,00" | "Descrição - R$ …"
     const itemMatch = line.match(
-      /^(?:[-•*]\s*)?(.+?)\s*(?:—+|–+|-+|\||\t)\s*(R\$\s*[\d.,]+|[\d.,]+|não\s*informado)\s*$/i,
+      /^(?:[-•*◦]\s*)?(.+?)\s*(?:—+|–+|-+|\||\t)\s*(R\$\s*[\d.,]+|[\d.,]+|não\s*informado)\s*$/i,
     ) || line.match(
-      /^(?:[-•*]\s*)?(.+?)\s+(R\$\s*[\d.,]+)\s*$/i,
+      /^(?:[-•*◦]\s*)?(.+?)\s+(R\$\s*[\d.,]+)\s*$/i,
     );
 
     if (itemMatch) {
       if (!current) {
-        // Sem município ainda — ignora ou cria genérico
-        continue;
+        if (fromTitle) ensureMuni(fromTitle);
+        else continue;
       }
-      if (!currentGroup) {
-        ensureGroup('infraestrutura');
-      }
-      const desc = itemMatch[1].trim().replace(/^[-•*]\s*/, '');
+      if (!currentGroup) ensureGroup('infraestrutura');
+      let desc = itemMatch[1].trim().replace(/^[-•*◦]\s*/, '');
+      // Evita cadastrar o total da área como item (descrição = nome da categoria)
+      if (isCategoryHeading(desc) || isCategoryLine(desc)) continue;
+      if (/^(área|entregas?|total|em investimentos?)$/i.test(desc)) continue;
       const val = parseMoneyToken(itemMatch[2]);
       if (!desc) continue;
       currentGroup.itens.push({ d: desc, v: val });
@@ -589,20 +720,32 @@ function parsePlainTextDossier(text) {
     }
 
     // Linha de item sem valor ainda (bullet) — valor pode vir na próxima
-    if (/^[-•*]\s+.+/.test(line) && current) {
+    if (/^[-•*◦]\s+.+/.test(line) && current) {
       if (!currentGroup) ensureGroup('infraestrutura');
-      currentGroup.itens.push({ d: line.replace(/^[-•*]\s+/, '').trim(), v: null });
+      const desc = line.replace(/^[-•*◦]\s+/, '').trim();
+      if (!isCategoryHeading(desc)) {
+        currentGroup.itens.push({ d: desc, v: null });
+      }
       continue;
     }
 
     // Linha curta sem valor → provavelmente nome de município (ex.: Alto Araguaia)
     const looksLikeCode = /[{}\[\]=;]|const\s|function\s|tag:|itens:/.test(line);
-    if (!looksLikeCode && line.length <= 60 && !/\d{3,}/.test(line) && !/^r\$/i.test(line)) {
-      // Se parece título de município
-      if (!isCategoryLine(line)) {
+    if (
+      !looksLikeCode
+      && line.length <= 60
+      && !/\d{3,}/.test(line)
+      && !/^r\$/i.test(line)
+      && !/investimentos?|criativo|rodap|federal|deputado/i.test(line)
+    ) {
+      if (!isCategoryHeading(line) && !isCategoryLine(line)) {
         ensureMuni(line);
       }
     }
+  }
+
+  if (productionNotes.length && municipios.length === 1 && !municipios[0].nota) {
+    municipios[0].nota = productionNotes.join(' ');
   }
 
   return municipios.filter((m) => m.nome && m.grupos.some((g) => g.itens.length));

@@ -28,7 +28,7 @@ function municipalityHintFromFilename(filename) {
 
 /**
  * Mammoth devolve texto com \n; tabelas viram linhas. Normalizamos um pouco
- * para o parsePlainTextDossier entender melhor.
+ * para o parsePlainTextDossier entender melhor (layout do criativo inclusivo).
  */
 function normalizeExtractedText(raw, filenameHint) {
   let text = String(raw || '')
@@ -41,23 +41,34 @@ function normalizeExtractedText(raw, filenameHint) {
 
   if (!text) return '';
 
-  // Se o doc não declara o município e o arquivo tem o nome, injeta no topo
+  // Título do criativo já carrega o município
+  const criativoMuni = text.match(
+    /(?:o\s+)?federal\s+que\s+mais\s+investiu\s+em\s+([^\n]+)/i,
+  );
+
   const hasMuniHeader = /(?:^|\n)\s*(?:munic[ií]pio\s*[:\-–]?\s*|#\s*)/i.test(text)
+    || Boolean(criativoMuni)
     || (filenameHint && new RegExp(`^\\s*${escapeRegExp(filenameHint)}\\s*$`, 'im').test(text.split('\n')[0] || ''));
 
   if (filenameHint && !hasMuniHeader) {
     const firstLine = (text.split('\n')[0] || '').trim();
     const firstLooksLikeMuni = firstLine.length <= 60
-      && !/infraestrutura|saúde|saude|agricultura|regulariza|r\$/i.test(firstLine)
+      && !/infraestrutura|saúde|saude|agricultura|educa|regulariza|r\$|federal|investiu/i.test(firstLine)
       && stripAccents(firstLine) === stripAccents(filenameHint);
     if (!firstLooksLikeMuni) {
       text = `Município: ${filenameHint}\n\n${text}`;
     }
   }
 
-  // "Descrição R$ 1.000,00" em linha única (comum em Word) — já coberto pelo parser
-  // Quebra "Categoria:" colada
-  text = text.replace(/\b(Infraestrutura|Saúde|Saude|Agricultura|Regularização Fundiária|Regularizacao Fundiaria)\s*:/gi, '\n$1\n');
+  // Quebra categorias do criativo coladas com ":"
+  text = text.replace(
+    /\b(Infraestrutura(?:\s*\/\s*Social)?|Saúde|Saude|Agricultura(?:\s*\/\s*Maquin[aá]rios)?|Educação|Educacao|Regularização Fundiária|Regularizacao Fundiaria)\s*:/gi,
+    '\n$1\n',
+  );
+
+  // Separadores de tabela do Word
+  text = text.replace(/\bÁREA\s*\/\s*VALOR\b/gi, '\n');
+  text = text.replace(/\bENTREGAS?\s+PARA\s+O\s+CRIATIVO\b/gi, '\n');
 
   return text.trim();
 }
