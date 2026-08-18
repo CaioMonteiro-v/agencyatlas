@@ -130,6 +130,8 @@ export const api = {
     request(`/api/campaigns/${slug}/investments`, { method: 'POST', body: JSON.stringify(body) }),
   importInvestments: (slug, body) =>
     request(`/api/campaigns/${slug}/investments/import`, { method: 'POST', body: JSON.stringify(body) }),
+  importInvestmentsDocx: (slug, body) =>
+    request(`/api/campaigns/${slug}/investments/import-docx`, { method: 'POST', body: JSON.stringify(body) }),
   clearInvestments: (slug, body = {}) =>
     request(`/api/campaigns/${slug}/investments/clear`, { method: 'POST', body: JSON.stringify(body) }),
   updateInvestment: (slug, id, body) =>

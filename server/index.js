@@ -36,7 +36,9 @@ const {
   importDossier,
   clearDossier,
   loadOfficialDossierSeed,
+  parsePlainTextDossier,
 } = require('./investment');
+const { parseDocxFiles } = require('./docx-dossier');
 const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
@@ -44,7 +46,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '40mb' }));
 app.use('/logos', express.static(path.join(__dirname, '../public/logos')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(requireAuth);
@@ -1730,7 +1732,8 @@ app.post('/api/campaigns/:slug/investments/import', (req, res) => {
       });
     }
 
-    const result = importDossier(db, campaign.id, source);
+    const merge = Boolean(req.body?.merge);
+    const result = importDossier(db, campaign.id, source, { merge });
     res.status(201).json(result);
   } catch (err) {
     console.error('POST investments import:', err);
@@ -1738,6 +1741,53 @@ app.post('/api/campaigns/:slug/investments/import', (req, res) => {
       error: err.message || 'Erro ao importar dossiê',
       missing: err.missing || undefined,
       detail: err.detail || undefined,
+    });
+  }
+});
+
+/**
+ * Upload de um ou vários Word (.docx) — um arquivo por município (ou vários no mesmo).
+ * Body JSON: { files: [{ name, content_base64 }], merge?: true }
+ * merge=true (padrão): só atualiza os municípios dos arquivos; não apaga o resto.
+ */
+app.post('/api/campaigns/:slug/investments/import-docx', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+    const files = Array.isArray(req.body?.files) ? req.body.files : [];
+    if (!files.length) {
+      return res.status(400).json({
+        error: 'Envie files: [{ name: "Alto Araguaia.docx", content_base64: "..." }]',
+      });
+    }
+    if (files.length > 40) {
+      return res.status(400).json({ error: 'Máximo 40 arquivos por vez' });
+    }
+
+    const { municipios, files: fileResults } = await parseDocxFiles(files, {
+      parsePlainText: parsePlainTextDossier,
+    });
+
+    if (!municipios.length) {
+      return res.status(400).json({
+        error: 'Nenhum município/itens reconhecidos nos Word. Confira categorias e valores em R$.',
+        files: fileResults,
+      });
+    }
+
+    const merge = req.body?.merge !== false; // padrão: mesclar
+    const result = importDossier(db, campaign.id, municipios, { merge });
+    res.status(201).json({
+      ...result,
+      files: fileResults,
+    });
+  } catch (err) {
+    console.error('POST investments import-docx:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Erro ao importar Word',
+      missing: err.missing || undefined,
+      files: err.files || undefined,
     });
   }
 });

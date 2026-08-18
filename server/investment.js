@@ -458,10 +458,18 @@ function parseDossierPaste(raw) {
   throw err;
 }
 
+function stripAccents(s) {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function parseMoneyToken(raw) {
   if (raw == null) return null;
   let s = String(raw).trim();
-  if (!s || /não\s*informado|n\/a|null/i.test(s)) return null;
+  if (!s || /não\s*informado|n\/?a|null|sem\s*valor/i.test(s)) return null;
   s = s.replace(/R\$\s*/gi, '').replace(/\s/g, '');
   if (!s) return null;
   // 1.030.556,00 ou 1030556.00 ou 1030556
@@ -469,6 +477,27 @@ function parseMoneyToken(raw) {
     return money(s.replace(/\./g, '').replace(',', '.'));
   }
   return money(s);
+}
+
+/** Resolve município por nome (exato, sem acento, ou contém). */
+function findMunicipalityByName(db, nome) {
+  const raw = String(nome || '').trim();
+  if (!raw) return null;
+  const exact = db.prepare('SELECT id, name FROM municipalities WHERE LOWER(name) = LOWER(?)').get(raw);
+  if (exact) return exact;
+
+  const target = stripAccents(raw);
+  const all = db.prepare('SELECT id, name FROM municipalities').all();
+  const byNorm = all.find((m) => stripAccents(m.name) === target);
+  if (byNorm) return byNorm;
+
+  // Contém / contido (ex.: "Araguaia" vs "Alto Araguaia") — só se único
+  const partial = all.filter((m) => {
+    const n = stripAccents(m.name);
+    return n.includes(target) || target.includes(n);
+  });
+  if (partial.length === 1) return partial[0];
+  return null;
 }
 
 function isCategoryLine(line) {
@@ -528,6 +557,15 @@ function parsePlainTextDossier(text) {
       continue;
     }
 
+    // Só valor na linha (Word às vezes quebra descrição / R$)
+    if (/^(?:R\$\s*)?[\d.,]+\s*$/i.test(line) || /^não\s*informado$/i.test(line)) {
+      if (current && currentGroup && currentGroup.itens.length) {
+        const last = currentGroup.itens[currentGroup.itens.length - 1];
+        if (last.v == null) last.v = parseMoneyToken(line);
+      }
+      continue;
+    }
+
     // Item com valor: "Descrição — R$ 1.000,00" | "Descrição | 1000" | "Descrição  R$ 1000"
     const itemMatch = line.match(
       /^(?:[-•*]\s*)?(.+?)\s*(?:—+|–+|-+|\||\t)\s*(R\$\s*[\d.,]+|[\d.,]+|não\s*informado)\s*$/i,
@@ -547,6 +585,13 @@ function parsePlainTextDossier(text) {
       const val = parseMoneyToken(itemMatch[2]);
       if (!desc) continue;
       currentGroup.itens.push({ d: desc, v: val });
+      continue;
+    }
+
+    // Linha de item sem valor ainda (bullet) — valor pode vir na próxima
+    if (/^[-•*]\s+.+/.test(line) && current) {
+      if (!currentGroup) ensureGroup('infraestrutura');
+      currentGroup.itens.push({ d: line.replace(/^[-•*]\s+/, '').trim(), v: null });
       continue;
     }
 
@@ -614,9 +659,13 @@ function normalizeMunicipiosInput(list) {
 }
 
 /**
- * Substitui o dossiê da campanha pelo conteúdo parseado (apaga e recria).
+ * Importa o dossiê parseado.
+ * @param {{ merge?: boolean }} options
+ *   merge=false (padrão no texto/oficial): apaga o dossiê inteiro e recria
+ *   merge=true (Word por município): só substitui os municípios enviados
  */
-function importDossier(db, campaignId, municipiosInput) {
+function importDossier(db, campaignId, municipiosInput, options = {}) {
+  const merge = Boolean(options.merge);
   const municipios = Array.isArray(municipiosInput)
     ? normalizeMunicipiosInput(municipiosInput)
     : parseDossierPaste(municipiosInput);
@@ -627,18 +676,16 @@ function importDossier(db, campaignId, municipiosInput) {
     throw err;
   }
 
-  const findMuni = db.prepare('SELECT id, name FROM municipalities WHERE LOWER(name) = LOWER(?)');
-  // removed broken COLLATE approach
   const missing = [];
   const resolved = [];
 
   for (const block of municipios) {
-    const muni = findMuni.get(block.nome);
+    const muni = findMunicipalityByName(db, block.nome);
     if (!muni) {
       missing.push(block.nome);
       continue;
     }
-    resolved.push({ ...block, municipality_id: muni.id });
+    resolved.push({ ...block, municipality_id: muni.id, municipality_name: muni.name });
   }
 
   if (!resolved.length) {
@@ -661,6 +708,9 @@ function importDossier(db, campaignId, municipiosInput) {
     INSERT INTO campaign_investment_muni_notes (campaign_id, municipality_id, footnote, sort_order)
     VALUES (?, ?, ?, ?)
   `);
+  const deleteNoteForMuni = db.prepare(`
+    DELETE FROM campaign_investment_muni_notes WHERE campaign_id = ? AND municipality_id = ?
+  `);
 
   // Coordenador principal já vinculado ao município no Atlas
   const coordForMuni = db.prepare(`
@@ -674,8 +724,21 @@ function importDossier(db, campaignId, municipiosInput) {
 
   let inserted = 0;
   const run = () => {
-    clearItems.run(campaignId);
-    clearNotes.run(campaignId);
+    if (merge) {
+      const ids = [...new Set(resolved.map((b) => b.municipality_id))];
+      const placeholders = ids.map(() => '?').join(',');
+      db.prepare(`
+        DELETE FROM campaign_investments
+        WHERE campaign_id = ? AND municipality_id IN (${placeholders})
+      `).run(campaignId, ...ids);
+      for (const id of ids) {
+        deleteNoteForMuni.run(campaignId, id);
+      }
+    } else {
+      clearItems.run(campaignId);
+      clearNotes.run(campaignId);
+    }
+
     for (const block of resolved) {
       if (block.nota || block.sort_order != null) {
         insertNote.run(campaignId, block.municipality_id, block.nota || null, block.sort_order || 0);
@@ -714,8 +777,10 @@ function importDossier(db, campaignId, municipiosInput) {
 
   return {
     ok: true,
+    merge,
     municipalities_imported: resolved.length,
     municipalities_missing: missing,
+    municipalities: resolved.map((b) => b.municipality_name || b.nome),
     items_inserted: inserted,
     dossier: buildDossier(db, campaignId),
   };
@@ -792,8 +857,10 @@ module.exports = {
   upsertMunicipalityNote,
   listMunicipalityNotes,
   parseDossierPaste,
+  parsePlainTextDossier,
   importDossier,
   clearDossier,
   loadOfficialDossierSeed,
+  findMunicipalityByName,
   AMOUNT_UNKNOWN,
 };

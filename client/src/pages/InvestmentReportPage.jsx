@@ -98,6 +98,19 @@ Infraestrutura
 Construção de praça — R$ 1.500.000,00
 `;
 
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error(`Falha ao ler ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function InvestmentReportPage() {
   const { campaign } = useOutletContext();
   const [mode, setMode] = useState('dossie');
@@ -109,7 +122,11 @@ export default function InvestmentReportPage() {
   const [filterMuni, setFilterMuni] = useState('');
   const [filterCoord, setFilterCoord] = useState('');
   const [lastImport, setLastImport] = useState(null);
+  const [docxFiles, setDocxFiles] = useState([]);
+  const [docxMerge, setDocxMerge] = useState(true);
+  const [docxDragging, setDocxDragging] = useState(false);
   const printRootRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   async function load(coordinatorId = filterCoord) {
     try {
@@ -154,6 +171,58 @@ export default function InvestmentReportPage() {
         : '';
       setToast(
         `Dossiê gerado: ${res.municipalities_imported} município(s), ${res.items_inserted} item(ns)${miss}`,
+      );
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function addDocxFiles(list) {
+    const incoming = Array.from(list || []).filter((f) => /\.docx$/i.test(f.name));
+    if (!incoming.length) {
+      setToast('Selecione arquivos .docx (Word). Se estiver em .doc, salve como .docx.');
+      return;
+    }
+    setDocxFiles((prev) => {
+      const map = new Map(prev.map((f) => [f.name + f.size, f]));
+      for (const f of incoming) map.set(f.name + f.size, f);
+      return Array.from(map.values());
+    });
+  }
+
+  async function onDocxImport(e) {
+    e.preventDefault();
+    if (!docxFiles.length) {
+      setToast('Selecione os Word (.docx) dos municípios');
+      return;
+    }
+    setImporting(true);
+    try {
+      const files = await Promise.all(
+        docxFiles.map(async (file) => ({
+          name: file.name,
+          content_base64: await readFileAsBase64(file),
+        })),
+      );
+      const res = await api.importInvestmentsDocx(campaign.slug, {
+        files,
+        merge: docxMerge,
+      });
+      setLastImport(res);
+      setDocxFiles([]);
+      setFilterCoord('');
+      setFilterMuni('');
+      setMode('dossie');
+      await load('');
+      const fail = (res.files || []).filter((f) => !f.ok);
+      const miss = res.municipalities_missing?.length
+        ? ` · ${res.municipalities_missing.length} nome(s) não achados`
+        : '';
+      const failMsg = fail.length ? ` · ${fail.length} arquivo(s) com problema` : '';
+      setToast(
+        `Word importado: ${res.municipalities_imported} município(s), ${res.items_inserted} item(ns)${miss}${failMsg}`,
       );
     } catch (err) {
       setToast(err.message);
@@ -230,8 +299,8 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Cola o texto normal (município, categoria, itens e valores) — o Atlas monta o dossiê.
-            Depois escolha o <strong>coordenador</strong> já cadastrado para puxar o dossiê completo dele.
+            Envie o <strong>Word (.docx)</strong> de cada município — o Atlas lê, monta os cards e liga no coordenador.
+            Também dá para colar texto. Depois filtre pelo <strong>coordenador</strong> cadastrado.
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -243,15 +312,25 @@ export default function InvestmentReportPage() {
             </button>
             <button
               type="button"
+              className={`chip ${mode === 'word' ? 'active' : ''}`}
+              onClick={() => setMode('word')}
+            >
+              Enviar Word
+            </button>
+            <button
+              type="button"
               className={`chip ${mode === 'importar' ? 'active' : ''}`}
               onClick={() => setMode('importar')}
             >
-              Colar texto / gerar
+              Colar texto
             </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
-            <button type="button" className="btn btn-accent btn-sm" onClick={() => setMode('importar')}>
-              Colar texto e gerar
+            <button type="button" className="btn btn-accent btn-sm" onClick={() => setMode('word')}>
+              Enviar Word (.docx)
+            </button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => setMode('importar')}>
+              Colar texto
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={loadOfficial} disabled={importing}>
               Carregar dossiê oficial (14 mun.)
@@ -269,6 +348,108 @@ export default function InvestmentReportPage() {
         </div>
 
         {error && <EmptyState>{error}</EmptyState>}
+
+        {mode === 'word' && (
+          <form className="no-print panel panel-pad dossier-import" onSubmit={onDocxImport}>
+            <h3 style={{ marginTop: 0 }}>Enviar Word por município</h3>
+            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+              Um arquivo <strong>.docx</strong> por município (ou vários de uma vez). Ideal: nome do arquivo =
+              município (ex.: <em>Alto Araguaia.docx</em>). Dentro do Word: categoria (Infraestrutura, Saúde…)
+              e cada item com valor em R$.
+            </p>
+
+            <div
+              className={`dossier-drop ${docxDragging ? 'is-dragging' : ''}`}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                setDocxDragging(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDocxDragging(true);
+              }}
+              onDragLeave={() => setDocxDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDocxDragging(false);
+                addDocxFiles(e.dataTransfer.files);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
+              }}
+            >
+              <strong>Solte os .docx aqui</strong>
+              <span>ou clique para escolher · até 40 arquivos</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                multiple
+                hidden
+                onChange={(e) => {
+                  addDocxFiles(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+
+            {docxFiles.length ? (
+              <ul className="dossier-file-list">
+                {docxFiles.map((f) => (
+                  <li key={`${f.name}-${f.size}`}>
+                    <span>{f.name}</span>
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-sm"
+                      onClick={() => setDocxFiles((prev) => prev.filter((x) => x !== f))}
+                    >
+                      Remover
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <label className="dossier-check">
+              <input
+                type="checkbox"
+                checked={docxMerge}
+                onChange={(e) => setDocxMerge(e.target.checked)}
+              />
+              Mesclar: atualiza só esses municípios e mantém o restante do dossiê
+            </label>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="submit" disabled={importing || !docxFiles.length}>
+                {importing ? 'Lendo Word…' : `Gerar dossiê (${docxFiles.length})`}
+              </button>
+              <button type="button" className="btn btn-soft" onClick={() => setDocxFiles([])} disabled={!docxFiles.length}>
+                Limpar lista
+              </button>
+              <button type="button" className="btn btn-soft" onClick={() => setMode('dossie')}>
+                Voltar ao dossiê
+              </button>
+            </div>
+
+            {lastImport?.files?.some((f) => !f.ok) ? (
+              <p className="dossier-import__warn">
+                Arquivos com problema:{' '}
+                {lastImport.files
+                  .filter((f) => !f.ok)
+                  .map((f) => `${f.name} (${f.error})`)
+                  .join(' · ')}
+              </p>
+            ) : null}
+            {lastImport?.municipalities_missing?.length ? (
+              <p className="dossier-import__warn">
+                Municípios não encontrados na base: {lastImport.municipalities_missing.join(', ')}
+              </p>
+            ) : null}
+          </form>
+        )}
 
         {mode === 'importar' && (
           <form className="no-print panel panel-pad dossier-import" onSubmit={onPasteImport}>

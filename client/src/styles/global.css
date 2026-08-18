@@ -2608,6 +2608,71 @@ th {
   font-size: 0.88rem;
 }
 
+.dossier-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 140px;
+  padding: 1.25rem;
+  margin: 0.75rem 0 1rem;
+  border: 1.5px dashed color-mix(in srgb, var(--dossier-ink-soft) 45%, transparent);
+  background: color-mix(in srgb, var(--dossier-paper, #fffef9) 80%, #e8efe6);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dossier-drop strong {
+  font-size: 1.05rem;
+  color: var(--dossier-ink, #1c241c);
+}
+
+.dossier-drop span {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.dossier-drop.is-dragging {
+  border-color: var(--dossier-forest, #2f5233);
+  background: color-mix(in srgb, var(--dossier-forest, #2f5233) 12%, #fff);
+}
+
+.dossier-file-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dossier-file-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+  border-bottom: 1px solid color-mix(in srgb, var(--dossier-ink-soft) 18%, transparent);
+  font-size: 0.9rem;
+}
+
+.dossier-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--dossier-ink-soft, #3d4a3d);
+  cursor: pointer;
+}
+
+.dossier-check input {
+  margin-top: 0.2rem;
+}
+
 .dossier-screen-print-only {
   display: none;
 }
