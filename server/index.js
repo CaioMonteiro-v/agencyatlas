@@ -26,11 +26,13 @@ const {
 const {
   CATEGORIES: INVESTMENT_CATEGORIES,
   listInvestments,
+  buildDossier,
   buildSummary: buildInvestmentSummary,
   createInvestment,
   updateInvestment,
   deleteInvestment,
   getInvestment,
+  upsertMunicipalityNote,
 } = require('./investment');
 const supabaseStorage = require('./supabase-storage');
 
@@ -1672,30 +1674,31 @@ app.delete('/api/campaigns/:slug/demands/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-/* ---------- Relatório de investimento (manual) ---------- */
+/* ---------- Dossiê de investimento por município ---------- */
 app.get('/api/campaigns/:slug/investments', (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const dossier = buildDossier(db, campaign.id);
     const items = listInvestments(db, campaign.id, {
-      coordinatorId: req.query.coordinator_id,
+      municipalityId: req.query.municipality_id,
       category: req.query.category,
-      from: req.query.from,
-      to: req.query.to,
     });
     res.json({
-      items,
-      summary: buildInvestmentSummary(items),
+      ...dossier,
+      items: req.query.municipality_id || req.query.category ? items : dossier.items,
+      summary: buildInvestmentSummary(items.length ? items : dossier.items),
       categories: INVESTMENT_CATEGORIES,
       campaign: {
         slug: campaign.slug,
         name: campaign.name,
         candidate: campaign.candidate,
+        logo_url: campaign.logo_url,
       },
     });
   } catch (err) {
     console.error('GET investments:', err);
-    res.status(500).json({ error: err.message || 'Erro ao carregar investimentos' });
+    res.status(500).json({ error: err.message || 'Erro ao carregar dossiê de investimentos' });
   }
 });
 
@@ -1704,8 +1707,7 @@ app.post('/api/campaigns/:slug/investments', (req, res) => {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const row = createInvestment(db, campaign.id, req.body || {});
-    const items = listInvestments(db, campaign.id);
-    res.status(201).json({ item: row, summary: buildInvestmentSummary(items) });
+    res.status(201).json({ item: row, dossier: buildDossier(db, campaign.id) });
   } catch (err) {
     console.error('POST investments:', err);
     res.status(err.status || 500).json({ error: err.message || 'Erro ao lançar investimento' });
@@ -1717,12 +1719,11 @@ app.patch('/api/campaigns/:slug/investments/:id', (req, res) => {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const updated = updateInvestment(db, campaign.id, Number(req.params.id), req.body || {});
-    if (!updated) return res.status(404).json({ error: 'Lançamento não encontrado' });
-    const items = listInvestments(db, campaign.id);
-    res.json({ item: updated, summary: buildInvestmentSummary(items) });
+    if (!updated) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json({ item: updated, dossier: buildDossier(db, campaign.id) });
   } catch (err) {
     console.error('PATCH investments:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar investimento' });
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar item' });
   }
 });
 
@@ -1731,12 +1732,31 @@ app.delete('/api/campaigns/:slug/investments/:id', (req, res) => {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const ok = deleteInvestment(db, campaign.id, Number(req.params.id));
-    if (!ok) return res.status(404).json({ error: 'Lançamento não encontrado' });
-    const items = listInvestments(db, campaign.id);
-    res.json({ ok: true, summary: buildInvestmentSummary(items) });
+    if (!ok) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json({ ok: true, dossier: buildDossier(db, campaign.id) });
   } catch (err) {
     console.error('DELETE investments:', err);
-    res.status(500).json({ error: err.message || 'Erro ao remover investimento' });
+    res.status(500).json({ error: err.message || 'Erro ao remover item' });
+  }
+});
+
+app.put('/api/campaigns/:slug/investments/municipality-note', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const municipalityId = Number(req.body.municipality_id);
+    if (!municipalityId) return res.status(400).json({ error: 'municipality_id obrigatório' });
+    upsertMunicipalityNote(
+      db,
+      campaign.id,
+      municipalityId,
+      req.body.footnote,
+      req.body.sort_order,
+    );
+    res.json({ ok: true, dossier: buildDossier(db, campaign.id) });
+  } catch (err) {
+    console.error('PUT investment muni note:', err);
+    res.status(500).json({ error: err.message || 'Erro ao salvar nota do município' });
   }
 });
 
@@ -1744,7 +1764,7 @@ app.get('/api/campaigns/:slug/investments/:id', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
   const row = getInvestment(db, campaign.id, Number(req.params.id));
-  if (!row) return res.status(404).json({ error: 'Lançamento não encontrado' });
+  if (!row) return res.status(404).json({ error: 'Item não encontrado' });
   res.json(row);
 });
 

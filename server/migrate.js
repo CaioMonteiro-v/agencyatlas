@@ -513,8 +513,21 @@ function migrateAnalyticsSchema(db) {
           receipt_ref TEXT,
           notes TEXT,
           created_by TEXT,
+          sort_order INTEGER DEFAULT 0,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS campaign_investment_muni_notes (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          municipality_id INTEGER NOT NULL REFERENCES municipalities(id) ON DELETE CASCADE,
+          footnote TEXT,
+          sort_order INTEGER DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (campaign_id, municipality_id)
         )
       `);
     } else {
@@ -531,6 +544,7 @@ function migrateAnalyticsSchema(db) {
           receipt_ref TEXT,
           notes TEXT,
           created_by TEXT,
+          sort_order INTEGER DEFAULT 0,
           created_at TEXT DEFAULT (datetime('now')),
           updated_at TEXT DEFAULT (datetime('now')),
           FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -538,9 +552,25 @@ function migrateAnalyticsSchema(db) {
           FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
         )
       `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS campaign_investment_muni_notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          municipality_id INTEGER NOT NULL,
+          footnote TEXT,
+          sort_order INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE (campaign_id, municipality_id),
+          FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+          FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE CASCADE
+        )
+      `);
     }
     db.exec('CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_invest_muni ON campaign_investments(municipality_id)');
+    ensureColumn(db, 'campaign_investments', 'sort_order', 'INTEGER DEFAULT 0');
   } catch (err) {
     console.warn('migrate campaign_investments:', err.message);
   }

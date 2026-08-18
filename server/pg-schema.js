@@ -248,8 +248,20 @@ CREATE TABLE IF NOT EXISTS campaign_investments (
   receipt_ref TEXT,
   notes TEXT,
   created_by TEXT,
+  sort_order INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS campaign_investment_muni_notes (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  municipality_id INTEGER NOT NULL REFERENCES municipalities(id) ON DELETE CASCADE,
+  footnote TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (campaign_id, municipality_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
@@ -265,6 +277,7 @@ CREATE INDEX IF NOT EXISTS idx_demands_coord ON territory_demands(coordinator_id
 CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id);
 CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id);
+CREATE INDEX IF NOT EXISTS idx_invest_muni ON campaign_investments(municipality_id);
 `;
 
 module.exports = { PG_SCHEMA };

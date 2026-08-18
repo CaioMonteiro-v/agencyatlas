@@ -118,12 +118,10 @@ export const api = {
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
-  getInvestments: (slug, { coordinator_id, category, from, to } = {}) => {
+  getInvestments: (slug, { municipality_id, category } = {}) => {
     const qs = new URLSearchParams();
-    if (coordinator_id) qs.set('coordinator_id', coordinator_id);
+    if (municipality_id) qs.set('municipality_id', municipality_id);
     if (category) qs.set('category', category);
-    if (from) qs.set('from', from);
-    if (to) qs.set('to', to);
     const q = qs.toString();
     return request(`/api/campaigns/${slug}/investments${q ? `?${q}` : ''}`);
   },
@@ -133,6 +131,11 @@ export const api = {
     request(`/api/campaigns/${slug}/investments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteInvestment: (slug, id) =>
     request(`/api/campaigns/${slug}/investments/${id}`, { method: 'DELETE' }),
+  upsertInvestmentMuniNote: (slug, body) =>
+    request(`/api/campaigns/${slug}/investments/municipality-note`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
   getHealth: () => request('/api/health'),
   getDemandTree: (slug) => request(`/api/campaigns/${slug}/demands/tree`),
   getDemands: (slug, { coordinator_id, municipality_id, status } = {}) => {

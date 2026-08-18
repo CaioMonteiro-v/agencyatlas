@@ -276,7 +276,71 @@ function seedProduction(db) {
   ensureBaseCampaign(db);
   seedMunicipalities(db);
   migrateLegacyCoordinators(db);
+  seedDossierInvestments(db);
   console.log('Base pronta (campanha + 142 municípios). Sem nomes fake — alimente pelo /admin.');
+}
+
+/**
+ * Importa o dossiê regional (emendas/viabilizações) se a campanha ainda não tiver itens.
+ */
+function seedDossierInvestments(db) {
+  const campaign = db.prepare("SELECT id FROM campaigns WHERE slug = 'fabio-garcia'").get();
+  if (!campaign) return;
+
+  const existing = db.prepare(
+    'SELECT COUNT(*) AS c FROM campaign_investments WHERE campaign_id = ?'
+  ).get(campaign.id);
+  if (existing?.c > 0) {
+    console.log(`Dossiê de investimentos: já existem ${existing.c} itens — seed ignorado.`);
+    return;
+  }
+
+  let dossier;
+  try {
+    dossier = require('./data/dossier-investments-seed');
+  } catch (err) {
+    console.warn('seed dossier: arquivo ausente', err.message);
+    return;
+  }
+
+  const findMuni = db.prepare('SELECT id FROM municipalities WHERE name = ?');
+  const insertItem = db.prepare(`
+    INSERT INTO campaign_investments (
+      campaign_id, municipality_id, category, description, amount, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const insertNote = db.prepare(`
+    INSERT INTO campaign_investment_muni_notes (campaign_id, municipality_id, footnote, sort_order)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  let inserted = 0;
+  for (const block of dossier) {
+    const muni = findMuni.get(block.municipality);
+    if (!muni) {
+      console.warn(`Dossiê: município não encontrado: ${block.municipality}`);
+      continue;
+    }
+    if (block.footnote || block.sort_order != null) {
+      try {
+        insertNote.run(campaign.id, muni.id, block.footnote || null, block.sort_order || 0);
+      } catch {
+        /* unique already */
+      }
+    }
+    (block.items || []).forEach((item, idx) => {
+      insertItem.run(
+        campaign.id,
+        muni.id,
+        item.category || 'infraestrutura',
+        item.description,
+        Number(item.amount) || 0,
+        idx,
+      );
+      inserted += 1;
+    });
+  }
+  console.log(`Dossiê de investimentos: ${inserted} itens importados.`);
 }
 
 module.exports = {
@@ -286,4 +350,5 @@ module.exports = {
   seedMunicipalities,
   loadMunicipalities,
   migrateLegacyCoordinators,
+  seedDossierInvestments,
 };

@@ -1,22 +1,18 @@
 /**
- * Relatório de investimento da campanha — lançamentos manuais por coordenador.
- * Sem relação com Meta/Instagram/Bitly: só o que foi investido no território.
+ * Dossiê regional de investimentos (emendas / viabilizações) por município.
+ * Manual — sem Meta/Instagram. Foco: MT, card por município, categorias accordion.
  */
 
 const CATEGORIES = [
-  { id: 'combustivel', label: 'Combustível / transporte' },
-  { id: 'material', label: 'Material gráfico' },
-  { id: 'alimentacao', label: 'Alimentação' },
-  { id: 'publicidade', label: 'Publicidade / impulsionamento' },
-  { id: 'equipe', label: 'Equipe / diárias' },
-  { id: 'eventos', label: 'Eventos / estrutura' },
-  { id: 'hospedagem', label: 'Hospedagem' },
-  { id: 'comunicacao', label: 'Comunicação / internet' },
-  { id: 'outros', label: 'Outros' },
+  { id: 'infraestrutura', label: 'Infraestrutura', color: '#3d5c45' },
+  { id: 'saude', label: 'Saúde', color: '#8b4a3b' },
+  { id: 'agricultura', label: 'Agricultura', color: '#9a6b2f' },
+  { id: 'regularizacao', label: 'Regularização fundiária', color: '#5a6b7a' },
+  { id: 'outros', label: 'Outros', color: '#5a5a5a' },
 ];
 
-function categoryLabel(id) {
-  return CATEGORIES.find((c) => c.id === id)?.label || id || 'Outros';
+function categoryMeta(id) {
+  return CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
 }
 
 function money(n) {
@@ -24,102 +20,178 @@ function money(n) {
 }
 
 function enrichRow(row) {
+  const meta = categoryMeta(row.category);
   return {
     ...row,
     amount: money(row.amount),
-    category_label: categoryLabel(row.category),
+    category_label: meta.label,
+    category_color: meta.color,
   };
 }
 
-function listInvestments(db, campaignId, { coordinatorId, category, from, to } = {}) {
+function listInvestments(db, campaignId, { municipalityId, category } = {}) {
   let sql = `
     SELECT i.*,
-      c.name AS coordinator_name,
       m.name AS municipality_name
     FROM campaign_investments i
-    LEFT JOIN coordinators c ON c.id = i.coordinator_id
     LEFT JOIN municipalities m ON m.id = i.municipality_id
     WHERE i.campaign_id = ?
   `;
   const params = [campaignId];
-
-  if (coordinatorId) {
-    sql += ' AND i.coordinator_id = ?';
-    params.push(Number(coordinatorId));
+  if (municipalityId) {
+    sql += ' AND i.municipality_id = ?';
+    params.push(Number(municipalityId));
   }
   if (category) {
     sql += ' AND i.category = ?';
     params.push(String(category));
   }
-  if (from) {
-    sql += ' AND i.invested_at >= ?';
-    params.push(String(from).slice(0, 10));
-  }
-  if (to) {
-    sql += ' AND i.invested_at <= ?';
-    params.push(String(to).slice(0, 10));
-  }
-
-  sql += ' ORDER BY i.invested_at DESC, i.id DESC';
+  sql += ' ORDER BY m.name ASC, i.sort_order ASC, i.id ASC';
   return db.prepare(sql).all(...params).map(enrichRow);
 }
 
-function buildSummary(items) {
-  const total = money(items.reduce((s, r) => s + money(r.amount), 0));
-  const byCoordinatorMap = new Map();
-  const byCategoryMap = new Map();
+function listMunicipalityNotes(db, campaignId) {
+  try {
+    return db.prepare(`
+      SELECT * FROM campaign_investment_muni_notes WHERE campaign_id = ?
+    `).all(campaignId);
+  } catch {
+    return [];
+  }
+}
 
+function upsertMunicipalityNote(db, campaignId, municipalityId, footnote, sortOrder) {
+  const existing = db.prepare(`
+    SELECT id FROM campaign_investment_muni_notes
+    WHERE campaign_id = ? AND municipality_id = ?
+  `).get(campaignId, municipalityId);
+  if (existing) {
+    db.prepare(`
+      UPDATE campaign_investment_muni_notes SET
+        footnote = ?,
+        sort_order = COALESCE(?, sort_order),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      footnote ? String(footnote).trim() : null,
+      sortOrder != null ? Number(sortOrder) : null,
+      existing.id,
+    );
+    return existing.id;
+  }
+  const result = db.prepare(`
+    INSERT INTO campaign_investment_muni_notes (campaign_id, municipality_id, footnote, sort_order)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    campaignId,
+    municipalityId,
+    footnote ? String(footnote).trim() : null,
+    sortOrder != null ? Number(sortOrder) : 0,
+  );
+  return result.lastInsertRowid;
+}
+
+/**
+ * Monta o dossiê: municípios com totais e categorias colapsáveis.
+ */
+function buildDossier(db, campaignId) {
+  const items = listInvestments(db, campaignId);
+  const notes = listMunicipalityNotes(db, campaignId);
+  const noteByMuni = new Map(notes.map((n) => [n.municipality_id, n]));
+
+  const byMuni = new Map();
   for (const item of items) {
-    const coordKey = item.coordinator_id || 0;
-    const coordName = item.coordinator_name || 'Campanha (sem coordenador)';
-    if (!byCoordinatorMap.has(coordKey)) {
-      byCoordinatorMap.set(coordKey, {
-        coordinator_id: item.coordinator_id || null,
-        coordinator_name: coordName,
+    if (!item.municipality_id) continue;
+    if (!byMuni.has(item.municipality_id)) {
+      const note = noteByMuni.get(item.municipality_id);
+      byMuni.set(item.municipality_id, {
+        municipality_id: item.municipality_id,
+        municipality_name: item.municipality_name || 'Município',
+        sort_order: note?.sort_order ?? 9999,
+        footnote: note?.footnote || null,
         total: 0,
         count: 0,
+        categories: {},
       });
     }
-    const c = byCoordinatorMap.get(coordKey);
-    c.total = money(c.total + money(item.amount));
-    c.count += 1;
+    const muni = byMuni.get(item.municipality_id);
+    muni.total = money(muni.total + item.amount);
+    muni.count += 1;
 
-    const cat = item.category || 'outros';
-    if (!byCategoryMap.has(cat)) {
-      byCategoryMap.set(cat, {
-        category: cat,
-        category_label: categoryLabel(cat),
+    const catId = item.category || 'outros';
+    if (!muni.categories[catId]) {
+      const meta = categoryMeta(catId);
+      muni.categories[catId] = {
+        category: catId,
+        category_label: meta.label,
+        category_color: meta.color,
         total: 0,
         count: 0,
-      });
+        items: [],
+      };
     }
-    const k = byCategoryMap.get(cat);
-    k.total = money(k.total + money(item.amount));
-    k.count += 1;
+    const cat = muni.categories[catId];
+    cat.total = money(cat.total + item.amount);
+    cat.count += 1;
+    cat.items.push({
+      id: item.id,
+      description: item.description,
+      amount: item.amount,
+      receipt_ref: item.receipt_ref,
+      notes: item.notes,
+      sort_order: item.sort_order,
+    });
   }
 
-  const by_coordinator = [...byCoordinatorMap.values()]
-    .map((row) => ({
-      ...row,
-      pct: total ? Math.round((row.total / total) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
+  // Ordem estável das categorias no card
+  const catOrder = CATEGORIES.map((c) => c.id);
 
-  const by_category = [...byCategoryMap.values()]
-    .map((row) => ({
-      ...row,
-      pct: total ? Math.round((row.total / total) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.total - a.total);
+  let municipalities = [...byMuni.values()].map((m) => ({
+    ...m,
+    categories: catOrder
+      .filter((id) => m.categories[id])
+      .map((id) => m.categories[id])
+      .concat(
+        Object.keys(m.categories)
+          .filter((id) => !catOrder.includes(id))
+          .map((id) => m.categories[id]),
+      ),
+  }));
+
+  municipalities.sort((a, b) => {
+    if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+    return String(a.municipality_name).localeCompare(String(b.municipality_name), 'pt-BR');
+  });
+
+  municipalities = municipalities.map((m, idx) => ({
+    ...m,
+    index: idx + 1,
+  }));
+
+  const grand_total = money(municipalities.reduce((s, m) => s + m.total, 0));
 
   return {
-    total,
-    count: items.length,
-    coordinators_with_spend: by_coordinator.filter((c) => c.coordinator_id).length,
-    average_per_entry: items.length ? money(total / items.length) : 0,
-    by_coordinator,
-    by_category,
+    title: 'Investimentos por Município',
+    eyebrow: 'Dossiê regional · Estado de Mato Grosso',
+    subtitle:
+      'Levantamento organizado por município, com o total viabilizado e a lista item a item nas categorias Infraestrutura, Saúde, Agricultura e Regularização fundiária.',
+    municipality_count: municipalities.length,
+    item_count: items.length,
+    grand_total,
+    municipalities,
+    categories: CATEGORIES,
+    items,
   };
+}
+
+function getInvestment(db, campaignId, id) {
+  const row = db.prepare(`
+    SELECT i.*, m.name AS municipality_name
+    FROM campaign_investments i
+    LEFT JOIN municipalities m ON m.id = i.municipality_id
+    WHERE i.id = ? AND i.campaign_id = ?
+  `).get(id, campaignId);
+  return row ? enrichRow(row) : null;
 }
 
 function createInvestment(db, campaignId, body) {
@@ -129,50 +201,40 @@ function createInvestment(db, campaignId, body) {
     err.status = 400;
     throw err;
   }
-
-  const category = String(body.category || 'outros').trim() || 'outros';
-  const investedAt = body.invested_at
-    ? String(body.invested_at).slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  const description = String(body.description || '').trim();
-  if (!description) {
-    const err = new Error('Descrição do investimento é obrigatória');
+  const municipalityId = Number(body.municipality_id);
+  if (!municipalityId) {
+    const err = new Error('Município é obrigatório');
     err.status = 400;
     throw err;
   }
+  const description = String(body.description || '').trim();
+  if (!description) {
+    const err = new Error('Descrição do item é obrigatória');
+    err.status = 400;
+    throw err;
+  }
+  const category = String(body.category || 'infraestrutura').trim() || 'infraestrutura';
 
   const result = db.prepare(`
     INSERT INTO campaign_investments (
       campaign_id, coordinator_id, municipality_id, category, description,
-      amount, invested_at, receipt_ref, notes, created_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      amount, invested_at, receipt_ref, notes, created_by, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaignId,
     body.coordinator_id ? Number(body.coordinator_id) : null,
-    body.municipality_id ? Number(body.municipality_id) : null,
+    municipalityId,
     category,
     description,
     amount,
-    investedAt,
+    body.invested_at ? String(body.invested_at).slice(0, 10) : null,
     body.receipt_ref ? String(body.receipt_ref).trim() : null,
     body.notes ? String(body.notes).trim() : null,
     body.created_by ? String(body.created_by).trim() : null,
+    body.sort_order != null ? Number(body.sort_order) : 0,
   );
 
   return getInvestment(db, campaignId, result.lastInsertRowid);
-}
-
-function getInvestment(db, campaignId, id) {
-  const row = db.prepare(`
-    SELECT i.*,
-      c.name AS coordinator_name,
-      m.name AS municipality_name
-    FROM campaign_investments i
-    LEFT JOIN coordinators c ON c.id = i.coordinator_id
-    LEFT JOIN municipalities m ON m.id = i.municipality_id
-    WHERE i.id = ? AND i.campaign_id = ?
-  `).get(id, campaignId);
-  return row ? enrichRow(row) : null;
 }
 
 function updateInvestment(db, campaignId, id, body) {
@@ -185,12 +247,19 @@ function updateInvestment(db, campaignId, id, body) {
     err.status = 400;
     throw err;
   }
-
   const description = body.description !== undefined
     ? String(body.description || '').trim()
     : existing.description;
   if (!description) {
-    const err = new Error('Descrição do investimento é obrigatória');
+    const err = new Error('Descrição do item é obrigatória');
+    err.status = 400;
+    throw err;
+  }
+  const municipalityId = body.municipality_id !== undefined
+    ? Number(body.municipality_id)
+    : existing.municipality_id;
+  if (!municipalityId) {
+    const err = new Error('Município é obrigatório');
     err.status = 400;
     throw err;
   }
@@ -205,20 +274,19 @@ function updateInvestment(db, campaignId, id, body) {
       invested_at = ?,
       receipt_ref = ?,
       notes = ?,
+      sort_order = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND campaign_id = ?
   `).run(
     body.coordinator_id !== undefined
       ? (body.coordinator_id ? Number(body.coordinator_id) : null)
       : existing.coordinator_id,
-    body.municipality_id !== undefined
-      ? (body.municipality_id ? Number(body.municipality_id) : null)
-      : existing.municipality_id,
-    body.category !== undefined ? String(body.category || 'outros') : existing.category,
+    municipalityId,
+    body.category !== undefined ? String(body.category || 'infraestrutura') : existing.category,
     description,
     amount,
     body.invested_at !== undefined
-      ? String(body.invested_at).slice(0, 10)
+      ? (body.invested_at ? String(body.invested_at).slice(0, 10) : null)
       : existing.invested_at,
     body.receipt_ref !== undefined
       ? (body.receipt_ref ? String(body.receipt_ref).trim() : null)
@@ -226,6 +294,7 @@ function updateInvestment(db, campaignId, id, body) {
     body.notes !== undefined
       ? (body.notes ? String(body.notes).trim() : null)
       : existing.notes,
+    body.sort_order !== undefined ? Number(body.sort_order) || 0 : (existing.sort_order || 0),
     id,
     campaignId,
   );
@@ -240,13 +309,24 @@ function deleteInvestment(db, campaignId, id) {
   return true;
 }
 
+/** Compat: summary antigo apontando para o dossiê */
+function buildSummary(items) {
+  return {
+    total: money(items.reduce((s, r) => s + money(r.amount), 0)),
+    count: items.length,
+  };
+}
+
 module.exports = {
   CATEGORIES,
-  categoryLabel,
+  categoryMeta,
   listInvestments,
+  buildDossier,
   buildSummary,
   createInvestment,
   getInvestment,
   updateInvestment,
   deleteInvestment,
+  upsertMunicipalityNote,
+  listMunicipalityNotes,
 };

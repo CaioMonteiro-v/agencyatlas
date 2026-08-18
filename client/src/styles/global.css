@@ -2299,260 +2299,250 @@ th {
   color: var(--muted);
 }
 
-/* ---------- Relatório de investimento ---------- */
-.invest-doc {
+/* ---------- Dossiê regional · Investimentos por município ---------- */
+.dossier-page {
   background:
-    linear-gradient(180deg, rgba(255, 252, 250, 0.96), rgba(248, 244, 242, 0.98));
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 1.5rem 1.4rem 1.75rem;
-  box-shadow: var(--shadow);
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 11px,
+      rgba(120, 100, 80, 0.035) 11px,
+      rgba(120, 100, 80, 0.035) 12px
+    ),
+    linear-gradient(180deg, #f3eadc 0%, #ebe0cf 55%, #e7dccb 100%);
+  margin: 0 -0.5rem;
+  padding: 0.5rem 0 2.5rem;
+  border-radius: 0;
 }
 
-.invest-doc--screen-only-print {
-  display: none;
+.dossier-hero {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 1.75rem;
+  padding: 0.5rem 0.5rem 0;
 }
 
-.invest-doc__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  padding-bottom: 1.1rem;
-  border-bottom: 2px solid rgba(0, 51, 160, 0.18);
-  margin-bottom: 1.15rem;
-}
-
-.invest-doc__brand {
-  display: flex;
-  gap: 0.9rem;
-  align-items: center;
-}
-
-.invest-doc__brand img {
-  width: 72px;
-  height: 72px;
-  object-fit: contain;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid var(--line);
-}
-
-.invest-doc__eyebrow {
-  margin: 0 0 0.2rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.72rem;
-  color: var(--muted);
-}
-
-.invest-doc__brand h1 {
-  margin: 0;
+.dossier-hero__eyebrow {
+  margin: 0 0 0.55rem;
   font-family: var(--font-display);
-  font-size: clamp(1.55rem, 3vw, 2.1rem);
-  color: var(--campaign-accent, #0033a0);
-  line-height: 1.15;
-}
-
-.invest-doc__sub {
-  margin: 0.2rem 0 0;
-  color: var(--ink-soft);
-}
-
-.invest-doc__meta {
-  display: grid;
-  gap: 0.2rem;
-  text-align: right;
-  font-size: 0.9rem;
-  color: var(--muted);
-  align-content: start;
-}
-
-.invest-doc__meta strong {
-  color: var(--ink);
-  font-size: 1rem;
-}
-
-.invest-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.invest-kpi {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 0.85rem 0.95rem;
-  display: grid;
-  gap: 0.25rem;
-}
-
-.invest-kpi span {
   font-size: 0.78rem;
-  color: var(--muted);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: #7a6550;
 }
 
-.invest-kpi strong {
+.dossier-hero h1 {
+  margin: 0 0 0.65rem;
   font-family: var(--font-display);
-  font-size: 1.35rem;
-  color: var(--ink);
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  line-height: 1.1;
+  color: #1f1a16;
+  font-weight: 700;
 }
 
-.invest-kpi--hero {
-  background: linear-gradient(145deg, rgba(0, 51, 160, 0.1), rgba(143, 181, 165, 0.14));
-  border-color: rgba(0, 51, 160, 0.22);
+.dossier-hero__lead {
+  margin: 0 auto;
+  max-width: 54ch;
+  color: #5c5146;
+  font-size: 1rem;
+  line-height: 1.55;
 }
 
-.invest-kpi--hero strong {
-  color: var(--campaign-accent, #0033a0);
-  font-size: 1.55rem;
-}
-
-.invest-section {
-  margin-top: 1.35rem;
-}
-
-.invest-section h2 {
-  margin: 0 0 0.75rem;
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-}
-
-.invest-bars {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.invest-bar__top {
+.dossier-hero__sum {
+  margin: 1rem 0 0;
   display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
   flex-wrap: wrap;
-  margin-bottom: 0.28rem;
+  gap: 0.45rem;
+  justify-content: center;
+  align-items: baseline;
+}
+
+.dossier-hero__sum strong {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  color: #8b4a3b;
+}
+
+.dossier-hero__sum span {
+  color: #7a6550;
   font-size: 0.92rem;
 }
 
-.invest-bar__top span {
-  color: var(--muted);
+.dossier-filter {
+  max-width: 280px;
+  margin: 0 0 1.1rem;
 }
 
-.invest-bar__track {
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(95, 120, 112, 0.12);
-  overflow: hidden;
-}
-
-.invest-bar__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--campaign-accent, #0033a0), #5f8a7a);
-}
-
-.invest-cats {
+.dossier-grid {
   display: grid;
-  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.15rem;
+  align-items: start;
 }
 
-.invest-cat {
+.dossier-card {
+  background: #fbf7f0;
+  border: 1px solid rgba(90, 70, 50, 0.14);
+  border-radius: 4px;
+  padding: 1.15rem 1.15rem 1.25rem;
+  box-shadow: 0 10px 28px rgba(70, 50, 30, 0.06);
+}
+
+.dossier-card__index {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a7660;
+  font-family: var(--font-display);
+}
+
+.dossier-card__title {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 2.2vw, 1.45rem);
+  line-height: 1.25;
+  color: #1f1a16;
+  font-weight: 600;
+}
+
+.dossier-card__title em {
+  font-style: italic;
+  color: #8b4a3b;
+  font-weight: 700;
+}
+
+.dossier-card__total {
+  margin: 0 0 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px dotted rgba(90, 70, 50, 0.28);
+  color: #5c5146;
+  font-size: 0.95rem;
+}
+
+.dossier-card__total strong {
+  display: inline;
+  color: #1f1a16;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.dossier-cats {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.dossier-cat__head {
+  width: 100%;
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid var(--line);
   align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
 }
 
-.invest-cat span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.invest-cat__right {
-  text-align: right;
-}
-
-.invest-table td,
-.invest-table th {
-  font-size: 0.9rem;
-}
-
-.invest-amount {
-  font-variant-numeric: tabular-nums;
+.dossier-cat__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--cat-color, #3d5c45);
+  color: #fff;
+  font-size: 0.72rem;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.65rem;
+  border-radius: 3px;
+}
+
+.dossier-cat__arrow {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.dossier-cat__meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  color: #6a5a4a;
+  font-size: 0.86rem;
+}
+
+.dossier-cat__meta strong {
+  color: #1f1a16;
+  font-variant-numeric: tabular-nums;
+}
+
+.dossier-cat__list {
+  list-style: none;
+  margin: 0.45rem 0 0.15rem;
+  padding: 0;
+}
+
+.dossier-cat__list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px dotted rgba(90, 70, 50, 0.22);
+  font-size: 0.9rem;
+  color: #3a322c;
+}
+
+.dossier-cat__list li strong {
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  color: #1f1a16;
 }
 
-.invest-ref {
-  color: var(--muted);
+.dossier-card__note {
+  margin: 0.9rem 0 0;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-style: italic;
+  color: #9a6b2f;
+  line-height: 1.45;
 }
 
-.invest-doc__foot {
-  margin-top: 1.5rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.invest-doc__foot p {
-  margin: 0.15rem 0;
-}
-
-.invest-filters .form-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.dossier-screen-print-only {
+  display: none;
 }
 
 @media (max-width: 900px) {
-  .invest-kpis {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .invest-filters .form-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .invest-kpis,
-  .invest-filters .form-grid {
+  .dossier-grid {
     grid-template-columns: 1fr;
-  }
-
-  .invest-doc__meta {
-    text-align: left;
   }
 }
 
 @media print {
   .no-print,
-  .invest-filters {
+  .dossier-filter {
     display: none !important;
   }
 
-  .invest-doc--screen-only-print {
+  .dossier-screen-print-only {
     display: block !important;
   }
 
-  .invest-doc {
-    box-shadow: none;
-    border: none;
+  .dossier-page {
+    background: #f3eadc !important;
+    margin: 0;
     padding: 0;
-    background: #fff;
   }
 
-  .invest-kpi {
+  .dossier-card {
     break-inside: avoid;
+    box-shadow: none;
   }
 
-  .invest-bar,
-  .invest-cat,
-  .invest-table tr {
-    break-inside: avoid;
+  .dossier-grid {
+    gap: 0.85rem;
   }
 }
