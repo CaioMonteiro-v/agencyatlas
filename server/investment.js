@@ -112,22 +112,47 @@ function upsertMunicipalityNote(db, campaignId, municipalityId, footnote, sortOr
 
 /**
  * Monta o dossiê: municípios com totais e categorias colapsáveis.
+ * Opção: filtrar por coordinator_id (municípios já vinculados ao coordenador no Atlas).
  */
-function buildDossier(db, campaignId) {
+function buildDossier(db, campaignId, { coordinatorId } = {}) {
   const items = listInvestments(db, campaignId);
   const notes = listMunicipalityNotes(db, campaignId);
   const noteByMuni = new Map(notes.map((n) => [n.municipality_id, n]));
+
+  // Vínculo município ↔ coordenador já cadastrado na campanha
+  const coordLinks = db.prepare(`
+    SELECT cm.municipality_id,
+      c.id AS coordinator_id,
+      c.name AS coordinator_name
+    FROM coordinator_municipalities cm
+    JOIN coordinators c ON c.id = cm.coordinator_id
+    WHERE c.campaign_id = ?
+    ORDER BY c.name ASC
+  `).all(campaignId);
+
+  const coordsByMuni = new Map();
+  for (const row of coordLinks) {
+    if (!coordsByMuni.has(row.municipality_id)) coordsByMuni.set(row.municipality_id, []);
+    coordsByMuni.get(row.municipality_id).push({
+      id: row.coordinator_id,
+      name: row.coordinator_name,
+    });
+  }
 
   const byMuni = new Map();
   for (const item of items) {
     if (!item.municipality_id) continue;
     if (!byMuni.has(item.municipality_id)) {
       const note = noteByMuni.get(item.municipality_id);
+      const coordinators = coordsByMuni.get(item.municipality_id) || [];
       byMuni.set(item.municipality_id, {
         municipality_id: item.municipality_id,
         municipality_name: item.municipality_name || 'Município',
         sort_order: note?.sort_order ?? 9999,
         footnote: note?.footnote || null,
+        coordinators,
+        coordinator_id: coordinators[0]?.id || null,
+        coordinator_name: coordinators[0]?.name || null,
         total: 0,
         count: 0,
         categories: {},
@@ -163,7 +188,6 @@ function buildDossier(db, campaignId) {
     });
   }
 
-  // Ordem estável das categorias no card
   const catOrder = CATEGORIES.map((c) => c.id);
 
   let municipalities = [...byMuni.values()].map((m) => ({
@@ -178,6 +202,35 @@ function buildDossier(db, campaignId) {
       ),
   }));
 
+  // Índice de coordenadores (para o seletor) — todos da campanha com totais do dossiê
+  const allCoords = db.prepare(`
+    SELECT id, name FROM coordinators WHERE campaign_id = ? ORDER BY name ASC
+  `).all(campaignId);
+
+  const coordinatorsIndex = allCoords.map((c) => {
+    const muniIds = new Set(
+      coordLinks.filter((l) => l.coordinator_id === c.id).map((l) => l.municipality_id),
+    );
+    const dossierMunis = municipalities.filter((m) => muniIds.has(m.municipality_id));
+    return {
+      id: c.id,
+      name: c.name,
+      municipalities_assigned: muniIds.size,
+      dossier_municipality_count: dossierMunis.length,
+      dossier_item_count: dossierMunis.reduce((s, m) => s + m.count, 0),
+      dossier_total: money(dossierMunis.reduce((s, m) => s + m.total, 0)),
+    };
+  });
+
+  let filterCoordinator = null;
+  if (coordinatorId) {
+    const cid = Number(coordinatorId);
+    filterCoordinator = coordinatorsIndex.find((c) => c.id === cid) || null;
+    municipalities = municipalities.filter((m) =>
+      (m.coordinators || []).some((c) => c.id === cid),
+    );
+  }
+
   municipalities.sort((a, b) => {
     if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
     return String(a.municipality_name).localeCompare(String(b.municipality_name), 'pt-BR');
@@ -189,18 +242,28 @@ function buildDossier(db, campaignId) {
   }));
 
   const grand_total = money(municipalities.reduce((s, m) => s + m.total, 0));
+  const item_count = municipalities.reduce((s, m) => s + m.count, 0);
 
   return {
-    title: 'Investimentos por Município',
-    eyebrow: 'Dossiê regional · Estado de Mato Grosso',
-    subtitle:
-      'Levantamento organizado por município, com o total viabilizado e a lista item a item nas categorias Infraestrutura, Saúde, Agricultura e Regularização fundiária.',
+    title: filterCoordinator
+      ? `Investimentos · ${filterCoordinator.name}`
+      : 'Investimentos por Município',
+    eyebrow: filterCoordinator
+      ? `Dossiê do coordenador · ${filterCoordinator.name}`
+      : 'Dossiê regional · Estado de Mato Grosso',
+    subtitle: filterCoordinator
+      ? `Municípios vinculados a ${filterCoordinator.name} no Atlas, com o total viabilizado e a lista item a item.`
+      : 'Levantamento organizado por município, com o total viabilizado e a relação item a item de cada categoria de investimento (infraestrutura, saúde, agricultura e regularização fundiária).',
     municipality_count: municipalities.length,
-    item_count: items.length,
+    item_count,
     grand_total,
     municipalities,
     categories: CATEGORIES,
-    items,
+    items: coordinatorId
+      ? items.filter((it) => municipalities.some((m) => m.municipality_id === it.municipality_id))
+      : items,
+    coordinators: coordinatorsIndex,
+    filter_coordinator: filterCoordinator,
   };
 }
 
@@ -481,14 +544,24 @@ function importDossier(db, campaignId, municipiosInput) {
 
   const insertItem = db.prepare(`
     INSERT INTO campaign_investments (
-      campaign_id, municipality_id, category, description, amount, notes, sort_order
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      campaign_id, coordinator_id, municipality_id, category, description, amount, notes, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const clearItems = db.prepare('DELETE FROM campaign_investments WHERE campaign_id = ?');
   const clearNotes = db.prepare('DELETE FROM campaign_investment_muni_notes WHERE campaign_id = ?');
   const insertNote = db.prepare(`
     INSERT INTO campaign_investment_muni_notes (campaign_id, municipality_id, footnote, sort_order)
     VALUES (?, ?, ?, ?)
+  `);
+
+  // Coordenador principal já vinculado ao município no Atlas
+  const coordForMuni = db.prepare(`
+    SELECT c.id
+    FROM coordinator_municipalities cm
+    JOIN coordinators c ON c.id = cm.coordinator_id
+    WHERE cm.municipality_id = ? AND c.campaign_id = ?
+    ORDER BY c.name ASC
+    LIMIT 1
   `);
 
   let inserted = 0;
@@ -499,6 +572,7 @@ function importDossier(db, campaignId, municipiosInput) {
       if (block.nota || block.sort_order != null) {
         insertNote.run(campaignId, block.municipality_id, block.nota || null, block.sort_order || 0);
       }
+      const linkedCoord = coordForMuni.get(block.municipality_id, campaignId);
       let order = 0;
       for (const g of block.grupos || []) {
         const category = resolveCategory(g.tag, g.label);
@@ -509,6 +583,7 @@ function importDossier(db, campaignId, municipiosInput) {
           const amount = unknown ? 0 : money(it.v);
           insertItem.run(
             campaignId,
+            linkedCoord?.id || null,
             block.municipality_id,
             category,
             desc,

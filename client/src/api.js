@@ -118,10 +118,11 @@ export const api = {
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
   getReport: (slug) => request(`/api/campaigns/${slug}/report`),
-  getInvestments: (slug, { municipality_id, category } = {}) => {
+  getInvestments: (slug, { municipality_id, category, coordinator_id } = {}) => {
     const qs = new URLSearchParams();
     if (municipality_id) qs.set('municipality_id', municipality_id);
     if (category) qs.set('category', category);
+    if (coordinator_id) qs.set('coordinator_id', coordinator_id);
     const q = qs.toString();
     return request(`/api/campaigns/${slug}/investments${q ? `?${q}` : ''}`);
   },

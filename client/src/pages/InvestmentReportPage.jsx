@@ -20,10 +20,16 @@ function MuniCard({ muni, totalCount }) {
     return init;
   });
 
+  const coordLabel = (muni.coordinators || [])
+    .map((c) => c.name)
+    .filter(Boolean)
+    .join(' · ') || muni.coordinator_name;
+
   return (
     <article className="dossier-card">
       <p className="dossier-card__index">
         Município {String(muni.index).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
+        {coordLabel ? ` · Coord. ${coordLabel}` : ''}
       </p>
       <h3 className="dossier-card__title">
         O deputado Federal que mais investiu em{' '}
@@ -101,11 +107,14 @@ export default function InvestmentReportPage() {
   const [paste, setPaste] = useState('');
   const [importing, setImporting] = useState(false);
   const [filterMuni, setFilterMuni] = useState('');
+  const [filterCoord, setFilterCoord] = useState('');
   const [lastImport, setLastImport] = useState(null);
 
-  async function load() {
+  async function load(coordinatorId = filterCoord) {
     try {
-      const res = await api.getInvestments(campaign.slug);
+      const res = await api.getInvestments(campaign.slug, {
+        coordinator_id: coordinatorId || undefined,
+      });
       setDossier(res);
       setError('');
     } catch (err) {
@@ -123,14 +132,22 @@ export default function InvestmentReportPage() {
     return list.filter((m) => String(m.municipality_id) === String(filterMuni));
   }, [dossier, filterMuni]);
 
+  async function onSelectCoordinator(value) {
+    setFilterCoord(value);
+    setFilterMuni('');
+    await load(value);
+  }
+
   async function runImport(body) {
     setImporting(true);
     try {
       const res = await api.importInvestments(campaign.slug, body);
-      setDossier(res.dossier);
       setLastImport(res);
       setPaste('');
+      setFilterCoord('');
+      setFilterMuni('');
       setMode('dossie');
+      await load('');
       const miss = res.municipalities_missing?.length
         ? ` · ${res.municipalities_missing.length} nome(s) não encontrados`
         : '';
@@ -169,8 +186,9 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Cole o texto (array <code>municipios</code> ou o HTML) e o Atlas monta o relatório sozinho —
-            cards, totais e categorias.
+            Só cola o texto com os municípios — o Atlas monta o dossiê.
+            Depois, escolha o <strong>coordenador</strong> já cadastrado para puxar o dossiê completo dele
+            (todos os municípios vinculados a ele).
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -207,8 +225,9 @@ export default function InvestmentReportPage() {
           <form className="no-print panel panel-pad dossier-import" onSubmit={onPasteImport}>
             <h3 style={{ marginTop: 0 }}>Gerar dossiê a partir do texto</h3>
             <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              1) Cole o array <code>municipios = [...]</code> do seu HTML (ou a página inteira / JSON).
-              2) Clique em <strong>Gerar relatório</strong>. O sistema apaga o dossiê anterior e cria os cards.
+              Cole o array <code>municipios = [...]</code> (o nome do município já vem no texto).
+              O Atlas gera os cards e amarra cada município ao <strong>coordenador já cadastrado</strong>
+              na aba Coordenadores. Depois é só selecionar o coordenador para ver o dossiê dele.
             </p>
             <label>
               Texto do dossiê
@@ -259,7 +278,25 @@ export default function InvestmentReportPage() {
             )}
           </header>
 
-          <div className="no-print dossier-filter">
+          <div className="no-print dossier-filters">
+            <label>
+              Coordenador (dossiê dele)
+              <select
+                className="select"
+                value={filterCoord}
+                onChange={(e) => onSelectCoordinator(e.target.value).catch((err) => setToast(err.message))}
+              >
+                <option value="">Todos os municípios do dossiê</option>
+                {(dossier?.coordinators || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.dossier_municipality_count
+                      ? ` · ${c.dossier_municipality_count} mun. no dossiê`
+                      : ' · sem mun. no dossiê ainda'}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Filtrar município
               <select
@@ -267,16 +304,28 @@ export default function InvestmentReportPage() {
                 value={filterMuni}
                 onChange={(e) => setFilterMuni(e.target.value)}
               >
-                <option value="">Todos</option>
+                <option value="">Todos desta visão</option>
                 {(dossier?.municipalities || []).map((m) => (
                   <option key={m.municipality_id} value={m.municipality_id}>
                     {m.municipality_name}
+                    {m.coordinator_name ? ` · ${m.coordinator_name}` : ''}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
+          {dossier?.filter_coordinator && (
+            <p className="no-print dossier-coord-banner">
+              Dossiê de <strong>{dossier.filter_coordinator.name}</strong>
+              {' — '}
+              {dossier.municipality_count} município(s)
+              {' · '}
+              {brl(dossier.grand_total)}
+              {' · '}
+              {dossier.filter_coordinator.municipalities_assigned} mun. cadastrado(s) no Atlas
+            </p>
+          )}
           {visibleMunis.length ? (
             <>
               <div className="dossier-grid">
@@ -288,10 +337,16 @@ export default function InvestmentReportPage() {
                 Fim do dossiê — {totalCount} município{totalCount === 1 ? '' : 's'} listado{totalCount === 1 ? '' : 's'}
               </p>
             </>
-          ) : (
+            ) : (
             <EmptyState>
-              Ainda sem dossiê. Clique em <strong>Colar texto / gerar</strong> ou{' '}
-              <strong>Carregar dossiê oficial (14 mun.)</strong>.
+              {filterCoord
+                ? 'Esse coordenador ainda não tem município do dossiê vinculado. Confira em Coordenadores se os municípios dele estão cadastrados, e se o texto importado usa os mesmos nomes.'
+                : (
+                  <>
+                    Ainda sem dossiê. Clique em <strong>Colar texto / gerar</strong> ou{' '}
+                    <strong>Carregar dossiê oficial (14 mun.)</strong>.
+                  </>
+                )}
             </EmptyState>
           )}
         </div>

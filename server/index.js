@@ -1681,15 +1681,12 @@ app.get('/api/campaigns/:slug/investments', (req, res) => {
   try {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
-    const dossier = buildDossier(db, campaign.id);
-    const items = listInvestments(db, campaign.id, {
-      municipalityId: req.query.municipality_id,
-      category: req.query.category,
+    const dossier = buildDossier(db, campaign.id, {
+      coordinatorId: req.query.coordinator_id || null,
     });
     res.json({
       ...dossier,
-      items: req.query.municipality_id || req.query.category ? items : dossier.items,
-      summary: buildInvestmentSummary(items.length ? items : dossier.items),
+      summary: buildInvestmentSummary(dossier.items || []),
       categories: INVESTMENT_CATEGORIES,
       campaign: {
         slug: campaign.slug,
