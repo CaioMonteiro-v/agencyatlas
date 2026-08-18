@@ -299,8 +299,8 @@ export default function InvestmentReportPage() {
           <p className="eyebrow">Dossiê regional · MT</p>
           <h2>Investimento</h2>
           <p>
-            Envie o <strong>Word (.docx)</strong> de cada município — o Atlas lê, monta os cards e liga no coordenador.
-            Também dá para colar texto. Depois filtre pelo <strong>coordenador</strong> cadastrado.
+            Todos os municípios vêm no mesmo Word do criativo (título “INVESTIU EM …”, ÁREA / ENTREGAS).
+            Envie os <strong>.docx</strong> — o Atlas lê, monta os cards e liga no coordenador.
           </p>
           <div className="chip-group" style={{ marginTop: '0.75rem' }}>
             <button
@@ -353,9 +353,10 @@ export default function InvestmentReportPage() {
           <form className="no-print panel panel-pad dossier-import" onSubmit={onDocxImport}>
             <h3 style={{ marginTop: 0 }}>Enviar Word por município</h3>
             <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Um arquivo <strong>.docx</strong> por município (ou vários de uma vez). Ideal: nome do arquivo =
-              município (ex.: <em>Alto Araguaia.docx</em>). Dentro do Word: categoria (Infraestrutura, Saúde…)
-              e cada item com valor em R$.
+              <strong>Todos os municípios usam o mesmo layout do criativo</strong> (como Alto Taquari):
+              título “O FEDERAL QUE MAIS INVESTIU EM …”, tabela ÁREA / VALOR + ENTREGAS, categorias
+              (Agricultura, Infraestrutura, Educação, Saúde…) e itens com R$.
+              Um <strong>.docx</strong> por município — pode soltar vários de uma vez.
             </p>
 
             <div

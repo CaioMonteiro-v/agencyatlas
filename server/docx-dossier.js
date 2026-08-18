@@ -1,6 +1,9 @@
 /**
- * Extrai texto de arquivos Word (.docx) e monta blocos de município
- * para o importador do dossiê de investimentos.
+ * Extrai texto de arquivos Word (.docx) no layout padrão do criativo
+ * (um arquivo por município, todos no mesmo formato):
+ * - Título: "O FEDERAL QUE MAIS INVESTIU EM {MUNICÍPIO}"
+ * - Tabela: ÁREA / VALOR | ENTREGAS PARA O CRIATIVO
+ * - Categorias + entregas com R$ + nota de produção
  */
 
 const mammoth = require('mammoth');
