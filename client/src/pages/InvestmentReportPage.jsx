@@ -259,18 +259,19 @@ export default function InvestmentReportPage() {
         <div className={mode === 'dossie' ? '' : 'dossier-screen-print-only'}>
           <header className="dossier-hero">
             <p className="dossier-hero__eyebrow">
-              {dossier?.eyebrow || 'Dossiê regional · Estado de Mato Grosso'}
+              Dossiê regional · Estado de Mato Grosso
             </p>
-            <h1>{dossier?.title || 'Investimentos por Município'}</h1>
+            <h1>Investimentos por Município</h1>
             <p className="dossier-hero__lead">
-              {dossier?.subtitle
-                || 'Levantamento organizado por município, com o total viabilizado e a relação item a item de cada categoria.'}
+              Levantamento organizado por município, com o total viabilizado e a relação item a item
+              de cada categoria de investimento (infraestrutura, saúde, agricultura e regularização fundiária).
             </p>
             {dossier && (
-              <p className="dossier-hero__sum">
+              <p className="dossier-hero__sum no-print">
                 <strong>{brl(dossier.grand_total)}</strong>
                 <span>
                   · {dossier.municipality_count} município(s) · {dossier.item_count} item(ns)
+                  {dossier.filter_coordinator ? ` · ${dossier.filter_coordinator.name}` : ''}
                 </span>
               </p>
             )}

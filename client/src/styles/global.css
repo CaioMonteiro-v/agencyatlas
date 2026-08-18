@@ -1662,8 +1662,11 @@ th {
   .site-header,
   .site-footer,
   .tabs,
+  .campaign-top,
+  .campaign-brand,
   .btn,
-  .toast {
+  .toast,
+  .no-print {
     display: none !important;
   }
 
@@ -2618,7 +2621,12 @@ th {
 @media print {
   .no-print,
   .dossier-filter,
-  .dossier-filters {
+  .dossier-filters,
+  .dossier-coord-banner,
+  .site-header,
+  .site-footer,
+  .campaign-top,
+  .tabs {
     display: none !important;
   }
 
@@ -2628,12 +2636,32 @@ th {
 
   .dossier-page {
     background: #EFE8D6 !important;
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0.5rem 0 1rem !important;
+  }
+
+  .dossier-page .container {
+    max-width: 100% !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  .dossier-hero {
+    border-bottom: 3px double #1C2A20;
+    margin-bottom: 1.5rem;
+    padding-top: 0.25rem;
+  }
+
+  .dossier-hero__sum {
+    display: none !important;
   }
 
   .dossier-card {
     break-inside: avoid;
     box-shadow: none;
+  }
+
+  .dossier-footer-rule {
+    display: none !important;
   }
 }

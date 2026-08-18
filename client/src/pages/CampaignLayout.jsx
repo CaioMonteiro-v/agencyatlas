@@ -45,7 +45,7 @@ export default function CampaignLayout() {
   return (
     <div className="campaign-shell" style={{ '--campaign-accent': campaign.accent_color }}>
       <Header compact />
-      <div className="container campaign-top">
+      <div className="container campaign-top no-print">
         <div className="campaign-top__row">
           <div className="campaign-brand">
             <img src={campaign.logo_url || '/logos/fabio-garcia.png'} alt={campaign.name} />
@@ -70,7 +70,7 @@ export default function CampaignLayout() {
           </div>
         </div>
 
-        <nav className="tabs" aria-label="Abas da campanha">
+        <nav className="tabs no-print" aria-label="Abas da campanha">
           <NavLink to={`/campanha/${slug}`} end>Visão Geral</NavLink>
           <NavLink to={`/campanha/${slug}/mobilizacao`}>Mobilização</NavLink>
           <NavLink to={`/campanha/${slug}/coordenadores`}>Coordenadores</NavLink>
