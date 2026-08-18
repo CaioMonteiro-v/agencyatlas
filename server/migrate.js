@@ -496,6 +496,54 @@ function migrateAnalyticsSchema(db) {
   } catch (err) {
     console.warn('migrate mobilized territory:', err.message);
   }
+
+  // Relatório de investimento (manual, por coordenador)
+  try {
+    if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS campaign_investments (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+          category TEXT DEFAULT 'outros',
+          description TEXT NOT NULL,
+          amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+          invested_at TEXT,
+          receipt_ref TEXT,
+          notes TEXT,
+          created_by TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS campaign_investments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          coordinator_id INTEGER,
+          municipality_id INTEGER,
+          category TEXT DEFAULT 'outros',
+          description TEXT NOT NULL,
+          amount REAL NOT NULL DEFAULT 0,
+          invested_at TEXT,
+          receipt_ref TEXT,
+          notes TEXT,
+          created_by TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+          FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+          FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
+        )
+      `);
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id)');
+  } catch (err) {
+    console.warn('migrate campaign_investments:', err.message);
+  }
 }
 
 module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };

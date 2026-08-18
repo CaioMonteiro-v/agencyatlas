@@ -347,6 +347,25 @@ function initSqliteSchema(db) {
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id)
     );
 
+    CREATE TABLE IF NOT EXISTS campaign_investments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      coordinator_id INTEGER,
+      municipality_id INTEGER,
+      category TEXT DEFAULT 'outros',
+      description TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      invested_at TEXT,
+      receipt_ref TEXT,
+      notes TEXT,
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
     CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
@@ -356,6 +375,8 @@ function initSqliteSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_demands_campaign ON territory_demands(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_demands_coord ON territory_demands(coordinator_id);
     CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id);
+    CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id);
   `);
 }
 

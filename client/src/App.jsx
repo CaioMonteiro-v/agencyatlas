@@ -7,6 +7,7 @@ import MobilizationPage from './pages/MobilizationPage';
 import CoordinatorsPage from './pages/CoordinatorsPage';
 import ReportPage from './pages/ReportPage';
 import ContentPage from './pages/ContentPage';
+import InvestmentReportPage from './pages/InvestmentReportPage';
 import UnderConstruction from './pages/UnderConstruction';
 import LeaderProfilePage from './pages/LeaderProfilePage';
 import EventRegistrationPage from './pages/EventRegistrationPage';
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="mobilizacao" element={<MobilizationPage />} />
         <Route path="coordenadores" element={<CoordinatorsPage />} />
         <Route path="relatorio" element={<ReportPage />} />
+        <Route path="investimento" element={<InvestmentReportPage />} />
         <Route path="midia" element={<UnderConstruction title="Mídia" />} />
         <Route path="conteudo" element={<ContentPage />} />
       </Route>

@@ -236,6 +236,22 @@ CREATE TABLE IF NOT EXISTS territory_demands (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS campaign_investments (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+  category TEXT DEFAULT 'outros',
+  description TEXT NOT NULL,
+  amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+  invested_at TEXT,
+  receipt_ref TEXT,
+  notes TEXT,
+  created_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
@@ -247,6 +263,8 @@ CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code);
 CREATE INDEX IF NOT EXISTS idx_demands_campaign ON territory_demands(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_demands_coord ON territory_demands(coordinator_id);
 CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id);
+CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id);
 `;
 
 module.exports = { PG_SCHEMA };

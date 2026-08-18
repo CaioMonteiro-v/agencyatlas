@@ -23,6 +23,15 @@ const {
   createDemand,
   updateDemand,
 } = require('./demands');
+const {
+  CATEGORIES: INVESTMENT_CATEGORIES,
+  listInvestments,
+  buildSummary: buildInvestmentSummary,
+  createInvestment,
+  updateInvestment,
+  deleteInvestment,
+  getInvestment,
+} = require('./investment');
 const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
@@ -1661,6 +1670,82 @@ app.delete('/api/campaigns/:slug/demands/:id', (req, res) => {
   if (!demand) return res.status(404).json({ error: 'Demanda não encontrada' });
   db.prepare('DELETE FROM territory_demands WHERE id = ?').run(demand.id);
   res.json({ ok: true });
+});
+
+/* ---------- Relatório de investimento (manual) ---------- */
+app.get('/api/campaigns/:slug/investments', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const items = listInvestments(db, campaign.id, {
+      coordinatorId: req.query.coordinator_id,
+      category: req.query.category,
+      from: req.query.from,
+      to: req.query.to,
+    });
+    res.json({
+      items,
+      summary: buildInvestmentSummary(items),
+      categories: INVESTMENT_CATEGORIES,
+      campaign: {
+        slug: campaign.slug,
+        name: campaign.name,
+        candidate: campaign.candidate,
+      },
+    });
+  } catch (err) {
+    console.error('GET investments:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar investimentos' });
+  }
+});
+
+app.post('/api/campaigns/:slug/investments', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const row = createInvestment(db, campaign.id, req.body || {});
+    const items = listInvestments(db, campaign.id);
+    res.status(201).json({ item: row, summary: buildInvestmentSummary(items) });
+  } catch (err) {
+    console.error('POST investments:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao lançar investimento' });
+  }
+});
+
+app.patch('/api/campaigns/:slug/investments/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const updated = updateInvestment(db, campaign.id, Number(req.params.id), req.body || {});
+    if (!updated) return res.status(404).json({ error: 'Lançamento não encontrado' });
+    const items = listInvestments(db, campaign.id);
+    res.json({ item: updated, summary: buildInvestmentSummary(items) });
+  } catch (err) {
+    console.error('PATCH investments:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar investimento' });
+  }
+});
+
+app.delete('/api/campaigns/:slug/investments/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const ok = deleteInvestment(db, campaign.id, Number(req.params.id));
+    if (!ok) return res.status(404).json({ error: 'Lançamento não encontrado' });
+    const items = listInvestments(db, campaign.id);
+    res.json({ ok: true, summary: buildInvestmentSummary(items) });
+  } catch (err) {
+    console.error('DELETE investments:', err);
+    res.status(500).json({ error: err.message || 'Erro ao remover investimento' });
+  }
+});
+
+app.get('/api/campaigns/:slug/investments/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const row = getInvestment(db, campaign.id, Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'Lançamento não encontrado' });
+  res.json(row);
 });
 
 app.get('/api/campaigns/:slug/meta/status', async (req, res) => {
