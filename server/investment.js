@@ -538,6 +538,24 @@ function stripAccents(s) {
     .trim();
 }
 
+/**
+ * Chave frouxa p/ nomes de município do Word vs base:
+ * "Campo Novo dos Parecis" ≈ "Campo Novo do Parecis"
+ * underscores, artigos do/dos/da/das/de.
+ */
+function municipalityMatchKey(s) {
+  return stripAccents(s)
+    .replace(/[_/]+/g, ' ')
+    .replace(/\b(d[oa]s?|de|e)\b/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function significantTokens(s) {
+  return municipalityMatchKey(s).split(' ').filter((t) => t.length >= 3);
+}
+
 function parseMoneyToken(raw) {
   if (raw == null) return null;
   let s = String(raw).trim();
@@ -553,15 +571,40 @@ function parseMoneyToken(raw) {
 
 /** Resolve município por nome (exato, sem acento, ou contém). */
 function findMunicipalityByName(db, nome) {
-  const raw = String(nome || '').trim();
+  const raw = String(nome || '').trim().replace(/[_]+/g, ' ');
   if (!raw) return null;
   const exact = db.prepare('SELECT id, name FROM municipalities WHERE LOWER(name) = LOWER(?)').get(raw);
   if (exact) return exact;
 
-  const target = stripAccents(raw);
   const all = db.prepare('SELECT id, name FROM municipalities').all();
+  const target = stripAccents(raw);
   const byNorm = all.find((m) => stripAccents(m.name) === target);
   if (byNorm) return byNorm;
+
+  // do/dos, da/das, underscores (Word: CAMPO NOVO DOS PARECIS)
+  const key = municipalityMatchKey(raw);
+  if (key) {
+    const byKey = all.filter((m) => municipalityMatchKey(m.name) === key);
+    if (byKey.length === 1) return byKey[0];
+  }
+
+  // Tokens significativos iguais (único match)
+  const tokens = significantTokens(raw);
+  if (tokens.length >= 2) {
+    const byTokens = all.filter((m) => {
+      const mt = significantTokens(m.name);
+      if (mt.length !== tokens.length) {
+        // todos tokens do input presentes no nome da base (ou vice-versa)
+        const a = new Set(mt);
+        const b = new Set(tokens);
+        const coverA = tokens.every((t) => a.has(t));
+        const coverB = mt.every((t) => b.has(t));
+        return coverA || coverB;
+      }
+      return mt.slice().sort().join(' ') === tokens.slice().sort().join(' ');
+    });
+    if (byTokens.length === 1) return byTokens[0];
+  }
 
   // Contém / contido (ex.: "Araguaia" vs "Alto Araguaia") — só se único
   const partial = all.filter((m) => {
@@ -569,6 +612,16 @@ function findMunicipalityByName(db, nome) {
     return n.includes(target) || target.includes(n);
   });
   if (partial.length === 1) return partial[0];
+
+  // Chave parcial única
+  if (key && key.length >= 8) {
+    const partialKey = all.filter((m) => {
+      const mk = municipalityMatchKey(m.name);
+      return mk.includes(key) || key.includes(mk);
+    });
+    if (partialKey.length === 1) return partialKey[0];
+  }
+
   return null;
 }
 
