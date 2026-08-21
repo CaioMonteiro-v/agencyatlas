@@ -8,6 +8,7 @@ const path = require('path');
 const { customAlphabet } = require('nanoid');
 const storage = require('./supabase-storage');
 const { createBitlink, fetchBitlinkAnalytics, bitlyConfigured } = require('./bitly');
+const { inferDeputyFromGroupName, resolveDeputyName } = require('./dobra-deputy');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 10);
 const UPLOAD_DIR = path.join(__dirname, 'uploads', 'groups');
@@ -73,8 +74,8 @@ function enrichGroup(row) {
   const current = Math.max(0, Number(row.members_current) || 0);
   const growth = current - initial;
   const multiplier = initial > 0 ? Math.round((current / initial) * 100) / 100 : null;
-  // Deputado Estadual da dobra (não é coordenador regional)
-  const deputy = String(row.deputy_name || row.coordinator_label || '').trim() || null;
+  // Deputado Estadual da dobra (nunca o coordenador regional da campanha)
+  const deputy = resolveDeputyName(row);
   return {
     ...row,
     members_initial: initial,
@@ -85,9 +86,10 @@ function enrichGroup(row) {
     clicks_30d: Math.max(0, Number(row.clicks_30d) || 0),
     clicks_series: parseSeries(row.clicks_series),
     deputy_name: deputy,
-    // compat: telas antigas / PDF
+    // compat: telas antigas / PDF — sempre o deputado, não o coord. vinculado
     coordinator_name: deputy,
     coordinator_label: deputy,
+    campaign_coordinator_name: row.linked_coordinator_name || null,
   };
 }
 
@@ -201,9 +203,11 @@ async function createGroup(db, campaignId, body = {}) {
   let bitlyError = null;
 
   const coordinatorId = body.coordinator_id ? Number(body.coordinator_id) : null;
-  const deputyName = String(
+  let deputyName = String(
     body.deputy_name || body.coordinator_label || body.coordinator_name || '',
   ).trim() || null;
+  const inferredDeputy = inferDeputyFromGroupName(name);
+  if (inferredDeputy) deputyName = inferredDeputy;
   const municipalityId = body.municipality_id ? Number(body.municipality_id) : null;
   if (coordinatorId) assertCoordMuni(db, campaignId, coordinatorId, municipalityId);
 
@@ -272,11 +276,14 @@ async function updateGroup(db, campaignId, id, body = {}) {
   const coordinatorId = body.coordinator_id !== undefined
     ? (body.coordinator_id ? Number(body.coordinator_id) : null)
     : existing.coordinator_id;
-  const deputyName = (body.deputy_name !== undefined
+  let deputyName = (body.deputy_name !== undefined
     || body.coordinator_label !== undefined
     || body.coordinator_name !== undefined)
     ? (String(body.deputy_name || body.coordinator_label || body.coordinator_name || '').trim() || null)
     : (existing.deputy_name || existing.coordinator_label || null);
+  const groupNameForInfer = body.name != null ? String(body.name).trim() : existing.name;
+  const inferredDeputy = inferDeputyFromGroupName(groupNameForInfer);
+  if (inferredDeputy) deputyName = inferredDeputy;
   const municipalityId = body.municipality_id !== undefined
     ? (body.municipality_id ? Number(body.municipality_id) : null)
     : existing.municipality_id;

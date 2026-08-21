@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 import { printGruposDobraDocument } from '../lib/printGruposDobra';
+import { deputyDisplayName, inferDeputyFromGroupName } from '../lib/dobraDeputy';
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -34,7 +35,7 @@ function formFromGroup(g) {
     bitly_url: g.bitly_url || '',
     members_initial: String(g.members_initial ?? 0),
     members_current: String(g.members_current ?? 0),
-    deputy_name: g.deputy_name || g.coordinator_label || '',
+    deputy_name: g.deputy_name || inferDeputyFromGroupName(g.name) || '',
     municipality_id: g.municipality_id ? String(g.municipality_id) : '',
     opened_at: g.opened_at ? String(g.opened_at).slice(0, 10) : '',
     notes: g.notes || '',
@@ -45,7 +46,7 @@ function formFromGroup(g) {
 
 /** Nome do Deputado Estadual da dobra (não coordenador regional). */
 function deputyKey(g) {
-  return String(g.deputy_name || g.coordinator_label || '').trim() || 'Sem deputado';
+  return deputyDisplayName(g);
 }
 
 export default function GruposDobraPage() {
@@ -273,8 +274,9 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Na criação, coloca o <strong>Deputado Estadual</strong> da dobra.
-            A tela fica em <strong>quadradinhos por deputado</strong> — clica para ver e editar os grupos.
+            Quadradinhos por <strong>Deputado Estadual</strong> (ex.: Beto Dois a Um).
+            Coordenador de campanha (ex.: Beto Correa em Cuiabá) <strong>não</strong> vira card —
+            os grupos com nome <em>BETO DOIS A UM</em> entram na aba do deputado.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
             <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate()}>
@@ -301,7 +303,7 @@ export default function GruposDobraPage() {
                   className="input"
                   value={form.deputy_name}
                   onChange={(e) => setForm({ ...form, deputy_name: e.target.value })}
-                  placeholder="Ex.: nome do Deputado Estadual"
+                  placeholder="Ex.: Beto Dois a Um (não o coordenador da campanha)"
                   required
                 />
               </label>
@@ -310,8 +312,16 @@ export default function GruposDobraPage() {
                 <input
                   className="input"
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ex.: Grupo Dobra · Centro"
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const inferred = inferDeputyFromGroupName(name);
+                    setForm((prev) => ({
+                      ...prev,
+                      name,
+                      deputy_name: inferred || prev.deputy_name,
+                    }));
+                  }}
+                  placeholder="Ex.: BETO DOIS A UM · Centro"
                   required
                 />
               </label>
@@ -478,8 +488,8 @@ export default function GruposDobraPage() {
             ))}
             {!peopleCards.length ? (
               <EmptyState>
-                Ainda não há grupos. Cadastre o primeiro e coloque o Deputado Estadual —
-                ele vira o quadradinho.
+                Ainda não há grupos. Cadastre o primeiro com o nome do Deputado Estadual
+                (ex.: grupos BETO DOIS A UM → card Beto Dois a Um).
               </EmptyState>
             ) : null}
           </div>
@@ -621,8 +631,8 @@ export default function GruposDobraPage() {
                   )}
                   <div className="dobra-print-card__body">
                     <p className="dobra-print-card__meta">
-                      {(g.deputy_name || g.coordinator_label)
-                        ? `Dep. ${g.deputy_name || g.coordinator_label}`
+                      {deputyDisplayName(g) !== 'Sem deputado'
+                        ? `Dep. ${deputyDisplayName(g)}`
                         : 'Sem deputado'}
                       {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                     </p>

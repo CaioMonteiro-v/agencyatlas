@@ -658,7 +658,7 @@ function migrateAnalyticsSchema(db) {
     ensureColumn(db, 'dobra_groups', 'coordinator_label', 'TEXT');
     ensureColumn(db, 'dobra_groups', 'deputy_name', 'TEXT');
     try {
-      // Migra nomes antigos (label) → deputado estadual
+      // Migra nomes antigos (label) → deputado estadual (só se ainda vazio)
       db.exec(`
         UPDATE dobra_groups
         SET deputy_name = coordinator_label
@@ -668,6 +668,14 @@ function migrateAnalyticsSchema(db) {
       `);
     } catch {
       /* ignore */
+    }
+    try {
+      // Corrige card errado: Beto Correa (coord. Cuiabá) → Beto Dois a Um (deputado)
+      const { repairDeputyNames } = require('./dobra-deputy');
+      const fixed = repairDeputyNames(db);
+      if (fixed) console.log(`dobra_groups: corrigidos ${fixed} grupo(s) para Deputado Estadual`);
+    } catch (err) {
+      console.warn('repairDeputyNames:', err.message);
     }
   } catch (err) {
     console.warn('migrate dobra_groups:', err.message);
