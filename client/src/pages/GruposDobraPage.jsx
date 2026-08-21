@@ -43,6 +43,10 @@ function formFromGroup(g) {
   };
 }
 
+function personKey(g) {
+  return String(g.coordinator_label || g.coordinator_name || '').trim() || 'Sem nome';
+}
+
 export default function GruposDobraPage() {
   const { campaign } = useOutletContext();
   const [groups, setGroups] = useState([]);
@@ -55,7 +59,7 @@ export default function GruposDobraPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [filterQ, setFilterQ] = useState('');
+  const [selectedPerson, setSelectedPerson] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const printRef = useRef(null);
   const formRef = useRef(null);
@@ -66,6 +70,40 @@ export default function GruposDobraPage() {
     () => allMunicipalities.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [allMunicipalities],
   );
+
+  /** Quadradinhos por nome do responsável da dobra */
+  const peopleCards = useMemo(() => {
+    const map = new Map();
+    for (const g of groups.filter((x) => x.status !== 'arquivado')) {
+      const key = personKey(g);
+      if (!map.has(key)) {
+        map.set(key, {
+          name: key,
+          groups: [],
+          members_initial: 0,
+          members_current: 0,
+          with_bitly: 0,
+        });
+      }
+      const row = map.get(key);
+      row.groups.push(g);
+      row.members_initial += g.members_initial || 0;
+      row.members_current += g.members_current || 0;
+      if (g.bitly_url) row.with_bitly += 1;
+    }
+    return Array.from(map.values())
+      .map((row) => ({
+        ...row,
+        growth: row.members_current - row.members_initial,
+        group_count: row.groups.length,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [groups]);
+
+  const personGroups = useMemo(() => {
+    if (!selectedPerson) return [];
+    return peopleCards.find((p) => p.name === selectedPerson)?.groups || [];
+  }, [peopleCards, selectedPerson]);
 
   async function load() {
     setLoading(true);
@@ -90,10 +128,11 @@ export default function GruposDobraPage() {
     load().catch((err) => setError(err.message));
   }, [campaign.slug]);
 
-  function openCreate() {
+  function openCreate(prefillName = '') {
     setEditingId(null);
     setForm({
       ...emptyForm,
+      coordinator_label: prefillName || selectedPerson || '',
       opened_at: new Date().toISOString().slice(0, 10),
     });
     setShowForm(true);
@@ -121,6 +160,10 @@ export default function GruposDobraPage() {
     e.preventDefault();
     if (!form.name.trim()) {
       setToast('Informe o nome do grupo');
+      return;
+    }
+    if (!form.coordinator_label.trim()) {
+      setToast('Informe o nome do responsável da dobra (aparece no quadradinho)');
       return;
     }
     setSaving(true);
@@ -158,6 +201,7 @@ export default function GruposDobraPage() {
 
       setGroups(res.groups || []);
       setSummary(res.summary || null);
+      if (body.coordinator_label) setSelectedPerson(body.coordinator_label);
       closeForm();
     } catch (err) {
       setToast(err.message);
@@ -218,20 +262,8 @@ export default function GruposDobraPage() {
     });
   }
 
-  const visible = useMemo(() => {
-    const list = groups.filter((g) => g.status !== 'arquivado');
-    const q = filterQ.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((g) => {
-      const hay = [
-        g.name,
-        g.coordinator_name,
-        g.coordinator_label,
-        g.municipality_name,
-      ].filter(Boolean).join(' ').toLowerCase();
-      return hay.includes(q);
-    });
-  }, [groups, filterQ]);
+  const showingPeople = !selectedPerson;
+  const printGroups = selectedPerson ? personGroups : groups.filter((g) => g.status !== 'arquivado');
 
   return (
     <div className="dobra-page">
@@ -240,12 +272,11 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Cadastre cada grupo WhatsApp da dobra: foto, link, membros e o{' '}
-            <strong>nome do coordenador</strong> (digitado aqui — aparece no PDF).
-            Use <strong>Editar</strong> para atualizar a quantidade de pessoas e o link.
+            Na criação, coloca o <strong>nome do responsável da dobra</strong>.
+            A tela fica em <strong>quadradinhos por nome</strong> — clica para ver e editar os grupos dele.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
-            <button type="button" className="btn btn-accent btn-sm" onClick={openCreate}>
+            <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate()}>
               Cadastrar grupo
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={syncAll} disabled={!bitlyConfigured}>
@@ -255,35 +286,31 @@ export default function GruposDobraPage() {
               Baixar PDF / apresentar
             </button>
           </div>
-          {!bitlyConfigured ? (
-            <p className="dobra-hint">Bitly ainda não configurado no Render — você pode cadastrar o grupo e gerar o link depois.</p>
-          ) : null}
         </div>
 
         {error && <EmptyState>{error}</EmptyState>}
 
         {showForm && (
-          <form
-            ref={formRef}
-            className="panel panel-pad no-print dobra-form"
-            onSubmit={onSubmit}
-          >
-            <h3 style={{ marginTop: 0 }}>
-              {isEditing ? 'Editar grupo' : 'Novo grupo'}
-            </h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-              {isEditing
-                ? 'Atualize a quantidade de pessoas, o link de convite ou qualquer outro campo.'
-                : 'Preencha os dados do grupo criado com a dobra.'}
-            </p>
+          <form ref={formRef} className="panel panel-pad no-print dobra-form" onSubmit={onSubmit}>
+            <h3 style={{ marginTop: 0 }}>{isEditing ? 'Editar grupo' : 'Novo grupo'}</h3>
             <div className="dobra-form__grid">
+              <label>
+                Nome do responsável da dobra
+                <input
+                  className="input"
+                  value={form.coordinator_label}
+                  onChange={(e) => setForm({ ...form, coordinator_label: e.target.value })}
+                  placeholder="Ex.: Domingos Savio / Leonardo Oliveira"
+                  required
+                />
+              </label>
               <label>
                 Nome do grupo
                 <input
                   className="input"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ex.: Grupo Dobra · Campo Novo"
+                  placeholder="Ex.: Grupo Dobra · Centro"
                   required
                 />
               </label>
@@ -326,15 +353,6 @@ export default function GruposDobraPage() {
                 />
               </label>
               <label>
-                Nome do coordenador
-                <input
-                  className="input"
-                  value={form.coordinator_label}
-                  onChange={(e) => setForm({ ...form, coordinator_label: e.target.value })}
-                  placeholder="Ex.: João · dobra Cuiabá"
-                />
-              </label>
-              <label>
                 Município
                 <select
                   className="input"
@@ -373,7 +391,6 @@ export default function GruposDobraPage() {
                 rows={2}
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Quem criou, estratégia, etc."
               />
             </label>
             {bitlyConfigured && !form.bitly_url.trim() && form.invite_link.trim() ? (
@@ -397,56 +414,205 @@ export default function GruposDobraPage() {
           </form>
         )}
 
-        <div className="no-print dobra-filters">
-          <label>
-            Filtrar por coordenador / grupo
-            <input
-              className="input"
-              value={filterQ}
-              onChange={(e) => setFilterQ(e.target.value)}
-              placeholder="Ex.: Cuiabá, João…"
-            />
-          </label>
+        <div className="demand-breadcrumb no-print">
+          <button
+            type="button"
+            className={`chip ${showingPeople ? 'active' : ''}`}
+            onClick={() => {
+              setSelectedPerson(null);
+              closeForm();
+            }}
+          >
+            Nomes
+          </button>
+          {selectedPerson ? (
+            <>
+              <span>/</span>
+              <span className="chip active">{selectedPerson}</span>
+            </>
+          ) : null}
         </div>
 
-        <div ref={printRef} className="dobra-print-root">
-          {summary && (
+        {summary && showingPeople ? (
+          <div className="dobra-print-stats no-print" style={{ marginTop: '1rem' }}>
+            <div className="dobra-print-stat">
+              <strong>{peopleCards.length}</strong>
+              <span>Nomes</span>
+            </div>
+            <div className="dobra-print-stat">
+              <strong>{summary.groups_active}</strong>
+              <span>Grupos</span>
+            </div>
+            <div className="dobra-print-stat">
+              <strong>{summary.members_current}</strong>
+              <span>Membros agora</span>
+            </div>
+            <div className="dobra-print-stat">
+              <strong>
+                {summary.growth >= 0 ? '+' : ''}{summary.growth}
+              </strong>
+              <span>Crescimento</span>
+            </div>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <EmptyState>Carregando…</EmptyState>
+        ) : showingPeople ? (
+          <div className="demand-grid" style={{ marginTop: '1rem' }}>
+            {peopleCards.map((person) => (
+              <button
+                key={person.name}
+                type="button"
+                className="demand-card-btn"
+                onClick={() => setSelectedPerson(person.name)}
+              >
+                <strong>{person.name}</strong>
+                <span>{person.group_count} grupo(s)</span>
+                <span className="demand-card-btn__stats">
+                  {person.members_initial} início · {person.members_current} agora
+                  {person.growth ? ` · +${person.growth}` : ''}
+                </span>
+              </button>
+            ))}
+            {!peopleCards.length ? (
+              <EmptyState>
+                Ainda não há grupos. Cadastre o primeiro e coloque o nome do responsável da dobra —
+                ele vira o quadradinho.
+              </EmptyState>
+            ) : null}
+          </div>
+        ) : (
+          <div style={{ marginTop: '1rem' }}>
+            <div className="no-print" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate(selectedPerson)}>
+                Novo grupo de {selectedPerson}
+              </button>
+              <button type="button" className="btn btn-soft btn-sm" onClick={() => setSelectedPerson(null)}>
+                Voltar aos nomes
+              </button>
+            </div>
+
+            <div ref={printRef} className="dobra-print-root">
+              <div className="dobra-print-stats">
+                <div className="dobra-print-stat">
+                  <strong>{personGroups.length}</strong>
+                  <span>Grupos</span>
+                </div>
+                <div className="dobra-print-stat">
+                  <strong>{personGroups.reduce((s, g) => s + g.members_initial, 0)}</strong>
+                  <span>Início</span>
+                </div>
+                <div className="dobra-print-stat">
+                  <strong>{personGroups.reduce((s, g) => s + g.members_current, 0)}</strong>
+                  <span>Agora</span>
+                </div>
+                <div className="dobra-print-stat">
+                  <strong>{selectedPerson}</strong>
+                  <span>Responsável</span>
+                </div>
+              </div>
+
+              {!personGroups.length ? (
+                <EmptyState>Nenhum grupo neste nome ainda.</EmptyState>
+              ) : (
+                <div className="dobra-print-grid dobra-grid">
+                  {personGroups.map((g) => (
+                    <article
+                      key={g.id}
+                      className={`dobra-print-card dobra-card${editingId === g.id ? ' is-editing' : ''}`}
+                    >
+                      {g.photo_url ? (
+                        <img className="dobra-print-card__photo" src={g.photo_url} alt={g.name} />
+                      ) : (
+                        <div className="dobra-print-card__photo dobra-print-card__photo--empty">Sem foto</div>
+                      )}
+                      <div className="dobra-print-card__body">
+                        <p className="dobra-print-card__meta">
+                          Coord. {selectedPerson}
+                          {g.municipality_name ? ` · ${g.municipality_name}` : ''}
+                          {g.opened_at ? ` · ${g.opened_at}` : ''}
+                        </p>
+                        <h3>{g.name}</h3>
+                        <div className="dobra-print-metrics">
+                          <div>
+                            <strong>{g.members_initial}</strong>
+                            <span>Início</span>
+                          </div>
+                          <div>
+                            <strong>{g.members_current}</strong>
+                            <span>Agora</span>
+                          </div>
+                          <div>
+                            <strong>
+                              {g.growth >= 0 ? '+' : ''}{g.growth}
+                              {g.multiplier != null ? ` (${g.multiplier}x)` : ''}
+                            </strong>
+                            <span>Crescimento</span>
+                          </div>
+                        </div>
+                        {g.bitly_url ? (
+                          <p className="dobra-print-link">
+                            Bitly: {g.bitly_url}
+                            {g.clicks != null ? ` · ${g.clicks} clique(s)` : ''}
+                          </p>
+                        ) : g.invite_link ? (
+                          <p className="dobra-print-link">Convite: {g.invite_link}</p>
+                        ) : (
+                          <p className="dobra-print-link dobra-print-link--warn">Sem link — edite para colocar</p>
+                        )}
+
+                        <div className="dobra-card__actions no-print">
+                          <button type="button" className="btn btn-accent btn-sm" onClick={() => openEdit(g)}>
+                            Editar
+                          </button>
+                          {!g.bitly_url && g.invite_link ? (
+                            <button type="button" className="btn btn-soft btn-sm" onClick={() => createBitly(g)}>
+                              Criar Bitly
+                            </button>
+                          ) : null}
+                          {g.bitly_url ? (
+                            <button type="button" className="btn btn-soft btn-sm" onClick={() => syncOne(g)}>
+                              Sync cliques
+                            </button>
+                          ) : null}
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => removeGroup(g)}>
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Conteúdo oculto para PDF quando está na visão de nomes (todos os grupos) */}
+        {showingPeople ? (
+          <div ref={printRef} className="dobra-print-root dobra-screen-print-only" aria-hidden>
             <div className="dobra-print-stats">
               <div className="dobra-print-stat">
-                <strong>{summary.groups_active}</strong>
-                <span>Grupos ativos</span>
+                <strong>{summary?.groups_active || 0}</strong>
+                <span>Grupos</span>
               </div>
               <div className="dobra-print-stat">
-                <strong>{summary.members_initial}</strong>
-                <span>Membros no início</span>
+                <strong>{summary?.members_initial || 0}</strong>
+                <span>Início</span>
               </div>
               <div className="dobra-print-stat">
-                <strong>{summary.members_current}</strong>
-                <span>Membros agora</span>
+                <strong>{summary?.members_current || 0}</strong>
+                <span>Agora</span>
               </div>
               <div className="dobra-print-stat">
-                <strong>
-                  {summary.growth >= 0 ? '+' : ''}{summary.growth}
-                  {summary.multiplier != null ? ` · ${summary.multiplier}x` : ''}
-                </strong>
-                <span>Crescimento</span>
+                <strong>{peopleCards.length}</strong>
+                <span>Nomes</span>
               </div>
             </div>
-          )}
-
-          {loading ? (
-            <EmptyState>Carregando grupos…</EmptyState>
-          ) : !visible.length ? (
-            <EmptyState>
-              Ainda não há grupos cadastrados. Crie o primeiro com a foto da dobra e o link de convite.
-            </EmptyState>
-          ) : (
-            <div className="dobra-print-grid dobra-grid">
-              {visible.map((g) => (
-                <article
-                  key={g.id}
-                  className={`dobra-print-card dobra-card${editingId === g.id ? ' is-editing' : ''}`}
-                >
+            <div className="dobra-print-grid">
+              {printGroups.map((g) => (
+                <article key={g.id} className="dobra-print-card">
                   {g.photo_url ? (
                     <img className="dobra-print-card__photo" src={g.photo_url} alt={g.name} />
                   ) : (
@@ -454,9 +620,8 @@ export default function GruposDobraPage() {
                   )}
                   <div className="dobra-print-card__body">
                     <p className="dobra-print-card__meta">
-                      {g.coordinator_name ? `Coord. ${g.coordinator_name}` : 'Sem coordenador'}
+                      {g.coordinator_name ? `Coord. ${g.coordinator_name}` : 'Sem nome'}
                       {g.municipality_name ? ` · ${g.municipality_name}` : ''}
-                      {g.opened_at ? ` · ${g.opened_at}` : ''}
                     </p>
                     <h3>{g.name}</h3>
                     <div className="dobra-print-metrics">
@@ -469,48 +634,17 @@ export default function GruposDobraPage() {
                         <span>Agora</span>
                       </div>
                       <div>
-                        <strong>
-                          {g.growth >= 0 ? '+' : ''}{g.growth}
-                          {g.multiplier != null ? ` (${g.multiplier}x)` : ''}
-                        </strong>
+                        <strong>{g.growth >= 0 ? '+' : ''}{g.growth}</strong>
                         <span>Crescimento</span>
                       </div>
                     </div>
-                    {g.bitly_url ? (
-                      <p className="dobra-print-link">
-                        Bitly: {g.bitly_url}
-                        {g.clicks != null ? ` · ${g.clicks} clique(s)` : ''}
-                      </p>
-                    ) : g.invite_link ? (
-                      <p className="dobra-print-link">Convite: {g.invite_link}</p>
-                    ) : (
-                      <p className="dobra-print-link dobra-print-link--warn">Sem link — edite para colocar</p>
-                    )}
-
-                    <div className="dobra-card__actions no-print">
-                      <button type="button" className="btn btn-accent btn-sm" onClick={() => openEdit(g)}>
-                        Editar
-                      </button>
-                      {!g.bitly_url && g.invite_link ? (
-                        <button type="button" className="btn btn-soft btn-sm" onClick={() => createBitly(g)}>
-                          Criar Bitly
-                        </button>
-                      ) : null}
-                      {g.bitly_url ? (
-                        <button type="button" className="btn btn-soft btn-sm" onClick={() => syncOne(g)}>
-                          Sync cliques
-                        </button>
-                      ) : null}
-                      <button type="button" className="btn btn-danger btn-sm" onClick={() => removeGroup(g)}>
-                        Remover
-                      </button>
-                    </div>
+                    {g.bitly_url ? <p className="dobra-print-link">Bitly: {g.bitly_url}</p> : null}
                   </div>
                 </article>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
       {toast ? <Toast onClose={() => setToast('')}>{toast}</Toast> : null}
     </div>
