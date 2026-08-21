@@ -49,6 +49,13 @@ const {
   syncGroupBitly,
   syncAllGroupBitly,
 } = require('./dobra-groups');
+const {
+  listDeputies: listDobraDeputies,
+  getDeputy: getDobraDeputy,
+  createDeputy: createDobraDeputy,
+  updateDeputy: updateDobraDeputy,
+  deleteDeputy: deleteDobraDeputy,
+} = require('./dobra-deputies');
 const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
@@ -1908,6 +1915,76 @@ app.get('/api/campaigns/:slug/investments/:id', (req, res) => {
   res.json(row);
 });
 
+/** Deputados Estaduais da dobra — cards + hierarquia de coordenadores */
+app.get('/api/campaigns/:slug/deputies', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const deputies = listDobraDeputies(db, campaign.id);
+    const coordinators = db.prepare(`
+      SELECT id, name, coord_type, phone FROM coordinators
+      WHERE campaign_id = ? ORDER BY name ASC
+    `).all(campaign.id);
+    res.json({
+      deputies,
+      coordinators,
+      summary: {
+        deputies: deputies.length,
+        groups: deputies.reduce((s, d) => s + (d.group_count || 0), 0),
+        members_current: deputies.reduce((s, d) => s + (d.members_current || 0), 0),
+      },
+    });
+  } catch (err) {
+    console.error('GET deputies:', err);
+    res.status(500).json({ error: err.message || 'Erro ao listar deputados' });
+  }
+});
+
+app.post('/api/campaigns/:slug/deputies', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const deputy = createDobraDeputy(db, campaign.id, req.body || {});
+    res.status(201).json({
+      deputy,
+      deputies: listDobraDeputies(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('POST deputies:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar deputado' });
+  }
+});
+
+app.patch('/api/campaigns/:slug/deputies/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const deputy = updateDobraDeputy(db, campaign.id, Number(req.params.id), req.body || {});
+    res.json({
+      deputy,
+      deputies: listDobraDeputies(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('PATCH deputies:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar deputado' });
+  }
+});
+
+app.delete('/api/campaigns/:slug/deputies/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = deleteDobraDeputy(db, campaign.id, Number(req.params.id));
+    res.json({
+      ...result,
+      deputies: listDobraDeputies(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('DELETE deputies:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao remover deputado' });
+  }
+});
+
 /** Grupos WhatsApp criados via dobra — controle + Bitly + foto */
 app.get('/api/campaigns/:slug/groups', (req, res) => {
   try {
@@ -1916,6 +1993,7 @@ app.get('/api/campaigns/:slug/groups', (req, res) => {
     const groups = listDobraGroups(db, campaign.id, {
       coordinatorId: req.query.coordinator_id,
       municipalityId: req.query.municipality_id,
+      deputyId: req.query.deputy_id,
       status: req.query.status,
       q: req.query.q,
     });

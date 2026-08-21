@@ -265,6 +265,17 @@ CREATE TABLE IF NOT EXISTS campaign_investment_muni_notes (
   UNIQUE (campaign_id, municipality_id)
 );
 
+CREATE TABLE IF NOT EXISTS dobra_deputies (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  campaign_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  dobra_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS dobra_groups (
   id SERIAL PRIMARY KEY,
   campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -278,6 +289,9 @@ CREATE TABLE IF NOT EXISTS dobra_groups (
   coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
   coordinator_label TEXT,
   deputy_name TEXT,
+  deputy_id INTEGER REFERENCES dobra_deputies(id) ON DELETE SET NULL,
+  campaign_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  dobra_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
   municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
   notes TEXT,
   status TEXT DEFAULT 'ativo',
@@ -309,6 +323,8 @@ CREATE INDEX IF NOT EXISTS idx_invest_muni ON campaign_investments(municipality_
 CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id);
 CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id);
 `;
 
 module.exports = { PG_SCHEMA };

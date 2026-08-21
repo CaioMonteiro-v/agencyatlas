@@ -588,9 +588,21 @@ function migrateAnalyticsSchema(db) {
     console.warn('migrate campaign_investments:', err.message);
   }
 
-  // Grupos WhatsApp criados via dobra (mobilização)
+  // Deputados Estaduais da dobra (cards) + grupos WhatsApp
   try {
     if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_deputies (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          campaign_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          dobra_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
       db.exec(`
         CREATE TABLE IF NOT EXISTS dobra_groups (
           id SERIAL PRIMARY KEY,
@@ -605,6 +617,9 @@ function migrateAnalyticsSchema(db) {
           coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
           coordinator_label TEXT,
           deputy_name TEXT,
+          deputy_id INTEGER REFERENCES dobra_deputies(id) ON DELETE SET NULL,
+          campaign_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          dobra_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
           municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
@@ -621,6 +636,21 @@ function migrateAnalyticsSchema(db) {
       `);
     } else {
       db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_deputies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          campaign_coordinator_id INTEGER,
+          dobra_coordinator_id INTEGER,
+          notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+          FOREIGN KEY (campaign_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+          FOREIGN KEY (dobra_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL
+        )
+      `);
+      db.exec(`
         CREATE TABLE IF NOT EXISTS dobra_groups (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           campaign_id INTEGER NOT NULL,
@@ -634,6 +664,9 @@ function migrateAnalyticsSchema(db) {
           coordinator_id INTEGER,
           coordinator_label TEXT,
           deputy_name TEXT,
+          deputy_id INTEGER,
+          campaign_coordinator_id INTEGER,
+          dobra_coordinator_id INTEGER,
           municipality_id INTEGER,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
@@ -648,6 +681,9 @@ function migrateAnalyticsSchema(db) {
           updated_at TEXT DEFAULT (datetime('now')),
           FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
           FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+          FOREIGN KEY (deputy_id) REFERENCES dobra_deputies(id) ON DELETE SET NULL,
+          FOREIGN KEY (campaign_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+          FOREIGN KEY (dobra_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
           FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
         )
       `);
@@ -655,10 +691,17 @@ function migrateAnalyticsSchema(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id)');
     ensureColumn(db, 'dobra_groups', 'coordinator_label', 'TEXT');
     ensureColumn(db, 'dobra_groups', 'deputy_name', 'TEXT');
+    ensureColumn(db, 'dobra_groups', 'deputy_id', 'INTEGER');
+    ensureColumn(db, 'dobra_groups', 'campaign_coordinator_id', 'INTEGER');
+    ensureColumn(db, 'dobra_groups', 'dobra_coordinator_id', 'INTEGER');
+    ensureColumn(db, 'dobra_deputies', 'campaign_coordinator_id', 'INTEGER');
+    ensureColumn(db, 'dobra_deputies', 'dobra_coordinator_id', 'INTEGER');
+    ensureColumn(db, 'dobra_deputies', 'notes', 'TEXT');
     try {
-      // Migra nomes antigos (label) → deputado estadual (só se ainda vazio)
       db.exec(`
         UPDATE dobra_groups
         SET deputy_name = coordinator_label
@@ -670,12 +713,20 @@ function migrateAnalyticsSchema(db) {
       /* ignore */
     }
     try {
-      // Corrige card errado: Beto Correa (coord. Cuiabá) → Beto Dois a Um (deputado)
       const { repairDeputyNames } = require('./dobra-deputy');
       const fixed = repairDeputyNames(db);
       if (fixed) console.log(`dobra_groups: corrigidos ${fixed} grupo(s) para Deputado Estadual`);
     } catch (err) {
       console.warn('repairDeputyNames:', err.message);
+    }
+    try {
+      const { backfillDeputiesFromGroups } = require('./dobra-deputies');
+      const bf = backfillDeputiesFromGroups(db);
+      if (bf.created || bf.linked) {
+        console.log(`dobra_deputies: ${bf.created} card(s), ${bf.linked} grupo(s) vinculados`);
+      }
+    } catch (err) {
+      console.warn('backfillDeputiesFromGroups:', err.message);
     }
   } catch (err) {
     console.warn('migrate dobra_groups:', err.message);

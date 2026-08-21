@@ -74,8 +74,8 @@ function enrichGroup(row) {
   const current = Math.max(0, Number(row.members_current) || 0);
   const growth = current - initial;
   const multiplier = initial > 0 ? Math.round((current / initial) * 100) / 100 : null;
-  // Deputado Estadual da dobra (nunca o coordenador regional da campanha)
-  const deputy = resolveDeputyName(row);
+  const deputyFromCard = String(row.deputy_card_name || '').trim() || null;
+  const deputy = deputyFromCard || resolveDeputyName(row);
   return {
     ...row,
     members_initial: initial,
@@ -85,28 +85,47 @@ function enrichGroup(row) {
     clicks: Math.max(0, Number(row.clicks) || 0),
     clicks_30d: Math.max(0, Number(row.clicks_30d) || 0),
     clicks_series: parseSeries(row.clicks_series),
+    deputy_id: row.deputy_id ? Number(row.deputy_id) : null,
     deputy_name: deputy,
-    // compat: telas antigas / PDF — sempre o deputado, não o coord. vinculado
     coordinator_name: deputy,
     coordinator_label: deputy,
-    campaign_coordinator_name: row.linked_coordinator_name || null,
+    campaign_coordinator_id: row.campaign_coordinator_id
+      ? Number(row.campaign_coordinator_id)
+      : (row.coordinator_id ? Number(row.coordinator_id) : null),
+    dobra_coordinator_id: row.dobra_coordinator_id ? Number(row.dobra_coordinator_id) : null,
+    campaign_coordinator_name:
+      row.campaign_coordinator_name
+      || row.linked_coordinator_name
+      || null,
+    dobra_coordinator_name: row.dobra_coordinator_name || null,
   };
 }
 
-function listGroups(db, campaignId, { coordinatorId, municipalityId, status, q } = {}) {
-  let sql = `
-    SELECT g.*,
-      c.name AS linked_coordinator_name,
-      m.name AS municipality_name
-    FROM dobra_groups g
-    LEFT JOIN coordinators c ON c.id = g.coordinator_id
-    LEFT JOIN municipalities m ON m.id = g.municipality_id
-    WHERE g.campaign_id = ?
-  `;
+const GROUP_SELECT = `
+  SELECT g.*,
+    d.name AS deputy_card_name,
+    cc.name AS campaign_coordinator_name,
+    dc.name AS dobra_coordinator_name,
+    COALESCE(cc.name, c.name) AS linked_coordinator_name,
+    m.name AS municipality_name
+  FROM dobra_groups g
+  LEFT JOIN dobra_deputies d ON d.id = g.deputy_id
+  LEFT JOIN coordinators cc ON cc.id = COALESCE(g.campaign_coordinator_id, g.coordinator_id)
+  LEFT JOIN coordinators dc ON dc.id = g.dobra_coordinator_id
+  LEFT JOIN coordinators c ON c.id = g.coordinator_id
+  LEFT JOIN municipalities m ON m.id = g.municipality_id
+`;
+
+function listGroups(db, campaignId, { coordinatorId, municipalityId, deputyId, status, q } = {}) {
+  let sql = `${GROUP_SELECT} WHERE g.campaign_id = ?`;
   const params = [campaignId];
+  if (deputyId) {
+    sql += ' AND g.deputy_id = ?';
+    params.push(Number(deputyId));
+  }
   if (coordinatorId) {
-    sql += ' AND g.coordinator_id = ?';
-    params.push(Number(coordinatorId));
+    sql += ' AND (g.coordinator_id = ? OR g.campaign_coordinator_id = ? OR g.dobra_coordinator_id = ?)';
+    params.push(Number(coordinatorId), Number(coordinatorId), Number(coordinatorId));
   }
   if (municipalityId) {
     sql += ' AND g.municipality_id = ?';
@@ -118,7 +137,7 @@ function listGroups(db, campaignId, { coordinatorId, municipalityId, status, q }
   }
   if (q) {
     sql += ` AND (
-      LOWER(COALESCE(g.deputy_name, g.coordinator_label, '')) LIKE LOWER(?)
+      LOWER(COALESCE(d.name, g.deputy_name, g.coordinator_label, '')) LIKE LOWER(?)
       OR LOWER(g.name) LIKE LOWER(?)
     )`;
     const like = `%${String(q).trim()}%`;
@@ -153,16 +172,72 @@ function buildSummary(groups) {
 }
 
 function getGroup(db, campaignId, id) {
-  const row = db.prepare(`
-    SELECT g.*,
-      c.name AS linked_coordinator_name,
-      m.name AS municipality_name
-    FROM dobra_groups g
-    LEFT JOIN coordinators c ON c.id = g.coordinator_id
-    LEFT JOIN municipalities m ON m.id = g.municipality_id
-    WHERE g.campaign_id = ? AND g.id = ?
-  `).get(campaignId, Number(id));
+  const row = db.prepare(`${GROUP_SELECT} WHERE g.campaign_id = ? AND g.id = ?`)
+    .get(campaignId, Number(id));
   return row ? enrichGroup(row) : null;
+}
+
+function resolveDeputyForWrite(db, campaignId, body, groupName) {
+  let deputyId = body.deputy_id ? Number(body.deputy_id) : null;
+  let deputyName = String(
+    body.deputy_name || body.coordinator_label || body.coordinator_name || '',
+  ).trim() || null;
+
+  if (deputyId) {
+    const card = db.prepare('SELECT * FROM dobra_deputies WHERE id = ? AND campaign_id = ?')
+      .get(deputyId, campaignId);
+    if (!card) {
+      const err = new Error('Selecione um Deputado Estadual cadastrado');
+      err.status = 400;
+      throw err;
+    }
+    deputyName = card.name;
+    return {
+      deputyId,
+      deputyName,
+      campaignCoordinatorId: body.campaign_coordinator_id !== undefined
+        ? (body.campaign_coordinator_id ? Number(body.campaign_coordinator_id) : null)
+        : (card.campaign_coordinator_id || null),
+      dobraCoordinatorId: body.dobra_coordinator_id !== undefined
+        ? (body.dobra_coordinator_id ? Number(body.dobra_coordinator_id) : null)
+        : (card.dobra_coordinator_id || null),
+    };
+  }
+
+  const inferred = inferDeputyFromGroupName(groupName);
+  if (inferred) deputyName = inferred;
+
+  if (deputyName) {
+    const existing = db.prepare(`
+      SELECT * FROM dobra_deputies
+      WHERE campaign_id = ? AND LOWER(TRIM(name)) = LOWER(?)
+    `).get(campaignId, deputyName);
+    if (existing) {
+      deputyId = existing.id;
+      deputyName = existing.name;
+      return {
+        deputyId,
+        deputyName,
+        campaignCoordinatorId: body.campaign_coordinator_id
+          ? Number(body.campaign_coordinator_id)
+          : (existing.campaign_coordinator_id || null),
+        dobraCoordinatorId: body.dobra_coordinator_id
+          ? Number(body.dobra_coordinator_id)
+          : (existing.dobra_coordinator_id || null),
+      };
+    }
+  }
+
+  return {
+    deputyId: null,
+    deputyName,
+    campaignCoordinatorId: body.campaign_coordinator_id
+      ? Number(body.campaign_coordinator_id)
+      : (body.coordinator_id ? Number(body.coordinator_id) : null),
+    dobraCoordinatorId: body.dobra_coordinator_id
+      ? Number(body.dobra_coordinator_id)
+      : null,
+  };
 }
 
 function assertCoordMuni(db, campaignId, coordinatorId, municipalityId) {
@@ -202,14 +277,20 @@ async function createGroup(db, campaignId, body = {}) {
   let bitlyUrl = String(body.bitly_url || '').trim() || null;
   let bitlyError = null;
 
-  const coordinatorId = body.coordinator_id ? Number(body.coordinator_id) : null;
-  let deputyName = String(
-    body.deputy_name || body.coordinator_label || body.coordinator_name || '',
-  ).trim() || null;
-  const inferredDeputy = inferDeputyFromGroupName(name);
-  if (inferredDeputy) deputyName = inferredDeputy;
   const municipalityId = body.municipality_id ? Number(body.municipality_id) : null;
+  const resolved = resolveDeputyForWrite(db, campaignId, body, name);
+  const deputyId = resolved.deputyId;
+  const deputyName = resolved.deputyName;
+  const campaignCoordinatorId = resolved.campaignCoordinatorId;
+  const dobraCoordinatorId = resolved.dobraCoordinatorId;
+  // compat: coordinator_id = nosso coordenador da campanha
+  const coordinatorId = campaignCoordinatorId || (body.coordinator_id ? Number(body.coordinator_id) : null);
   if (coordinatorId) assertCoordMuni(db, campaignId, coordinatorId, municipalityId);
+  if (!deputyId) {
+    const err = new Error('Selecione o Deputado Estadual (cadastre o card antes)');
+    err.status = 400;
+    throw err;
+  }
 
   let photoUrl = String(body.photo_url || '').trim() || null;
   if (body.photo_data_url) {
@@ -238,9 +319,10 @@ async function createGroup(db, campaignId, body = {}) {
   const result = db.prepare(`
     INSERT INTO dobra_groups (
       campaign_id, name, photo_url, invite_link, bitly_url, destination_url,
-      members_initial, members_current, coordinator_id, coordinator_label, deputy_name, municipality_id,
+      members_initial, members_current, coordinator_id, coordinator_label, deputy_name,
+      deputy_id, campaign_coordinator_id, dobra_coordinator_id, municipality_id,
       notes, status, opened_at, bitly_last_error, members_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   `).run(
     campaignId,
     name,
@@ -253,6 +335,9 @@ async function createGroup(db, campaignId, body = {}) {
     coordinatorId,
     deputyName,
     deputyName,
+    deputyId,
+    campaignCoordinatorId,
+    dobraCoordinatorId,
     municipalityId,
     body.notes ? String(body.notes).trim() : null,
     body.status === 'arquivado' ? 'arquivado' : 'ativo',
@@ -273,20 +358,35 @@ async function updateGroup(db, campaignId, id, body = {}) {
     throw err;
   }
 
-  const coordinatorId = body.coordinator_id !== undefined
-    ? (body.coordinator_id ? Number(body.coordinator_id) : null)
-    : existing.coordinator_id;
-  let deputyName = (body.deputy_name !== undefined
-    || body.coordinator_label !== undefined
-    || body.coordinator_name !== undefined)
-    ? (String(body.deputy_name || body.coordinator_label || body.coordinator_name || '').trim() || null)
-    : (existing.deputy_name || existing.coordinator_label || null);
-  const groupNameForInfer = body.name != null ? String(body.name).trim() : existing.name;
-  const inferredDeputy = inferDeputyFromGroupName(groupNameForInfer);
-  if (inferredDeputy) deputyName = inferredDeputy;
   const municipalityId = body.municipality_id !== undefined
     ? (body.municipality_id ? Number(body.municipality_id) : null)
     : existing.municipality_id;
+
+  const writeBody = {
+    deputy_id: body.deputy_id !== undefined ? body.deputy_id : existing.deputy_id,
+    deputy_name: body.deputy_name !== undefined ? body.deputy_name : existing.deputy_name,
+    coordinator_label: body.coordinator_label,
+    coordinator_name: body.coordinator_name,
+    campaign_coordinator_id: body.campaign_coordinator_id !== undefined
+      ? body.campaign_coordinator_id
+      : (body.coordinator_id !== undefined ? body.coordinator_id : existing.campaign_coordinator_id),
+    dobra_coordinator_id: body.dobra_coordinator_id !== undefined
+      ? body.dobra_coordinator_id
+      : existing.dobra_coordinator_id,
+    coordinator_id: body.coordinator_id,
+  };
+  const groupNameForInfer = body.name != null ? String(body.name).trim() : existing.name;
+  const resolved = resolveDeputyForWrite(db, campaignId, writeBody, groupNameForInfer);
+  const deputyId = resolved.deputyId || existing.deputy_id || null;
+  const deputyName = resolved.deputyName || existing.deputy_name || null;
+  const campaignCoordinatorId = resolved.campaignCoordinatorId
+    ?? existing.campaign_coordinator_id
+    ?? existing.coordinator_id
+    ?? null;
+  const dobraCoordinatorId = resolved.dobraCoordinatorId
+    ?? existing.dobra_coordinator_id
+    ?? null;
+  const coordinatorId = campaignCoordinatorId;
   if (coordinatorId) assertCoordMuni(db, campaignId, coordinatorId, municipalityId);
 
   let photoUrl = existing.photo_url;
@@ -350,6 +450,9 @@ async function updateGroup(db, campaignId, id, body = {}) {
       coordinator_id = ?,
       coordinator_label = ?,
       deputy_name = ?,
+      deputy_id = ?,
+      campaign_coordinator_id = ?,
+      dobra_coordinator_id = ?,
       municipality_id = ?,
       notes = ?,
       status = ?,
@@ -369,6 +472,9 @@ async function updateGroup(db, campaignId, id, body = {}) {
     coordinatorId,
     deputyName,
     deputyName,
+    deputyId,
+    campaignCoordinatorId,
+    dobraCoordinatorId,
     municipalityId,
     body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : existing.notes,
     body.status === 'arquivado' ? 'arquivado' : (body.status === 'ativo' ? 'ativo' : existing.status),

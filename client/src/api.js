@@ -134,10 +134,11 @@ export const api = {
     request(`/api/campaigns/${slug}/investments/import-docx`, { method: 'POST', body: JSON.stringify(body) }),
   clearInvestments: (slug, body = {}) =>
     request(`/api/campaigns/${slug}/investments/clear`, { method: 'POST', body: JSON.stringify(body) }),
-  getDobraGroups: (slug, { coordinator_id, municipality_id, status, q } = {}) => {
+  getDobraGroups: (slug, { coordinator_id, municipality_id, deputy_id, status, q } = {}) => {
     const qs = new URLSearchParams();
     if (coordinator_id) qs.set('coordinator_id', coordinator_id);
     if (municipality_id) qs.set('municipality_id', municipality_id);
+    if (deputy_id) qs.set('deputy_id', deputy_id);
     if (status) qs.set('status', status);
     if (q) qs.set('q', q);
     const query = qs.toString();
@@ -153,6 +154,14 @@ export const api = {
     request(`/api/campaigns/${slug}/groups/${id}/sync`, { method: 'POST', body: '{}' }),
   syncAllDobraGroups: (slug) =>
     request(`/api/campaigns/${slug}/groups/sync`, { method: 'POST', body: '{}' }),
+  getDobraDeputies: (slug) =>
+    request(`/api/campaigns/${slug}/deputies`),
+  createDobraDeputy: (slug, body) =>
+    request(`/api/campaigns/${slug}/deputies`, { method: 'POST', body: JSON.stringify(body) }),
+  updateDobraDeputy: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/deputies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteDobraDeputy: (slug, id) =>
+    request(`/api/campaigns/${slug}/deputies/${id}`, { method: 'DELETE' }),
   updateInvestment: (slug, id, body) =>
     request(`/api/campaigns/${slug}/investments/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteInvestment: (slug, id) =>

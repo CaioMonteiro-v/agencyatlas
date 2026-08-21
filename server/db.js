@@ -381,6 +381,20 @@ function initSqliteSchema(db) {
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS dobra_deputies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      campaign_coordinator_id INTEGER,
+      dobra_coordinator_id INTEGER,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (campaign_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (dobra_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dobra_groups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,
@@ -394,6 +408,9 @@ function initSqliteSchema(db) {
       coordinator_id INTEGER,
       coordinator_label TEXT,
       deputy_name TEXT,
+      deputy_id INTEGER,
+      campaign_coordinator_id INTEGER,
+      dobra_coordinator_id INTEGER,
       municipality_id INTEGER,
       notes TEXT,
       status TEXT DEFAULT 'ativo',
@@ -408,6 +425,9 @@ function initSqliteSchema(db) {
       updated_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (deputy_id) REFERENCES dobra_deputies(id) ON DELETE SET NULL,
+      FOREIGN KEY (campaign_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (dobra_coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
     );
 
@@ -426,6 +446,8 @@ function initSqliteSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id);
     CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id);
   `);
 }
 

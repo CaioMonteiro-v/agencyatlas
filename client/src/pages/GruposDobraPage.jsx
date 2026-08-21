@@ -3,7 +3,6 @@ import { useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 import { printGruposDobraDocument } from '../lib/printGruposDobra';
-import { deputyDisplayName, inferDeputyFromGroupName } from '../lib/dobraDeputy';
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -14,13 +13,22 @@ function readFileAsDataUrl(file) {
   });
 }
 
-const emptyForm = {
+const emptyDeputyForm = {
+  name: '',
+  campaign_coordinator_id: '',
+  dobra_coordinator_id: '',
+  notes: '',
+};
+
+const emptyGroupForm = {
   name: '',
   invite_link: '',
   bitly_url: '',
   members_initial: '13',
   members_current: '13',
-  deputy_name: '',
+  deputy_id: '',
+  campaign_coordinator_id: '',
+  dobra_coordinator_id: '',
   municipality_id: '',
   opened_at: new Date().toISOString().slice(0, 10),
   notes: '',
@@ -28,14 +36,18 @@ const emptyForm = {
   create_bitly: true,
 };
 
-function formFromGroup(g) {
+function groupFormFrom(g) {
   return {
     name: g.name || '',
     invite_link: g.invite_link || '',
     bitly_url: g.bitly_url || '',
     members_initial: String(g.members_initial ?? 0),
     members_current: String(g.members_current ?? 0),
-    deputy_name: g.deputy_name || inferDeputyFromGroupName(g.name) || '',
+    deputy_id: g.deputy_id ? String(g.deputy_id) : '',
+    campaign_coordinator_id: g.campaign_coordinator_id
+      ? String(g.campaign_coordinator_id)
+      : (g.coordinator_id ? String(g.coordinator_id) : ''),
+    dobra_coordinator_id: g.dobra_coordinator_id ? String(g.dobra_coordinator_id) : '',
     municipality_id: g.municipality_id ? String(g.municipality_id) : '',
     opened_at: g.opened_at ? String(g.opened_at).slice(0, 10) : '',
     notes: g.notes || '',
@@ -44,13 +56,21 @@ function formFromGroup(g) {
   };
 }
 
-/** Nome do Deputado Estadual da dobra (não coordenador regional). */
-function deputyKey(g) {
-  return deputyDisplayName(g);
+function coordOptions(list, preferType) {
+  const sorted = (list || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  if (!preferType) return sorted;
+  return sorted.slice().sort((a, b) => {
+    const aMatch = (a.coord_type || 'regional') === preferType ? 0 : 1;
+    const bMatch = (b.coord_type || 'regional') === preferType ? 0 : 1;
+    if (aMatch !== bMatch) return aMatch - bMatch;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
 }
 
 export default function GruposDobraPage() {
   const { campaign } = useOutletContext();
+  const [deputies, setDeputies] = useState([]);
+  const [coordinators, setCoordinators] = useState([]);
   const [groups, setGroups] = useState([]);
   const [summary, setSummary] = useState(null);
   const [bitlyConfigured, setBitlyConfigured] = useState(false);
@@ -59,68 +79,62 @@ export default function GruposDobraPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
-  const [selectedPerson, setSelectedPerson] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+
+  const [selectedDeputyId, setSelectedDeputyId] = useState(null);
+  const [showDeputyForm, setShowDeputyForm] = useState(false);
+  const [editingDeputyId, setEditingDeputyId] = useState(null);
+  const [deputyForm, setDeputyForm] = useState(emptyDeputyForm);
+
+  const [showGroupForm, setShowGroupForm] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [groupForm, setGroupForm] = useState(emptyGroupForm);
+
   const printRef = useRef(null);
   const formRef = useRef(null);
-
-  const isEditing = editingId != null;
 
   const muniOptions = useMemo(
     () => allMunicipalities.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [allMunicipalities],
   );
 
-  /** Quadradinhos por Deputado Estadual */
-  const peopleCards = useMemo(() => {
-    const map = new Map();
-    for (const g of groups.filter((x) => x.status !== 'arquivado')) {
-      const key = deputyKey(g);
-      if (!map.has(key)) {
-        map.set(key, {
-          name: key,
-          groups: [],
-          members_initial: 0,
-          members_current: 0,
-          with_bitly: 0,
-        });
-      }
-      const row = map.get(key);
-      row.groups.push(g);
-      row.members_initial += g.members_initial || 0;
-      row.members_current += g.members_current || 0;
-      if (g.bitly_url) row.with_bitly += 1;
-    }
-    return Array.from(map.values())
-      .map((row) => ({
-        ...row,
-        growth: row.members_current - row.members_initial,
-        group_count: row.groups.length,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, [groups]);
+  const selectedDeputy = useMemo(
+    () => deputies.find((d) => d.id === Number(selectedDeputyId)) || null,
+    [deputies, selectedDeputyId],
+  );
 
   const personGroups = useMemo(() => {
-    if (!selectedPerson) return [];
-    return peopleCards.find((p) => p.name === selectedPerson)?.groups || [];
-  }, [peopleCards, selectedPerson]);
+    if (!selectedDeputy) return [];
+    return groups.filter(
+      (g) => g.status !== 'arquivado' && Number(g.deputy_id) === Number(selectedDeputy.id),
+    );
+  }, [groups, selectedDeputy]);
+
+  const campaignCoords = useMemo(
+    () => coordOptions(coordinators, 'regional'),
+    [coordinators],
+  );
+  const dobraCoords = useMemo(
+    () => coordOptions(coordinators, 'dobra'),
+    [coordinators],
+  );
 
   async function load() {
     setLoading(true);
     try {
-      const [res, munis] = await Promise.all([
+      const [depRes, grpRes, munis] = await Promise.all([
+        api.getDobraDeputies(campaign.slug),
         api.getDobraGroups(campaign.slug),
         api.getMunicipalities().catch(() => []),
       ]);
-      setGroups(res.groups || []);
-      setSummary(res.summary || null);
-      setBitlyConfigured(Boolean(res.bitly_configured));
+      setDeputies(depRes.deputies || []);
+      setCoordinators(depRes.coordinators || []);
+      setGroups(grpRes.groups || []);
+      setSummary(grpRes.summary || null);
+      setBitlyConfigured(Boolean(grpRes.bitly_configured));
       setAllMunicipalities(Array.isArray(munis) ? munis : (munis.municipalities || []));
       setError('');
     } catch (err) {
-      setError(err.message || 'Erro ao carregar grupos');
+      setError(err.message || 'Erro ao carregar grupos dobra');
     } finally {
       setLoading(false);
     }
@@ -130,68 +144,157 @@ export default function GruposDobraPage() {
     load().catch((err) => setError(err.message));
   }, [campaign.slug]);
 
-  function openCreate(prefillName = '') {
-    setEditingId(null);
-    setForm({
-      ...emptyForm,
-      deputy_name: prefillName || selectedPerson || '',
-      opened_at: new Date().toISOString().slice(0, 10),
-    });
-    setShowForm(true);
-    requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+  function openCreateDeputy() {
+    setEditingDeputyId(null);
+    setDeputyForm(emptyDeputyForm);
+    setShowDeputyForm(true);
+    setShowGroupForm(false);
   }
 
-  function openEdit(group) {
-    setEditingId(group.id);
-    setForm(formFromGroup(group));
-    setShowForm(true);
-    requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function openEditDeputy(dep) {
+    setEditingDeputyId(dep.id);
+    setDeputyForm({
+      name: dep.name || '',
+      campaign_coordinator_id: dep.campaign_coordinator_id ? String(dep.campaign_coordinator_id) : '',
+      dobra_coordinator_id: dep.dobra_coordinator_id ? String(dep.dobra_coordinator_id) : '',
+      notes: dep.notes || '',
     });
+    setShowDeputyForm(true);
+    setShowGroupForm(false);
   }
 
-  function closeForm() {
-    setShowForm(false);
-    setEditingId(null);
-    setForm(emptyForm);
+  function closeDeputyForm() {
+    setShowDeputyForm(false);
+    setEditingDeputyId(null);
+    setDeputyForm(emptyDeputyForm);
   }
 
-  async function onSubmit(e) {
+  async function onSubmitDeputy(e) {
     e.preventDefault();
-    if (!form.name.trim()) {
-      setToast('Informe o nome do grupo');
-      return;
-    }
-    if (!form.deputy_name.trim()) {
-      setToast('Informe o Deputado Estadual da dobra (aparece no quadradinho)');
+    if (!deputyForm.name.trim()) {
+      setToast('Informe o nome do Deputado Estadual');
       return;
     }
     setSaving(true);
     try {
       const body = {
-        name: form.name.trim(),
-        invite_link: form.invite_link.trim() || null,
-        bitly_url: form.bitly_url.trim() || null,
-        members_initial: Number(form.members_initial) || 0,
-        members_current: Number(form.members_current) || Number(form.members_initial) || 0,
-        deputy_name: form.deputy_name.trim() || null,
-        municipality_id: form.municipality_id ? Number(form.municipality_id) : null,
-        opened_at: form.opened_at || null,
-        notes: form.notes.trim() || null,
+        name: deputyForm.name.trim(),
+        campaign_coordinator_id: deputyForm.campaign_coordinator_id
+          ? Number(deputyForm.campaign_coordinator_id)
+          : null,
+        dobra_coordinator_id: deputyForm.dobra_coordinator_id
+          ? Number(deputyForm.dobra_coordinator_id)
+          : null,
+        notes: deputyForm.notes.trim() || null,
       };
-      if (form.photo_file) {
-        body.photo_data_url = await readFileAsDataUrl(form.photo_file);
-        body.photo_name = form.photo_file.name;
+      const res = editingDeputyId
+        ? await api.updateDobraDeputy(campaign.slug, editingDeputyId, body)
+        : await api.createDobraDeputy(campaign.slug, body);
+      setDeputies(res.deputies || []);
+      setToast(editingDeputyId ? 'Card do deputado atualizado' : 'Card do Deputado Estadual criado');
+      closeDeputyForm();
+      if (!editingDeputyId && res.deputy?.id) setSelectedDeputyId(res.deputy.id);
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeDeputy(dep) {
+    if (!window.confirm(`Remover o card do deputado "${dep.name}"?`)) return;
+    try {
+      const res = await api.deleteDobraDeputy(campaign.slug, dep.id);
+      setDeputies(res.deputies || []);
+      if (Number(selectedDeputyId) === Number(dep.id)) setSelectedDeputyId(null);
+      setToast('Card removido');
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  function applyDeputyDefaults(deputyId, prev = emptyGroupForm) {
+    const dep = deputies.find((d) => d.id === Number(deputyId));
+    return {
+      ...prev,
+      deputy_id: deputyId ? String(deputyId) : '',
+      campaign_coordinator_id: dep?.campaign_coordinator_id
+        ? String(dep.campaign_coordinator_id)
+        : prev.campaign_coordinator_id,
+      dobra_coordinator_id: dep?.dobra_coordinator_id
+        ? String(dep.dobra_coordinator_id)
+        : prev.dobra_coordinator_id,
+    };
+  }
+
+  function openCreateGroup() {
+    if (!deputies.length) {
+      setToast('Cadastre primeiro o card do Deputado Estadual');
+      openCreateDeputy();
+      return;
+    }
+    setEditingGroupId(null);
+    setGroupForm(applyDeputyDefaults(
+      selectedDeputyId || deputies[0].id,
+      { ...emptyGroupForm, opened_at: new Date().toISOString().slice(0, 10) },
+    ));
+    setShowGroupForm(true);
+    setShowDeputyForm(false);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function openEditGroup(group) {
+    setEditingGroupId(group.id);
+    setGroupForm(groupFormFrom(group));
+    setShowGroupForm(true);
+    setShowDeputyForm(false);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function closeGroupForm() {
+    setShowGroupForm(false);
+    setEditingGroupId(null);
+    setGroupForm(emptyGroupForm);
+  }
+
+  async function onSubmitGroup(e) {
+    e.preventDefault();
+    if (!groupForm.name.trim()) {
+      setToast('Informe o nome do grupo');
+      return;
+    }
+    if (!groupForm.deputy_id) {
+      setToast('Selecione o Deputado Estadual');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: groupForm.name.trim(),
+        invite_link: groupForm.invite_link.trim() || null,
+        bitly_url: groupForm.bitly_url.trim() || null,
+        members_initial: Number(groupForm.members_initial) || 0,
+        members_current: Number(groupForm.members_current) || Number(groupForm.members_initial) || 0,
+        deputy_id: Number(groupForm.deputy_id),
+        campaign_coordinator_id: groupForm.campaign_coordinator_id
+          ? Number(groupForm.campaign_coordinator_id)
+          : null,
+        dobra_coordinator_id: groupForm.dobra_coordinator_id
+          ? Number(groupForm.dobra_coordinator_id)
+          : null,
+        municipality_id: groupForm.municipality_id ? Number(groupForm.municipality_id) : null,
+        opened_at: groupForm.opened_at || null,
+        notes: groupForm.notes.trim() || null,
+      };
+      if (groupForm.photo_file) {
+        body.photo_data_url = await readFileAsDataUrl(groupForm.photo_file);
+        body.photo_name = groupForm.photo_file.name;
       }
 
       let res;
-      if (isEditing) {
-        if (form.create_bitly && !body.bitly_url && body.invite_link) {
-          body.create_bitly = true;
-        }
-        res = await api.updateDobraGroup(campaign.slug, editingId, body);
+      if (editingGroupId) {
+        if (groupForm.create_bitly && !body.bitly_url && body.invite_link) body.create_bitly = true;
+        res = await api.updateDobraGroup(campaign.slug, editingGroupId, body);
         setToast(`Grupo atualizado · ${res.group?.members_current ?? body.members_current} pessoas agora`);
       } else {
         res = await api.createDobraGroup(campaign.slug, body);
@@ -203,8 +306,13 @@ export default function GruposDobraPage() {
 
       setGroups(res.groups || []);
       setSummary(res.summary || null);
-      if (body.deputy_name) setSelectedPerson(body.deputy_name);
-      closeForm();
+      const depRes = await api.getDobraDeputies(campaign.slug).catch(() => null);
+      if (depRes) {
+        setDeputies(depRes.deputies || []);
+        setCoordinators(depRes.coordinators || []);
+      }
+      if (body.deputy_id) setSelectedDeputyId(body.deputy_id);
+      closeGroupForm();
     } catch (err) {
       setToast(err.message);
     } finally {
@@ -250,7 +358,9 @@ export default function GruposDobraPage() {
       const res = await api.deleteDobraGroup(campaign.slug, group.id);
       setGroups(res.groups || []);
       setSummary(res.summary || null);
-      if (editingId === group.id) closeForm();
+      if (editingGroupId === group.id) closeGroupForm();
+      const depRes = await api.getDobraDeputies(campaign.slug).catch(() => null);
+      if (depRes) setDeputies(depRes.deputies || []);
       setToast('Grupo removido');
     } catch (err) {
       setToast(err.message);
@@ -264,8 +374,10 @@ export default function GruposDobraPage() {
     });
   }
 
-  const showingPeople = !selectedPerson;
-  const printGroups = selectedPerson ? personGroups : groups.filter((g) => g.status !== 'arquivado');
+  const showingDeputies = !selectedDeputy;
+  const printGroups = selectedDeputy
+    ? personGroups
+    : groups.filter((g) => g.status !== 'arquivado');
 
   return (
     <div className="dobra-page">
@@ -274,18 +386,22 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Quadradinhos por <strong>Deputado Estadual</strong> (ex.: Beto Dois a Um).
-            Coordenador de campanha (ex.: Beto Correa em Cuiabá) <strong>não</strong> vira card —
-            os grupos com nome <em>BETO DOIS A UM</em> entram na aba do deputado.
+            Hierarquia: <strong>Deputado Estadual</strong> (card) →
+            {' '}<strong>nosso coordenador</strong> (Atlas / campanha) +
+            {' '}<strong>coordenador das dobras</strong> (quem toca a rede após a conversa com a região).
+            Cadastre o deputado primeiro; na criação do grupo, só seleciona.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
-            <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate()}>
+            <button type="button" className="btn btn-accent btn-sm" onClick={openCreateDeputy}>
+              Novo Deputado Estadual
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={openCreateGroup}>
               Cadastrar grupo
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={syncAll} disabled={!bitlyConfigured}>
               Sincronizar cliques Bitly
             </button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={onPrint}>
+            <button type="button" className="btn btn-soft btn-sm" onClick={onPrint}>
               Baixar PDF / apresentar
             </button>
           </div>
@@ -293,34 +409,127 @@ export default function GruposDobraPage() {
 
         {error && <EmptyState>{error}</EmptyState>}
 
-        {showForm && (
-          <form ref={formRef} className="panel panel-pad no-print dobra-form" onSubmit={onSubmit}>
-            <h3 style={{ marginTop: 0 }}>{isEditing ? 'Editar grupo' : 'Novo grupo'}</h3>
+        {showDeputyForm && (
+          <form className="panel panel-pad no-print dobra-form" onSubmit={onSubmitDeputy}>
+            <h3 style={{ marginTop: 0 }}>
+              {editingDeputyId ? 'Editar Deputado Estadual' : 'Novo Deputado Estadual'}
+            </h3>
+            <p style={{ marginTop: 0, color: 'var(--ink-soft, #556)', fontSize: '0.92rem' }}>
+              Esse card é o lugar da dobra política. Abaixo fica a divisão clara dos dois coordenadores.
+            </p>
             <div className="dobra-form__grid">
               <label>
                 Deputado Estadual
                 <input
                   className="input"
-                  value={form.deputy_name}
-                  onChange={(e) => setForm({ ...form, deputy_name: e.target.value })}
-                  placeholder="Ex.: Beto Dois a Um (não o coordenador da campanha)"
+                  value={deputyForm.name}
+                  onChange={(e) => setDeputyForm({ ...deputyForm, name: e.target.value })}
+                  placeholder="Ex.: Beto Dois a Um"
                   required
                 />
+              </label>
+              <label>
+                Nosso coordenador (Atlas / campanha)
+                <select
+                  className="input"
+                  value={deputyForm.campaign_coordinator_id}
+                  onChange={(e) => setDeputyForm({ ...deputyForm, campaign_coordinator_id: e.target.value })}
+                >
+                  <option value="">— selecione o já cadastrado —</option>
+                  {campaignCoords.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Coordenador das dobras (quem toca a rede)
+                <select
+                  className="input"
+                  value={deputyForm.dobra_coordinator_id}
+                  onChange={(e) => setDeputyForm({ ...deputyForm, dobra_coordinator_id: e.target.value })}
+                >
+                  <option value="">— selecione quem cuida das dobras —</option>
+                  {dobraCoords.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label>
+              Observações da hierarquia / conversa
+              <textarea
+                className="textarea"
+                rows={2}
+                value={deputyForm.notes}
+                onChange={(e) => setDeputyForm({ ...deputyForm, notes: e.target.value })}
+                placeholder="Ex.: conversa Fábio + deputado com coordenador da região…"
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="submit" disabled={saving}>
+                {saving ? 'Salvando…' : (editingDeputyId ? 'Salvar card' : 'Criar card')}
+              </button>
+              <button type="button" className="btn btn-soft" onClick={closeDeputyForm}>Cancelar</button>
+            </div>
+          </form>
+        )}
+
+        {showGroupForm && (
+          <form ref={formRef} className="panel panel-pad no-print dobra-form" onSubmit={onSubmitGroup}>
+            <h3 style={{ marginTop: 0 }}>{editingGroupId ? 'Editar grupo' : 'Novo grupo'}</h3>
+            <div className="dobra-form__grid">
+              <label>
+                Deputado Estadual
+                <select
+                  className="input"
+                  value={groupForm.deputy_id}
+                  onChange={(e) => setGroupForm((prev) => applyDeputyDefaults(e.target.value, prev))}
+                  required
+                >
+                  <option value="">— selecione o card —</option>
+                  {deputies.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Nosso coordenador (Atlas)
+                <select
+                  className="input"
+                  value={groupForm.campaign_coordinator_id}
+                  onChange={(e) => setGroupForm({ ...groupForm, campaign_coordinator_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {campaignCoords.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Coordenador das dobras
+                <select
+                  className="input"
+                  value={groupForm.dobra_coordinator_id}
+                  onChange={(e) => setGroupForm({ ...groupForm, dobra_coordinator_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {dobraCoords.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 Nome do grupo
                 <input
                   className="input"
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    const inferred = inferDeputyFromGroupName(name);
-                    setForm((prev) => ({
-                      ...prev,
-                      name,
-                      deputy_name: inferred || prev.deputy_name,
-                    }));
-                  }}
+                  value={groupForm.name}
+                  onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
                   placeholder="Ex.: BETO DOIS A UM · Centro"
                   required
                 />
@@ -329,8 +538,8 @@ export default function GruposDobraPage() {
                 Link de convite WhatsApp
                 <input
                   className="input"
-                  value={form.invite_link}
-                  onChange={(e) => setForm({ ...form, invite_link: e.target.value })}
+                  value={groupForm.invite_link}
+                  onChange={(e) => setGroupForm({ ...groupForm, invite_link: e.target.value })}
                   placeholder="https://chat.whatsapp.com/..."
                 />
               </label>
@@ -338,8 +547,8 @@ export default function GruposDobraPage() {
                 Link Bitly (se já tiver)
                 <input
                   className="input"
-                  value={form.bitly_url}
-                  onChange={(e) => setForm({ ...form, bitly_url: e.target.value })}
+                  value={groupForm.bitly_url}
+                  onChange={(e) => setGroupForm({ ...groupForm, bitly_url: e.target.value })}
                   placeholder="https://bit.ly/..."
                 />
               </label>
@@ -349,8 +558,8 @@ export default function GruposDobraPage() {
                   className="input"
                   type="number"
                   min="0"
-                  value={form.members_initial}
-                  onChange={(e) => setForm({ ...form, members_initial: e.target.value })}
+                  value={groupForm.members_initial}
+                  onChange={(e) => setGroupForm({ ...groupForm, members_initial: e.target.value })}
                 />
               </label>
               <label>
@@ -359,16 +568,16 @@ export default function GruposDobraPage() {
                   className="input"
                   type="number"
                   min="0"
-                  value={form.members_current}
-                  onChange={(e) => setForm({ ...form, members_current: e.target.value })}
+                  value={groupForm.members_current}
+                  onChange={(e) => setGroupForm({ ...groupForm, members_current: e.target.value })}
                 />
               </label>
               <label>
                 Município
                 <select
                   className="input"
-                  value={form.municipality_id}
-                  onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
+                  value={groupForm.municipality_id}
+                  onChange={(e) => setGroupForm({ ...groupForm, municipality_id: e.target.value })}
                 >
                   <option value="">—</option>
                   {muniOptions.map((m) => (
@@ -381,17 +590,17 @@ export default function GruposDobraPage() {
                 <input
                   className="input"
                   type="date"
-                  value={form.opened_at}
-                  onChange={(e) => setForm({ ...form, opened_at: e.target.value })}
+                  value={groupForm.opened_at}
+                  onChange={(e) => setGroupForm({ ...groupForm, opened_at: e.target.value })}
                 />
               </label>
               <label>
-                {isEditing ? 'Trocar foto (opcional)' : 'Foto do grupo'}
+                {editingGroupId ? 'Trocar foto (opcional)' : 'Foto do grupo'}
                 <input
                   className="input"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setForm({ ...form, photo_file: e.target.files?.[0] || null })}
+                  onChange={(e) => setGroupForm({ ...groupForm, photo_file: e.target.files?.[0] || null })}
                 />
               </label>
             </div>
@@ -400,27 +609,25 @@ export default function GruposDobraPage() {
               <textarea
                 className="textarea"
                 rows={2}
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                value={groupForm.notes}
+                onChange={(e) => setGroupForm({ ...groupForm, notes: e.target.value })}
               />
             </label>
-            {bitlyConfigured && !form.bitly_url.trim() && form.invite_link.trim() ? (
+            {bitlyConfigured && !groupForm.bitly_url.trim() && groupForm.invite_link.trim() ? (
               <label className="dobra-check">
                 <input
                   type="checkbox"
-                  checked={form.create_bitly}
-                  onChange={(e) => setForm({ ...form, create_bitly: e.target.checked })}
+                  checked={groupForm.create_bitly}
+                  onChange={(e) => setGroupForm({ ...groupForm, create_bitly: e.target.checked })}
                 />
                 Gerar Bitly automaticamente a partir do convite
               </label>
             ) : null}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Salvando…' : (isEditing ? 'Salvar alterações' : 'Salvar grupo')}
+                {saving ? 'Salvando…' : (editingGroupId ? 'Salvar alterações' : 'Salvar grupo')}
               </button>
-              <button type="button" className="btn btn-soft" onClick={closeForm}>
-                Cancelar
-              </button>
+              <button type="button" className="btn btn-soft" onClick={closeGroupForm}>Cancelar</button>
             </div>
           </form>
         )}
@@ -428,26 +635,27 @@ export default function GruposDobraPage() {
         <div className="demand-breadcrumb no-print">
           <button
             type="button"
-            className={`chip ${showingPeople ? 'active' : ''}`}
+            className={`chip ${showingDeputies ? 'active' : ''}`}
             onClick={() => {
-              setSelectedPerson(null);
-              closeForm();
+              setSelectedDeputyId(null);
+              closeGroupForm();
+              closeDeputyForm();
             }}
           >
             Deputados
           </button>
-          {selectedPerson ? (
+          {selectedDeputy ? (
             <>
               <span>/</span>
-              <span className="chip active">{selectedPerson}</span>
+              <span className="chip active">{selectedDeputy.name}</span>
             </>
           ) : null}
         </div>
 
-        {summary && showingPeople ? (
+        {summary && showingDeputies ? (
           <div className="dobra-print-stats no-print" style={{ marginTop: '1rem' }}>
             <div className="dobra-print-stat">
-              <strong>{peopleCards.length}</strong>
+              <strong>{deputies.length}</strong>
               <span>Deputados</span>
             </div>
             <div className="dobra-print-stat">
@@ -469,39 +677,65 @@ export default function GruposDobraPage() {
 
         {loading ? (
           <EmptyState>Carregando…</EmptyState>
-        ) : showingPeople ? (
+        ) : showingDeputies ? (
           <div className="demand-grid" style={{ marginTop: '1rem' }}>
-            {peopleCards.map((person) => (
+            {deputies.map((dep) => (
               <button
-                key={person.name}
+                key={dep.id}
                 type="button"
                 className="demand-card-btn"
-                onClick={() => setSelectedPerson(person.name)}
+                onClick={() => setSelectedDeputyId(dep.id)}
               >
-                <strong>{person.name}</strong>
-                <span>{person.group_count} grupo(s)</span>
+                <strong>{dep.name}</strong>
+                <span>{dep.group_count || 0} grupo(s)</span>
                 <span className="demand-card-btn__stats">
-                  {person.members_initial} início · {person.members_current} agora
-                  {person.growth ? ` · +${person.growth}` : ''}
+                  Nosso: {dep.campaign_coordinator_name || '—'}
+                </span>
+                <span className="demand-card-btn__stats">
+                  Dobra: {dep.dobra_coordinator_name || '—'}
+                </span>
+                <span className="demand-card-btn__stats">
+                  {dep.members_initial || 0} início · {dep.members_current || 0} agora
                 </span>
               </button>
             ))}
-            {!peopleCards.length ? (
+            {!deputies.length ? (
               <EmptyState>
-                Ainda não há grupos. Cadastre o primeiro com o nome do Deputado Estadual
-                (ex.: grupos BETO DOIS A UM → card Beto Dois a Um).
+                Ainda não há Deputados Estaduais. Crie o card (ex.: Beto Dois a Um), escolha
+                o nosso coordenador e o coordenador das dobras — depois cadastre os grupos.
               </EmptyState>
             ) : null}
           </div>
         ) : (
           <div style={{ marginTop: '1rem' }}>
-            <div className="no-print" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate(selectedPerson)}>
-                Novo grupo de {selectedPerson}
-              </button>
-              <button type="button" className="btn btn-soft btn-sm" onClick={() => setSelectedPerson(null)}>
-                Voltar aos deputados
-              </button>
+            <div className="panel panel-pad no-print" style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div>
+                  <p className="eyebrow" style={{ marginBottom: 4 }}>Deputado Estadual</p>
+                  <h3 style={{ margin: 0 }}>{selectedDeputy.name}</h3>
+                  <p style={{ margin: '0.55rem 0 0', fontSize: '0.92rem' }}>
+                    <strong>Nosso coordenador:</strong>{' '}
+                    {selectedDeputy.campaign_coordinator_name || '— não definido'}
+                    <br />
+                    <strong>Coordenador das dobras:</strong>{' '}
+                    {selectedDeputy.dobra_coordinator_name || '— não definido'}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  <button type="button" className="btn btn-accent btn-sm" onClick={openCreateGroup}>
+                    Novo grupo
+                  </button>
+                  <button type="button" className="btn btn-soft btn-sm" onClick={() => openEditDeputy(selectedDeputy)}>
+                    Editar hierarquia
+                  </button>
+                  <button type="button" className="btn btn-soft btn-sm" onClick={() => setSelectedDeputyId(null)}>
+                    Voltar aos deputados
+                  </button>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removeDeputy(selectedDeputy)}>
+                    Remover card
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div ref={printRef} className="dobra-print-root">
@@ -519,19 +753,19 @@ export default function GruposDobraPage() {
                   <span>Agora</span>
                 </div>
                 <div className="dobra-print-stat">
-                  <strong>{selectedPerson}</strong>
+                  <strong>{selectedDeputy.name}</strong>
                   <span>Dep. Estadual</span>
                 </div>
               </div>
 
               {!personGroups.length ? (
-                <EmptyState>Nenhum grupo neste nome ainda.</EmptyState>
+                <EmptyState>Nenhum grupo neste deputado ainda — cadastre o primeiro.</EmptyState>
               ) : (
                 <div className="dobra-print-grid dobra-grid">
                   {personGroups.map((g) => (
                     <article
                       key={g.id}
-                      className={`dobra-print-card dobra-card${editingId === g.id ? ' is-editing' : ''}`}
+                      className={`dobra-print-card dobra-card${editingGroupId === g.id ? ' is-editing' : ''}`}
                     >
                       {g.photo_url ? (
                         <img className="dobra-print-card__photo" src={g.photo_url} alt={g.name} />
@@ -540,11 +774,16 @@ export default function GruposDobraPage() {
                       )}
                       <div className="dobra-print-card__body">
                         <p className="dobra-print-card__meta">
-                          Dep. {selectedPerson}
+                          Dep. {selectedDeputy.name}
                           {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                           {g.opened_at ? ` · ${g.opened_at}` : ''}
                         </p>
                         <h3>{g.name}</h3>
+                        <p className="dobra-print-link" style={{ marginBottom: 8 }}>
+                          Nosso: {g.campaign_coordinator_name || '—'}
+                          {' · '}
+                          Dobra: {g.dobra_coordinator_name || '—'}
+                        </p>
                         <div className="dobra-print-metrics">
                           <div>
                             <strong>{g.members_initial}</strong>
@@ -574,7 +813,7 @@ export default function GruposDobraPage() {
                         )}
 
                         <div className="dobra-card__actions no-print">
-                          <button type="button" className="btn btn-accent btn-sm" onClick={() => openEdit(g)}>
+                          <button type="button" className="btn btn-accent btn-sm" onClick={() => openEditGroup(g)}>
                             Editar
                           </button>
                           {!g.bitly_url && g.invite_link ? (
@@ -600,8 +839,7 @@ export default function GruposDobraPage() {
           </div>
         )}
 
-        {/* Conteúdo oculto para PDF quando está na visão de nomes (todos os grupos) */}
-        {showingPeople ? (
+        {showingDeputies ? (
           <div ref={printRef} className="dobra-print-root dobra-screen-print-only" aria-hidden>
             <div className="dobra-print-stats">
               <div className="dobra-print-stat">
@@ -617,7 +855,7 @@ export default function GruposDobraPage() {
                 <span>Agora</span>
               </div>
               <div className="dobra-print-stat">
-                <strong>{peopleCards.length}</strong>
+                <strong>{deputies.length}</strong>
                 <span>Deputados</span>
               </div>
             </div>
@@ -631,12 +869,15 @@ export default function GruposDobraPage() {
                   )}
                   <div className="dobra-print-card__body">
                     <p className="dobra-print-card__meta">
-                      {deputyDisplayName(g) !== 'Sem deputado'
-                        ? `Dep. ${deputyDisplayName(g)}`
-                        : 'Sem deputado'}
+                      {g.deputy_name ? `Dep. ${g.deputy_name}` : 'Sem deputado'}
                       {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                     </p>
                     <h3>{g.name}</h3>
+                    <p className="dobra-print-link">
+                      Nosso: {g.campaign_coordinator_name || '—'}
+                      {' · '}
+                      Dobra: {g.dobra_coordinator_name || '—'}
+                    </p>
                     <div className="dobra-print-metrics">
                       <div>
                         <strong>{g.members_initial}</strong>
