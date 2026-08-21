@@ -276,6 +276,7 @@ CREATE TABLE IF NOT EXISTS dobra_groups (
   members_initial INTEGER DEFAULT 0,
   members_current INTEGER DEFAULT 0,
   coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  coordinator_label TEXT,
   municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
   notes TEXT,
   status TEXT DEFAULT 'ativo',

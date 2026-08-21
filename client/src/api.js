@@ -134,13 +134,14 @@ export const api = {
     request(`/api/campaigns/${slug}/investments/import-docx`, { method: 'POST', body: JSON.stringify(body) }),
   clearInvestments: (slug, body = {}) =>
     request(`/api/campaigns/${slug}/investments/clear`, { method: 'POST', body: JSON.stringify(body) }),
-  getDobraGroups: (slug, { coordinator_id, municipality_id, status } = {}) => {
+  getDobraGroups: (slug, { coordinator_id, municipality_id, status, q } = {}) => {
     const qs = new URLSearchParams();
     if (coordinator_id) qs.set('coordinator_id', coordinator_id);
     if (municipality_id) qs.set('municipality_id', municipality_id);
     if (status) qs.set('status', status);
-    const q = qs.toString();
-    return request(`/api/campaigns/${slug}/groups${q ? `?${q}` : ''}`);
+    if (q) qs.set('q', q);
+    const query = qs.toString();
+    return request(`/api/campaigns/${slug}/groups${query ? `?${query}` : ''}`);
   },
   createDobraGroup: (slug, body) =>
     request(`/api/campaigns/${slug}/groups`, { method: 'POST', body: JSON.stringify(body) }),

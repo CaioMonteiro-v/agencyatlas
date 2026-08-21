@@ -19,7 +19,7 @@ const emptyForm = {
   bitly_url: '',
   members_initial: '13',
   members_current: '13',
-  coordinator_id: '',
+  coordinator_label: '',
   municipality_id: '',
   opened_at: new Date().toISOString().slice(0, 10),
   notes: '',
@@ -34,7 +34,7 @@ function formFromGroup(g) {
     bitly_url: g.bitly_url || '',
     members_initial: String(g.members_initial ?? 0),
     members_current: String(g.members_current ?? 0),
-    coordinator_id: g.coordinator_id ? String(g.coordinator_id) : '',
+    coordinator_label: g.coordinator_label || g.coordinator_name || '',
     municipality_id: g.municipality_id ? String(g.municipality_id) : '',
     opened_at: g.opened_at ? String(g.opened_at).slice(0, 10) : '',
     notes: g.notes || '',
@@ -48,7 +48,6 @@ export default function GruposDobraPage() {
   const [groups, setGroups] = useState([]);
   const [summary, setSummary] = useState(null);
   const [bitlyConfigured, setBitlyConfigured] = useState(false);
-  const [coordinators, setCoordinators] = useState([]);
   const [allMunicipalities, setAllMunicipalities] = useState([]);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
@@ -56,47 +55,28 @@ export default function GruposDobraPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [filterCoord, setFilterCoord] = useState('');
+  const [filterQ, setFilterQ] = useState('');
   const [showForm, setShowForm] = useState(false);
   const printRef = useRef(null);
   const formRef = useRef(null);
 
   const isEditing = editingId != null;
 
-  const muniOptions = useMemo(() => {
-    const selectedCoord = coordinators.find((c) => String(c.id) === String(form.coordinator_id));
-    const isDobra = selectedCoord?.coord_type === 'dobra';
-
-    // Dobra (ex. Cuiabá): pode escolher qualquer município, mesmo sem vínculo exclusivo
-    if (isDobra || !form.coordinator_id) {
-      const fromCoord = [];
-      for (const c of coordinators) {
-        for (const m of c.municipalities || []) {
-          if (!fromCoord.some((x) => x.id === m.id)) fromCoord.push(m);
-        }
-      }
-      const base = allMunicipalities.length ? allMunicipalities : fromCoord;
-      return base.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-    }
-
-    const coord = selectedCoord;
-    return (coord?.municipalities || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, [coordinators, form.coordinator_id, allMunicipalities]);
+  const muniOptions = useMemo(
+    () => allMunicipalities.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [allMunicipalities],
+  );
 
   async function load() {
     setLoading(true);
     try {
-      const [res, coords, munis] = await Promise.all([
-        api.getDobraGroups(campaign.slug, {
-          coordinator_id: filterCoord || undefined,
-        }),
-        api.getCoordinators(campaign.slug),
+      const [res, munis] = await Promise.all([
+        api.getDobraGroups(campaign.slug),
         api.getMunicipalities().catch(() => []),
       ]);
       setGroups(res.groups || []);
       setSummary(res.summary || null);
       setBitlyConfigured(Boolean(res.bitly_configured));
-      setCoordinators(coords.coordinators || coords || []);
       setAllMunicipalities(Array.isArray(munis) ? munis : (munis.municipalities || []));
       setError('');
     } catch (err) {
@@ -108,7 +88,7 @@ export default function GruposDobraPage() {
 
   useEffect(() => {
     load().catch((err) => setError(err.message));
-  }, [campaign.slug, filterCoord]);
+  }, [campaign.slug]);
 
   function openCreate() {
     setEditingId(null);
@@ -151,7 +131,7 @@ export default function GruposDobraPage() {
         bitly_url: form.bitly_url.trim() || null,
         members_initial: Number(form.members_initial) || 0,
         members_current: Number(form.members_current) || Number(form.members_initial) || 0,
-        coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
+        coordinator_label: form.coordinator_label.trim() || null,
         municipality_id: form.municipality_id ? Number(form.municipality_id) : null,
         opened_at: form.opened_at || null,
         notes: form.notes.trim() || null,
@@ -238,7 +218,7 @@ export default function GruposDobraPage() {
     });
   }
 
-  const visible = groups.filter((g) => g.status !== 'arquivado' || filterCoord);
+  const visible = groups.filter((g) => g.status !== 'arquivado');
 
   return (
     <div className="dobra-page">
@@ -247,9 +227,9 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Cadastre cada grupo WhatsApp criado com a dobra: foto, link de convite (Bitly separado)
-            e membros. Pode vincular a coordenadores <strong>regionais</strong> ou de{' '}
-            <strong>dobra</strong> (ex.: Cuiabá). Use <strong>Editar</strong> para atualizar pessoas e o link.
+            Cadastre cada grupo WhatsApp da dobra: foto, link, membros e o{' '}
+            <strong>nome do coordenador</strong> (digitado aqui — aparece no PDF).
+            Use <strong>Editar</strong> para atualizar a quantidade de pessoas e o link.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
             <button type="button" className="btn btn-accent btn-sm" onClick={openCreate}>
@@ -333,19 +313,13 @@ export default function GruposDobraPage() {
                 />
               </label>
               <label>
-                Coordenador
-                <select
+                Nome do coordenador
+                <input
                   className="input"
-                  value={form.coordinator_id}
-                  onChange={(e) => setForm({ ...form, coordinator_id: e.target.value, municipality_id: '' })}
-                >
-                  <option value="">—</option>
-                  {coordinators.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} · {c.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
-                    </option>
-                  ))}
-                </select>
+                  value={form.coordinator_label}
+                  onChange={(e) => setForm({ ...form, coordinator_label: e.target.value })}
+                  placeholder="Ex.: João · dobra Cuiabá"
+                />
               </label>
               <label>
                 Município
@@ -412,19 +386,13 @@ export default function GruposDobraPage() {
 
         <div className="no-print dobra-filters">
           <label>
-            Filtrar coordenador
-            <select
+            Filtrar por coordenador / grupo
+            <input
               className="input"
-              value={filterCoord}
-              onChange={(e) => setFilterCoord(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {coordinators.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} · {c.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
-                </option>
-              ))}
-            </select>
+              value={filterQ}
+              onChange={(e) => setFilterQ(e.target.value)}
+              placeholder="Ex.: Cuiabá, João…"
+            />
           </label>
         </div>
 

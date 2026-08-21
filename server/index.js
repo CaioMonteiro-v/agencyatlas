@@ -1917,6 +1917,7 @@ app.get('/api/campaigns/:slug/groups', (req, res) => {
       coordinatorId: req.query.coordinator_id,
       municipalityId: req.query.municipality_id,
       status: req.query.status,
+      q: req.query.q,
     });
     res.json({
       groups,
