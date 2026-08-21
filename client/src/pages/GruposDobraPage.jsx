@@ -16,6 +16,7 @@ function readFileAsDataUrl(file) {
 const emptyForm = {
   name: '',
   invite_link: '',
+  bitly_url: '',
   members_initial: '13',
   members_current: '13',
   coordinator_id: '',
@@ -23,7 +24,24 @@ const emptyForm = {
   opened_at: new Date().toISOString().slice(0, 10),
   notes: '',
   photo_file: null,
+  create_bitly: true,
 };
+
+function formFromGroup(g) {
+  return {
+    name: g.name || '',
+    invite_link: g.invite_link || '',
+    bitly_url: g.bitly_url || '',
+    members_initial: String(g.members_initial ?? 0),
+    members_current: String(g.members_current ?? 0),
+    coordinator_id: g.coordinator_id ? String(g.coordinator_id) : '',
+    municipality_id: g.municipality_id ? String(g.municipality_id) : '',
+    opened_at: g.opened_at ? String(g.opened_at).slice(0, 10) : '',
+    notes: g.notes || '',
+    photo_file: null,
+    create_bitly: !g.bitly_url,
+  };
+}
 
 export default function GruposDobraPage() {
   const { campaign } = useOutletContext();
@@ -36,9 +54,13 @@ export default function GruposDobraPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
   const [filterCoord, setFilterCoord] = useState('');
   const [showForm, setShowForm] = useState(false);
   const printRef = useRef(null);
+  const formRef = useRef(null);
+
+  const isEditing = editingId != null;
 
   const muniOptions = useMemo(() => {
     if (!form.coordinator_id) {
@@ -79,6 +101,33 @@ export default function GruposDobraPage() {
     load().catch((err) => setError(err.message));
   }, [campaign.slug, filterCoord]);
 
+  function openCreate() {
+    setEditingId(null);
+    setForm({
+      ...emptyForm,
+      opened_at: new Date().toISOString().slice(0, 10),
+    });
+    setShowForm(true);
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function openEdit(group) {
+    setEditingId(group.id);
+    setForm(formFromGroup(group));
+    setShowForm(true);
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     if (!form.name.trim()) {
@@ -90,6 +139,7 @@ export default function GruposDobraPage() {
       const body = {
         name: form.name.trim(),
         invite_link: form.invite_link.trim() || null,
+        bitly_url: form.bitly_url.trim() || null,
         members_initial: Number(form.members_initial) || 0,
         members_current: Number(form.members_current) || Number(form.members_initial) || 0,
         coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
@@ -101,31 +151,29 @@ export default function GruposDobraPage() {
         body.photo_data_url = await readFileAsDataUrl(form.photo_file);
         body.photo_name = form.photo_file.name;
       }
-      const res = await api.createDobraGroup(campaign.slug, body);
+
+      let res;
+      if (isEditing) {
+        if (form.create_bitly && !body.bitly_url && body.invite_link) {
+          body.create_bitly = true;
+        }
+        res = await api.updateDobraGroup(campaign.slug, editingId, body);
+        setToast(`Grupo atualizado · ${res.group?.members_current ?? body.members_current} pessoas agora`);
+      } else {
+        res = await api.createDobraGroup(campaign.slug, body);
+        const bitlyNote = res.group?.bitly_url
+          ? ` · Bitly ${res.group.bitly_url}`
+          : (res.bitly_error ? ` · Bitly: ${res.bitly_error}` : '');
+        setToast(`Grupo cadastrado${bitlyNote}`);
+      }
+
       setGroups(res.groups || []);
       setSummary(res.summary || null);
-      setForm(emptyForm);
-      setShowForm(false);
-      const bitlyNote = res.group?.bitly_url
-        ? ` · Bitly ${res.group.bitly_url}`
-        : (res.bitly_error ? ` · Bitly: ${res.bitly_error}` : '');
-      setToast(`Grupo cadastrado${bitlyNote}`);
+      closeForm();
     } catch (err) {
       setToast(err.message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function updateMembers(group, field, value) {
-    try {
-      const res = await api.updateDobraGroup(campaign.slug, group.id, {
-        [field]: Number(value) || 0,
-      });
-      setGroups(res.groups || []);
-      setSummary(res.summary || null);
-    } catch (err) {
-      setToast(err.message);
     }
   }
 
@@ -161,28 +209,13 @@ export default function GruposDobraPage() {
     }
   }
 
-  async function onPhotoReplace(group, file) {
-    if (!file) return;
-    try {
-      const photo_data_url = await readFileAsDataUrl(file);
-      const res = await api.updateDobraGroup(campaign.slug, group.id, {
-        photo_data_url,
-        photo_name: file.name,
-      });
-      setGroups(res.groups || []);
-      setSummary(res.summary || null);
-      setToast('Foto atualizada');
-    } catch (err) {
-      setToast(err.message);
-    }
-  }
-
   async function removeGroup(group) {
     if (!window.confirm(`Remover o grupo "${group.name}"?`)) return;
     try {
       const res = await api.deleteDobraGroup(campaign.slug, group.id);
       setGroups(res.groups || []);
       setSummary(res.summary || null);
+      if (editingId === group.id) closeForm();
       setToast('Grupo removido');
     } catch (err) {
       setToast(err.message);
@@ -206,11 +239,11 @@ export default function GruposDobraPage() {
           <h2>Grupos Dobra</h2>
           <p>
             Cadastre cada grupo WhatsApp criado com a dobra: foto, link de convite (Bitly separado)
-            e membros — de 13 para 50, 100, 200. Esse controle entra no relatório final da campanha.
+            e membros. Use <strong>Editar</strong> para atualizar a quantidade de pessoas e o link.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
-            <button type="button" className="btn btn-accent btn-sm" onClick={() => setShowForm((v) => !v)}>
-              {showForm ? 'Fechar formulário' : 'Cadastrar grupo'}
+            <button type="button" className="btn btn-accent btn-sm" onClick={openCreate}>
+              Cadastrar grupo
             </button>
             <button type="button" className="btn btn-soft btn-sm" onClick={syncAll} disabled={!bitlyConfigured}>
               Sincronizar cliques Bitly
@@ -227,8 +260,19 @@ export default function GruposDobraPage() {
         {error && <EmptyState>{error}</EmptyState>}
 
         {showForm && (
-          <form className="panel panel-pad no-print dobra-form" onSubmit={onSubmit}>
-            <h3 style={{ marginTop: 0 }}>Novo grupo</h3>
+          <form
+            ref={formRef}
+            className="panel panel-pad no-print dobra-form"
+            onSubmit={onSubmit}
+          >
+            <h3 style={{ marginTop: 0 }}>
+              {isEditing ? 'Editar grupo' : 'Novo grupo'}
+            </h3>
+            <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+              {isEditing
+                ? 'Atualize a quantidade de pessoas, o link de convite ou qualquer outro campo.'
+                : 'Preencha os dados do grupo criado com a dobra.'}
+            </p>
             <div className="dobra-form__grid">
               <label>
                 Nome do grupo
@@ -247,6 +291,15 @@ export default function GruposDobraPage() {
                   value={form.invite_link}
                   onChange={(e) => setForm({ ...form, invite_link: e.target.value })}
                   placeholder="https://chat.whatsapp.com/..."
+                />
+              </label>
+              <label>
+                Link Bitly (se já tiver)
+                <input
+                  className="input"
+                  value={form.bitly_url}
+                  onChange={(e) => setForm({ ...form, bitly_url: e.target.value })}
+                  placeholder="https://bit.ly/..."
                 />
               </label>
               <label>
@@ -305,7 +358,7 @@ export default function GruposDobraPage() {
                 />
               </label>
               <label>
-                Foto do grupo
+                {isEditing ? 'Trocar foto (opcional)' : 'Foto do grupo'}
                 <input
                   className="input"
                   type="file"
@@ -324,11 +377,21 @@ export default function GruposDobraPage() {
                 placeholder="Quem criou, estratégia, etc."
               />
             </label>
+            {bitlyConfigured && !form.bitly_url.trim() && form.invite_link.trim() ? (
+              <label className="dobra-check">
+                <input
+                  type="checkbox"
+                  checked={form.create_bitly}
+                  onChange={(e) => setForm({ ...form, create_bitly: e.target.checked })}
+                />
+                Gerar Bitly automaticamente a partir do convite
+              </label>
+            ) : null}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Salvando…' : 'Salvar grupo'}
+                {saving ? 'Salvando…' : (isEditing ? 'Salvar alterações' : 'Salvar grupo')}
               </button>
-              <button type="button" className="btn btn-soft" onClick={() => setShowForm(false)}>
+              <button type="button" className="btn btn-soft" onClick={closeForm}>
                 Cancelar
               </button>
             </div>
@@ -385,7 +448,10 @@ export default function GruposDobraPage() {
           ) : (
             <div className="dobra-print-grid dobra-grid">
               {visible.map((g) => (
-                <article key={g.id} className="dobra-print-card dobra-card">
+                <article
+                  key={g.id}
+                  className={`dobra-print-card dobra-card${editingId === g.id ? ' is-editing' : ''}`}
+                >
                   {g.photo_url ? (
                     <img className="dobra-print-card__photo" src={g.photo_url} alt={g.name} />
                   ) : (
@@ -421,36 +487,14 @@ export default function GruposDobraPage() {
                       </p>
                     ) : g.invite_link ? (
                       <p className="dobra-print-link">Convite: {g.invite_link}</p>
-                    ) : null}
+                    ) : (
+                      <p className="dobra-print-link dobra-print-link--warn">Sem link — edite para colocar</p>
+                    )}
 
                     <div className="dobra-card__actions no-print">
-                      <label className="dobra-inline">
-                        Agora
-                        <input
-                          className="input input-sm"
-                          type="number"
-                          min="0"
-                          defaultValue={g.members_current}
-                          key={`cur-${g.id}-${g.members_current}`}
-                          onBlur={(e) => {
-                            if (Number(e.target.value) !== g.members_current) {
-                              updateMembers(g, 'members_current', e.target.value);
-                            }
-                          }}
-                        />
-                      </label>
-                      <label className="btn btn-soft btn-sm">
-                        Foto
-                        <input
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => {
-                            onPhotoReplace(g, e.target.files?.[0]);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
+                      <button type="button" className="btn btn-accent btn-sm" onClick={() => openEdit(g)}>
+                        Editar
+                      </button>
                       {!g.bitly_url && g.invite_link ? (
                         <button type="button" className="btn btn-soft btn-sm" onClick={() => createBitly(g)}>
                           Criar Bitly

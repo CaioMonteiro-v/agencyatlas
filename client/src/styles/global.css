@@ -2848,6 +2848,30 @@ th {
   word-break: break-all;
 }
 
+.dobra-print-link--warn {
+  color: #8c3b2e;
+  font-style: italic;
+}
+
+.dobra-card.is-editing {
+  outline: 2px solid var(--dobra-leaf);
+  outline-offset: 2px;
+}
+
+.dobra-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--dobra-soft);
+  cursor: pointer;
+}
+
+.dobra-check input {
+  margin-top: 0.2rem;
+}
+
 .dobra-print-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
