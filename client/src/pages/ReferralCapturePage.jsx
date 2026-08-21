@@ -59,7 +59,7 @@ export default function ReferralCapturePage() {
             </label>
             <label>
               E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Se quiser receber novidades da campanha" autoComplete="email" />
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Opcional — se quiser receber novidades da campanha" autoComplete="email" />
             </label>
             <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
               E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.

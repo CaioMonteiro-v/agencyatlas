@@ -230,7 +230,7 @@ export default function EventRegistrationPage() {
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="Se quiser receber novidades da campanha"
+                      placeholder="Opcional — se quiser receber novidades da campanha"
                       autoComplete="email"
                     />
                   </label>
