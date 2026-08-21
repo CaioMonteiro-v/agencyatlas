@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 
@@ -8,21 +8,28 @@ export default function ReferralCapturePage() {
   const [campaign, setCampaign] = useState(null);
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
   const [form, setForm] = useState({ full_name: '', phone: '', email: '' });
 
   useEffect(() => {
-    api.getCampaign(slug).then(setCampaign).catch(() => {});
+    api.getCampaignPublic(slug)
+      .then(setCampaign)
+      .catch((err) => setError(err.message || 'Campanha não encontrada'));
   }, [slug]);
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (!form.full_name.trim() || !form.phone.trim()) {
+      setToast('Nome e telefone são obrigatórios');
+      return;
+    }
     try {
       await api.createRegistration(slug, {
         ...form,
         referral_code: code,
       });
       setDone(true);
-      setToast('Cadastro realizado');
+      setToast('Cadastro confirmado');
     } catch (err) {
       setToast(err.message);
     }
@@ -31,12 +38,16 @@ export default function ReferralCapturePage() {
   return (
     <div className="public-page">
       <div className="public-card">
-        <img src="/logos/atlas-agency-horizontal.png" alt="Atlas Agency" style={{ height: 48, marginBottom: 12 }} />
-        <p className="eyebrow">Convite rastreado</p>
-        <h1 style={{ fontSize: '1.7rem' }}>{campaign?.name || 'Campanha Atlas'}</h1>
-        <p>Você chegou por um link parametrizado de mobilização. Complete seu cadastro com carinho.</p>
+        {campaign?.logo_url && (
+          <img src={campaign.logo_url} alt="" style={{ height: 56, marginBottom: 12, objectFit: 'contain' }} />
+        )}
+        <p className="eyebrow">Cadastro de presença</p>
+        <h1 style={{ fontSize: '1.7rem' }}>{campaign?.name || 'Campanha'}</h1>
+        <p>Preencha seus dados para confirmar. Esta página é só para cadastro — sem acesso ao painel da campanha.</p>
 
-        {!done ? (
+        {error && <EmptyState>{error}</EmptyState>}
+
+        {!done && !error && (
           <form className="form-grid" onSubmit={onSubmit}>
             <label>
               Nome completo *
@@ -44,28 +55,30 @@ export default function ReferralCapturePage() {
             </label>
             <label>
               Telefone *
-              <input className="input" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input className="input" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" inputMode="tel" />
             </label>
             <label>
-              E-mail
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Se quiser receber novidades da campanha" autoComplete="email" />
             </label>
-            <button className="btn btn-primary" type="submit">Quero participar</button>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+              E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
+            </p>
+            <button className="btn btn-primary" type="submit">Confirmar cadastro</button>
           </form>
-        ) : (
+        )}
+
+        {done && (
           <div>
-            <h3>Bem-vindo(a)!</h3>
-            <p>Seu cadastro foi vinculado à liderança que compartilhou este link.</p>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <a className="btn btn-whatsapp" href={campaign?.whatsapp_url || 'https://bit.ly/FalaFabio'} target="_blank" rel="noreferrer">
-                Falar no WhatsApp
-              </a>
-              <Link className="btn btn-soft" to={`/campanha/${slug}`}>Ver campanha</Link>
-            </div>
+            <h3>Cadastro confirmado</h3>
+            <p>
+              Obrigado! Sua presença foi registrada com sucesso.
+              Você já pode fechar esta página.
+            </p>
           </div>
         )}
 
-        {!campaign && <EmptyState>Preparando formulário…</EmptyState>}
+        {!campaign && !error && <EmptyState>Preparando formulário…</EmptyState>}
       </div>
       <Toast message={toast} onClose={() => setToast('')} />
     </div>
