@@ -2730,3 +2730,183 @@ th {
     display: none !important;
   }
 }
+
+/* ——— Grupos Dobra ——— */
+.dobra-page {
+  --dobra-forest: #1a3d2e;
+  --dobra-leaf: #2d6a4f;
+  --dobra-sand: #f3efe6;
+  --dobra-line: #d4cfc2;
+  --dobra-ink: #14201a;
+  --dobra-soft: #3d4f44;
+}
+
+.dobra-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.dobra-form {
+  margin-bottom: 1.5rem;
+}
+
+.dobra-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.dobra-filters {
+  margin: 0 0 1.25rem;
+  max-width: 280px;
+}
+
+.dobra-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.15rem;
+}
+
+.dobra-card {
+  background: #fbfaf7;
+  border: 1px solid var(--dobra-line);
+  overflow: hidden;
+}
+
+.dobra-card .dobra-print-card__photo {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  background: #e8e4da;
+}
+
+.dobra-card .dobra-print-card__photo--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dobra-soft);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dobra-card .dobra-print-card__body {
+  padding: 0.9rem 1rem 1rem;
+}
+
+.dobra-card .dobra-print-card__meta {
+  margin: 0 0 0.35rem;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dobra-leaf);
+}
+
+.dobra-card h3 {
+  margin: 0 0 0.65rem;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--dobra-forest);
+}
+
+.dobra-print-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.dobra-print-metrics div {
+  border-top: 1px solid var(--dobra-line);
+  padding-top: 0.45rem;
+}
+
+.dobra-print-metrics strong {
+  display: block;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.95rem;
+  color: var(--dobra-ink);
+}
+
+.dobra-print-metrics span {
+  font-size: 0.65rem;
+  color: var(--dobra-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dobra-print-link {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  color: var(--dobra-soft);
+  word-break: break-all;
+}
+
+.dobra-print-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.dobra-print-stat {
+  background: #fbfaf7;
+  border: 1px solid var(--dobra-line);
+  padding: 0.85rem 0.65rem;
+  text-align: center;
+}
+
+.dobra-print-stat strong {
+  display: block;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 1.25rem;
+  color: var(--dobra-forest);
+  margin-bottom: 0.2rem;
+}
+
+.dobra-print-stat span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dobra-soft);
+}
+
+.dobra-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: flex-end;
+  margin-top: 0.35rem;
+}
+
+.dobra-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--dobra-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dobra-inline .input,
+.input-sm {
+  min-width: 72px;
+  max-width: 96px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .dobra-form__grid,
+  .dobra-grid,
+  .dobra-print-stats {
+    grid-template-columns: 1fr;
+  }
+}

@@ -39,6 +39,16 @@ const {
   parsePlainTextDossier,
 } = require('./investment');
 const { parseDocxFiles } = require('./docx-dossier');
+const {
+  listGroups: listDobraGroups,
+  buildSummary: buildDobraSummary,
+  getGroup: getDobraGroup,
+  createGroup: createDobraGroup,
+  updateGroup: updateDobraGroup,
+  deleteGroup: deleteDobraGroup,
+  syncGroupBitly,
+  syncAllGroupBitly,
+} = require('./dobra-groups');
 const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
@@ -1875,6 +1885,95 @@ app.get('/api/campaigns/:slug/investments/:id', (req, res) => {
   const row = getInvestment(db, campaign.id, Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'Item não encontrado' });
   res.json(row);
+});
+
+/** Grupos WhatsApp criados via dobra — controle + Bitly + foto */
+app.get('/api/campaigns/:slug/groups', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const groups = listDobraGroups(db, campaign.id, {
+      coordinatorId: req.query.coordinator_id,
+      municipalityId: req.query.municipality_id,
+      status: req.query.status,
+    });
+    res.json({
+      groups,
+      summary: buildDobraSummary(groups),
+      bitly_configured: bitlyConfigured(),
+      campaign: { id: campaign.id, slug: campaign.slug, name: campaign.name, candidate: campaign.candidate },
+    });
+  } catch (err) {
+    console.error('GET groups:', err);
+    res.status(500).json({ error: err.message || 'Erro ao listar grupos' });
+  }
+});
+
+app.post('/api/campaigns/:slug/groups', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = await createDobraGroup(db, campaign.id, req.body || {});
+    const groups = listDobraGroups(db, campaign.id);
+    res.status(201).json({
+      ...result,
+      groups,
+      summary: buildDobraSummary(groups),
+    });
+  } catch (err) {
+    console.error('POST groups:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar grupo' });
+  }
+});
+
+app.patch('/api/campaigns/:slug/groups/:id', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const group = await updateDobraGroup(db, campaign.id, Number(req.params.id), req.body || {});
+    const groups = listDobraGroups(db, campaign.id);
+    res.json({ group, groups, summary: buildDobraSummary(groups) });
+  } catch (err) {
+    console.error('PATCH groups:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar grupo' });
+  }
+});
+
+app.delete('/api/campaigns/:slug/groups/:id', (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = deleteDobraGroup(db, campaign.id, Number(req.params.id));
+    const groups = listDobraGroups(db, campaign.id);
+    res.json({ ...result, groups, summary: buildDobraSummary(groups) });
+  } catch (err) {
+    console.error('DELETE groups:', err);
+    res.status(500).json({ error: err.message || 'Erro ao remover grupo' });
+  }
+});
+
+app.post('/api/campaigns/:slug/groups/:id/sync', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const group = await syncGroupBitly(db, campaign.id, Number(req.params.id));
+    res.json({ group, summary: buildDobraSummary(listDobraGroups(db, campaign.id)) });
+  } catch (err) {
+    console.error('POST groups sync:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao sincronizar Bitly' });
+  }
+});
+
+app.post('/api/campaigns/:slug/groups/sync', async (req, res) => {
+  try {
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = await syncAllGroupBitly(db, campaign.id);
+    res.json(result);
+  } catch (err) {
+    console.error('POST groups sync all:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao sincronizar Bitlys' });
+  }
 });
 
 app.get('/api/campaigns/:slug/meta/status', async (req, res) => {

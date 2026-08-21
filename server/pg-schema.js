@@ -264,6 +264,31 @@ CREATE TABLE IF NOT EXISTS campaign_investment_muni_notes (
   UNIQUE (campaign_id, municipality_id)
 );
 
+CREATE TABLE IF NOT EXISTS dobra_groups (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  photo_url TEXT,
+  invite_link TEXT,
+  bitly_url TEXT,
+  destination_url TEXT,
+  members_initial INTEGER DEFAULT 0,
+  members_current INTEGER DEFAULT 0,
+  coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+  municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+  notes TEXT,
+  status TEXT DEFAULT 'ativo',
+  opened_at TEXT,
+  members_updated_at TIMESTAMPTZ,
+  clicks INTEGER DEFAULT 0,
+  clicks_30d INTEGER DEFAULT 0,
+  clicks_series TEXT,
+  bitly_synced_at TIMESTAMPTZ,
+  bitly_last_error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
@@ -278,6 +303,9 @@ CREATE INDEX IF NOT EXISTS idx_demands_muni ON territory_demands(municipality_id
 CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id);
 CREATE INDEX IF NOT EXISTS idx_invest_muni ON campaign_investments(municipality_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
 `;
 
 module.exports = { PG_SCHEMA };

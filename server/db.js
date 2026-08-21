@@ -380,6 +380,34 @@ function initSqliteSchema(db) {
       FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS dobra_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      photo_url TEXT,
+      invite_link TEXT,
+      bitly_url TEXT,
+      destination_url TEXT,
+      members_initial INTEGER DEFAULT 0,
+      members_current INTEGER DEFAULT 0,
+      coordinator_id INTEGER,
+      municipality_id INTEGER,
+      notes TEXT,
+      status TEXT DEFAULT 'ativo',
+      opened_at TEXT,
+      members_updated_at TEXT,
+      clicks INTEGER DEFAULT 0,
+      clicks_30d INTEGER DEFAULT 0,
+      clicks_series TEXT,
+      bitly_synced_at TEXT,
+      bitly_last_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+      FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
     CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
@@ -392,6 +420,9 @@ function initSqliteSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_invest_campaign ON campaign_investments(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_invest_coord ON campaign_investments(coordinator_id);
     CREATE INDEX IF NOT EXISTS idx_invest_muni ON campaign_investments(municipality_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
   `);
 }
 

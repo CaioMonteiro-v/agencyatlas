@@ -574,6 +574,73 @@ function migrateAnalyticsSchema(db) {
   } catch (err) {
     console.warn('migrate campaign_investments:', err.message);
   }
+
+  // Grupos WhatsApp criados via dobra (mobilização)
+  try {
+    if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_groups (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          photo_url TEXT,
+          invite_link TEXT,
+          bitly_url TEXT,
+          destination_url TEXT,
+          members_initial INTEGER DEFAULT 0,
+          members_current INTEGER DEFAULT 0,
+          coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
+          notes TEXT,
+          status TEXT DEFAULT 'ativo',
+          opened_at TEXT,
+          members_updated_at TIMESTAMPTZ,
+          clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
+          bitly_synced_at TIMESTAMPTZ,
+          bitly_last_error TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_groups (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          photo_url TEXT,
+          invite_link TEXT,
+          bitly_url TEXT,
+          destination_url TEXT,
+          members_initial INTEGER DEFAULT 0,
+          members_current INTEGER DEFAULT 0,
+          coordinator_id INTEGER,
+          municipality_id INTEGER,
+          notes TEXT,
+          status TEXT DEFAULT 'ativo',
+          opened_at TEXT,
+          members_updated_at TEXT,
+          clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
+          bitly_synced_at TEXT,
+          bitly_last_error TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+          FOREIGN KEY (coordinator_id) REFERENCES coordinators(id) ON DELETE SET NULL,
+          FOREIGN KEY (municipality_id) REFERENCES municipalities(id) ON DELETE SET NULL
+        )
+      `);
+    }
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id)');
+  } catch (err) {
+    console.warn('migrate dobra_groups:', err.message);
+  }
 }
 
 module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };

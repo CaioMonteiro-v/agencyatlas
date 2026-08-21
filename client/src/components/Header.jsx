@@ -105,6 +105,9 @@ export default function Header({ compact = false }) {
               <NavLink to="/campanha/fabio-garcia/investimento" onClick={closeMenu}>
                 Investimento
               </NavLink>
+              <NavLink to="/campanha/fabio-garcia/grupos" onClick={closeMenu}>
+                Grupos Dobra
+              </NavLink>
               <NavLink to="/admin" onClick={closeMenu}>
                 Administração
               </NavLink>
