@@ -55,12 +55,15 @@ export default function ReferralCapturePage() {
             </label>
             <label>
               Telefone *
-              <input className="input" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input className="input" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" inputMode="tel" />
             </label>
             <label>
-              E-mail
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Se quiser receber novidades da campanha" autoComplete="email" />
             </label>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+              E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
+            </p>
             <button className="btn btn-primary" type="submit">Confirmar cadastro</button>
           </form>
         )}

@@ -334,7 +334,7 @@ export default function EventsPanel({ campaignSlug }) {
             </div>
             <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
               Esse nome vai para a coluna <strong>Mobilizador</strong> na Base — é o norte de quem está trazendo gente.
-              Organiz./Coord. do município a pessoa preenche na inscrição do QR.
+              Organiz./Coord. do município fica no painel (não pede mais no QR).
             </p>
           </div>
 

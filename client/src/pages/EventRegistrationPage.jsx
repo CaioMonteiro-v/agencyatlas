@@ -39,7 +39,6 @@ export default function EventRegistrationPage() {
     full_name: '',
     email: '',
     phone: '',
-    organizer_name: '',
   });
 
   useEffect(() => {
@@ -91,9 +90,8 @@ export default function EventRegistrationPage() {
     try {
       await api.registerEvent(eventSlug, {
         full_name: form.full_name,
-        email: form.email,
+        email: form.email.trim() || null,
         phone: form.phone,
-        organizer_name: form.organizer_name,
         connect_whatsapp: true,
       });
       setDone(true);
@@ -120,8 +118,6 @@ export default function EventRegistrationPage() {
     }
   }
 
-  const mobilizerLabel = event?.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador';
-
   return (
     <div className="public-page">
       <div className="public-card">
@@ -138,19 +134,13 @@ export default function EventRegistrationPage() {
                 ? ` · ${event.municipality_name || event.location}`
                 : ''}
             </p>
-            {event.organizer_name && (
-              <p>
-                <strong>{mobilizerLabel} do evento:</strong> {event.organizer_name}
-              </p>
-            )}
             <p>{event.description}</p>
 
             {done ? (
               <div className="event-done">
                 <h3>Presença confirmada</h3>
                 <p>
-                  Obrigado, {firstName(form.full_name)}! Seu cadastro foi registrado
-                  {event.organizer_name ? ` com ${event.organizer_name}` : ''}.
+                  Obrigado, {firstName(form.full_name)}! Seu cadastro foi registrado.
                 </p>
 
                 {hasChannel ? (
@@ -218,6 +208,7 @@ export default function EventRegistrationPage() {
                       required
                       value={form.full_name}
                       onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                      autoComplete="name"
                     />
                   </label>
                   <label>
@@ -228,31 +219,24 @@ export default function EventRegistrationPage() {
                       value={form.phone}
                       onChange={(e) => setForm({ ...form, phone: e.target.value })}
                       placeholder="(65) 9xxxx-xxxx"
+                      autoComplete="tel"
+                      inputMode="tel"
                     />
                   </label>
                   <label>
-                    Organizador / coordenador do município
-                    <input
-                      className="input"
-                      value={form.organizer_name}
-                      onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
-                      placeholder="Nome de referência local (opcional)"
-                    />
-                  </label>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-                    Campo livre do município. O mobilizador do evento
-                    {event.organizer_name ? ` (${event.organizer_name})` : ''} já fica registrado automaticamente.
-                  </p>
-                  <label>
-                    E-mail
+                    E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
                     <input
                       className="input"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="Para comunicação e tráfego"
+                      placeholder="Se quiser receber novidades da campanha"
+                      autoComplete="email"
                     />
                   </label>
+                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+                    E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
+                  </p>
                   <button className="btn btn-primary" type="submit">
                     {hasChannel ? 'Confirmar presença' : 'Confirmar e falar com o Fábio'}
                   </button>

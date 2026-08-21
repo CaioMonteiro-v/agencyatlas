@@ -26,7 +26,8 @@ export default function RegistrationsTable({ campaignSlug }) {
           <h3>Registro de cadastros</h3>
           <p>
             <strong>Mobilizador</strong> = quem fechou o evento/link conosco (norte de desempenho).{' '}
-            <strong>Organiz./Coord.</strong> = referência do município (texto livre).
+            <strong>Mobilizador</strong> = quem fechou o evento/link (automático).
+            E-mail no QR é opcional.
           </p>
         </div>
         <div className="filters">

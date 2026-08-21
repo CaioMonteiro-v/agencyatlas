@@ -31,7 +31,6 @@ export default function MobilizerCapturePage() {
     full_name: '',
     phone: '',
     email: '',
-    organizer_name: '',
   });
 
   useEffect(() => {
@@ -54,7 +53,11 @@ export default function MobilizerCapturePage() {
       return;
     }
     try {
-      await api.registerMobilizer(slug, code, form);
+      await api.registerMobilizer(slug, code, {
+        full_name: form.full_name,
+        phone: form.phone,
+        email: form.email.trim() || null,
+      });
       setDone(true);
       setToast('Cadastro confirmado');
       window.setTimeout(() => {
@@ -114,26 +117,24 @@ export default function MobilizerCapturePage() {
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     placeholder="(65) 9xxxx-xxxx"
+                    autoComplete="tel"
+                    inputMode="tel"
                   />
                 </label>
                 <label>
-                  Organizador / coordenador do município
-                  <input
-                    className="input"
-                    value={form.organizer_name}
-                    onChange={(e) => setForm({ ...form, organizer_name: e.target.value })}
-                    placeholder="Referência local (opcional)"
-                  />
-                </label>
-                <label>
-                  E-mail
+                  E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
                   <input
                     className="input"
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="Se quiser receber novidades da campanha"
+                    autoComplete="email"
                   />
                 </label>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+                  E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
+                </p>
                 <button className="btn btn-primary" type="submit">
                   Confirmar e falar com o Fábio
                 </button>
