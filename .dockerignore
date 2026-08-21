@@ -1,0 +1,13 @@
+node_modules
+client/node_modules
+client/dist
+server/data
+.git
+.gitignore
+*.md
+.cursor
+.tmp
+.DS_Store
+npm-debug.log*
+.env
+.env.*
