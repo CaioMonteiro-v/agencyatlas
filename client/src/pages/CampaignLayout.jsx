@@ -77,6 +77,7 @@ export default function CampaignLayout() {
           <NavLink to={`/campanha/${slug}/relatorio`}>Relatório</NavLink>
           <NavLink to={`/campanha/${slug}/investimento`}>Investimento</NavLink>
           <NavLink to={`/campanha/${slug}/grupos`}>Grupos Dobra</NavLink>
+          <NavLink to={`/campanha/${slug}/bitly`}>Bitly</NavLink>
           <NavLink to={`/campanha/${slug}/midia`}>Mídia</NavLink>
           <NavLink to={`/campanha/${slug}/conteudo`}>Conteúdo</NavLink>
         </nav>

@@ -9,6 +9,7 @@ import ReportPage from './pages/ReportPage';
 import ContentPage from './pages/ContentPage';
 import InvestmentReportPage from './pages/InvestmentReportPage';
 import GruposDobraPage from './pages/GruposDobraPage';
+import BitlyGruposPage from './pages/BitlyGruposPage';
 import UnderConstruction from './pages/UnderConstruction';
 import LeaderProfilePage from './pages/LeaderProfilePage';
 import EventRegistrationPage from './pages/EventRegistrationPage';
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="relatorio" element={<ReportPage />} />
         <Route path="investimento" element={<InvestmentReportPage />} />
         <Route path="grupos" element={<GruposDobraPage />} />
+        <Route path="bitly" element={<BitlyGruposPage />} />
         <Route path="midia" element={<UnderConstruction title="Mídia" />} />
         <Route path="conteudo" element={<ContentPage />} />
       </Route>

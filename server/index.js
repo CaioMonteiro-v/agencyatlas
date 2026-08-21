@@ -48,6 +48,7 @@ const {
   deleteGroup: deleteDobraGroup,
   syncGroupBitly,
   syncAllGroupBitly,
+  bulkCreateGroupBitly,
 } = require('./dobra-groups');
 const {
   listDeputies: listDobraDeputies,
@@ -2075,6 +2076,7 @@ app.post('/api/campaigns/:slug/groups/:id/sync', async (req, res) => {
 
 app.post('/api/campaigns/:slug/groups/sync', async (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const result = await syncAllGroupBitly(db, campaign.id);
@@ -2082,6 +2084,57 @@ app.post('/api/campaigns/:slug/groups/sync', async (req, res) => {
   } catch (err) {
     console.error('POST groups sync all:', err);
     res.status(err.status || 500).json({ error: err.message || 'Erro ao sincronizar Bitlys' });
+  }
+});
+
+/** Cria Bitly em massa para grupos dobra (vários links, um por grupo). */
+app.post('/api/campaigns/:slug/groups/bitly/bulk', async (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = await bulkCreateGroupBitly(db, campaign.id, {
+      deputyId: req.body?.deputy_id || null,
+      onlyMissing: req.body?.only_missing !== false,
+      limit: req.body?.limit,
+    });
+    res.json({
+      ...result,
+      bitly: bitlyStatus(),
+    });
+  } catch (err) {
+    console.error('POST groups bitly bulk:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Erro ao criar Bitlys em massa',
+      bitly: bitlyStatus(),
+    });
+  }
+});
+
+app.get('/api/campaigns/:slug/groups/bitly', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const groups = listDobraGroups(db, campaign.id).filter((g) => g.status !== 'arquivado');
+    const withBitly = groups.filter((g) => g.bitly_url);
+    const pending = groups.filter((g) => !g.bitly_url && (g.invite_link || g.destination_url));
+    const noInvite = groups.filter((g) => !g.bitly_url && !(g.invite_link || g.destination_url));
+    res.json({
+      bitly: bitlyStatus(),
+      summary: {
+        groups: groups.length,
+        with_bitly: withBitly.length,
+        pending_bitly: pending.length,
+        missing_invite: noInvite.length,
+        clicks_total: withBitly.reduce((s, g) => s + (g.clicks || 0), 0),
+      },
+      groups,
+      pending,
+    });
+  } catch (err) {
+    console.error('GET groups bitly:', err);
+    res.status(500).json({ error: err.message || 'Erro ao listar Bitlys dos grupos' });
   }
 });
 

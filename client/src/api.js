@@ -154,6 +154,13 @@ export const api = {
     request(`/api/campaigns/${slug}/groups/${id}/sync`, { method: 'POST', body: '{}' }),
   syncAllDobraGroups: (slug) =>
     request(`/api/campaigns/${slug}/groups/sync`, { method: 'POST', body: '{}' }),
+  getDobraBitlyBoard: (slug) =>
+    request(`/api/campaigns/${slug}/groups/bitly`),
+  bulkCreateDobraBitly: (slug, body = {}) =>
+    request(`/api/campaigns/${slug}/groups/bitly/bulk`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getDobraDeputies: (slug) =>
     request(`/api/campaigns/${slug}/deputies`),
   createDobraDeputy: (slug, body) =>

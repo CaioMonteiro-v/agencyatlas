@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 import { printGruposDobraDocument } from '../lib/printGruposDobra';
@@ -399,6 +399,9 @@ export default function GruposDobraPage() {
             <button type="button" className="btn btn-soft btn-sm" onClick={syncAll} disabled={!bitlyConfigured}>
               Sincronizar cliques Bitly
             </button>
+            <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/bitly`}>
+              Aba Bitly (massa)
+            </Link>
             <button type="button" className="btn btn-soft btn-sm" onClick={onPrint}>
               Baixar PDF / apresentar
             </button>

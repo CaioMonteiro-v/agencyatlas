@@ -544,12 +544,14 @@ async function syncGroupBitly(db, campaignId, id) {
 async function syncAllGroupBitly(db, campaignId) {
   const groups = listGroups(db, campaignId).filter((g) => g.bitly_url && g.status !== 'arquivado');
   const results = [];
-  for (const g of groups) {
+  for (let i = 0; i < groups.length; i += 1) {
+    const g = groups[i];
     try {
+      if (i > 0) await new Promise((r) => setTimeout(r, 180));
       const updated = await syncGroupBitly(db, campaignId, g.id);
-      results.push({ id: g.id, ok: true, clicks: updated.clicks });
+      results.push({ id: g.id, name: g.name, ok: true, clicks: updated.clicks, bitly_url: updated.bitly_url });
     } catch (err) {
-      results.push({ id: g.id, ok: false, error: err.message });
+      results.push({ id: g.id, name: g.name, ok: false, error: err.message });
     }
   }
   return {
@@ -558,6 +560,89 @@ async function syncAllGroupBitly(db, campaignId) {
     results,
     groups: listGroups(db, campaignId),
     summary: buildSummary(listGroups(db, campaignId)),
+  };
+}
+
+/** Cria Bitly em massa para grupos com convite e sem bitlink. */
+async function bulkCreateGroupBitly(db, campaignId, { deputyId, onlyMissing = true, limit = 80 } = {}) {
+  if (!bitlyConfigured()) {
+    const err = new Error('Configure BITLY_ACCESS_TOKEN no Render para criar links em massa');
+    err.status = 503;
+    throw err;
+  }
+
+  let groups = listGroups(db, campaignId).filter((g) => g.status !== 'arquivado');
+  if (deputyId) {
+    groups = groups.filter((g) => Number(g.deputy_id) === Number(deputyId));
+  }
+  if (onlyMissing) {
+    groups = groups.filter((g) => !g.bitly_url && (g.invite_link || g.destination_url));
+  } else {
+    groups = groups.filter((g) => g.invite_link || g.destination_url);
+  }
+
+  const max = Math.min(Math.max(1, Number(limit) || 80), 80);
+  groups = groups.slice(0, max);
+
+  const results = [];
+  for (let i = 0; i < groups.length; i += 1) {
+    const g = groups[i];
+    try {
+      if (i > 0) await new Promise((r) => setTimeout(r, 220));
+      const longUrl = g.destination_url || g.invite_link;
+      const created = await createBitlink(longUrl, {
+        title: `Dobra · ${g.name}`.slice(0, 120),
+        tags: ['dobra', 'grupo', 'atlas'],
+      });
+      db.prepare(`
+        UPDATE dobra_groups SET
+          bitly_url = ?,
+          destination_url = COALESCE(?, destination_url, invite_link),
+          bitly_last_error = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE campaign_id = ? AND id = ?
+      `).run(
+        created.bitly_url,
+        created.destination_url || longUrl,
+        campaignId,
+        g.id,
+      );
+      results.push({
+        id: g.id,
+        name: g.name,
+        ok: true,
+        bitly_url: created.bitly_url,
+        deputy_name: g.deputy_name,
+      });
+    } catch (err) {
+      try {
+        db.prepare(`
+          UPDATE dobra_groups SET bitly_last_error = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(String(err.message || 'erro').slice(0, 280), g.id);
+      } catch {
+        /* ignore */
+      }
+      results.push({
+        id: g.id,
+        name: g.name,
+        ok: false,
+        error: err.message,
+        deputy_name: g.deputy_name,
+      });
+    }
+  }
+
+  return {
+    created: results.filter((r) => r.ok).length,
+    failed: results.filter((r) => !r.ok).length,
+    skipped_total: listGroups(db, campaignId).filter(
+      (g) => g.status !== 'arquivado' && !g.bitly_url && !(g.invite_link || g.destination_url),
+    ).length,
+    results,
+    groups: listGroups(db, campaignId),
+    summary: buildSummary(listGroups(db, campaignId)),
+    bitly: { configured: true },
   };
 }
 
@@ -570,5 +655,6 @@ module.exports = {
   deleteGroup,
   syncGroupBitly,
   syncAllGroupBitly,
+  bulkCreateGroupBitly,
   saveGroupPhoto,
 };
