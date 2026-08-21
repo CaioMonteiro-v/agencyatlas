@@ -386,10 +386,8 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Hierarquia: <strong>Deputado Estadual</strong> (card) →
-            {' '}<strong>nosso coordenador</strong> (Atlas / campanha) +
-            {' '}<strong>coordenador das dobras</strong> (quem toca a rede após a conversa com a região).
-            Cadastre o deputado primeiro; na criação do grupo, só seleciona.
+            1) Crie o <strong>Deputado Estadual</strong> (só o nome).
+            2) Ao cadastrar o grupo, <strong>seleciona</strong> o deputado na lista.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
             <button type="button" className="btn btn-accent btn-sm" onClick={openCreateDeputy}>
@@ -414,12 +412,9 @@ export default function GruposDobraPage() {
             <h3 style={{ marginTop: 0 }}>
               {editingDeputyId ? 'Editar Deputado Estadual' : 'Novo Deputado Estadual'}
             </h3>
-            <p style={{ marginTop: 0, color: 'var(--ink-soft, #556)', fontSize: '0.92rem' }}>
-              Esse card é o lugar da dobra política. Abaixo fica a divisão clara dos dois coordenadores.
-            </p>
             <div className="dobra-form__grid">
               <label>
-                Deputado Estadual
+                Nome do Deputado Estadual
                 <input
                   className="input"
                   value={deputyForm.name}
@@ -428,52 +423,57 @@ export default function GruposDobraPage() {
                   required
                 />
               </label>
-              <label>
-                Nosso coordenador (Atlas / campanha)
-                <select
-                  className="input"
-                  value={deputyForm.campaign_coordinator_id}
-                  onChange={(e) => setDeputyForm({ ...deputyForm, campaign_coordinator_id: e.target.value })}
-                >
-                  <option value="">— selecione o já cadastrado —</option>
-                  {campaignCoords.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Coordenador das dobras (quem toca a rede)
-                <select
-                  className="input"
-                  value={deputyForm.dobra_coordinator_id}
-                  onChange={(e) => setDeputyForm({ ...deputyForm, dobra_coordinator_id: e.target.value })}
-                >
-                  <option value="">— selecione quem cuida das dobras —</option>
-                  {dobraCoords.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {editingDeputyId ? (
+                <>
+                  <label>
+                    Nosso coordenador (Atlas / campanha)
+                    <select
+                      className="input"
+                      value={deputyForm.campaign_coordinator_id}
+                      onChange={(e) => setDeputyForm({ ...deputyForm, campaign_coordinator_id: e.target.value })}
+                    >
+                      <option value="">— opcional —</option>
+                      {campaignCoords.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Coordenador das dobras
+                    <select
+                      className="input"
+                      value={deputyForm.dobra_coordinator_id}
+                      onChange={(e) => setDeputyForm({ ...deputyForm, dobra_coordinator_id: e.target.value })}
+                    >
+                      <option value="">— opcional —</option>
+                      {dobraCoords.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.coord_type === 'dobra' ? ' · dobra' : ' · regional'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
             </div>
-            <label>
-              Observações da hierarquia / conversa
-              <textarea
-                className="textarea"
-                rows={2}
-                value={deputyForm.notes}
-                onChange={(e) => setDeputyForm({ ...deputyForm, notes: e.target.value })}
-                placeholder="Ex.: conversa Fábio + deputado com coordenador da região…"
-              />
-            </label>
+            {editingDeputyId ? (
+              <label>
+                Observações
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={deputyForm.notes}
+                  onChange={(e) => setDeputyForm({ ...deputyForm, notes: e.target.value })}
+                />
+              </label>
+            ) : null}
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Salvando…' : (editingDeputyId ? 'Salvar card' : 'Criar card')}
+                {saving ? 'Salvando…' : (editingDeputyId ? 'Salvar' : 'Criar deputado')}
               </button>
               <button type="button" className="btn btn-soft" onClick={closeDeputyForm}>Cancelar</button>
             </div>
@@ -492,35 +492,9 @@ export default function GruposDobraPage() {
                   onChange={(e) => setGroupForm((prev) => applyDeputyDefaults(e.target.value, prev))}
                   required
                 >
-                  <option value="">— selecione o card —</option>
+                  <option value="">— selecione o deputado criado —</option>
                   {deputies.map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Nosso coordenador (Atlas)
-                <select
-                  className="input"
-                  value={groupForm.campaign_coordinator_id}
-                  onChange={(e) => setGroupForm({ ...groupForm, campaign_coordinator_id: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {campaignCoords.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Coordenador das dobras
-                <select
-                  className="input"
-                  value={groupForm.dobra_coordinator_id}
-                  onChange={(e) => setGroupForm({ ...groupForm, dobra_coordinator_id: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {dobraCoords.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </label>
@@ -533,6 +507,32 @@ export default function GruposDobraPage() {
                   placeholder="Ex.: BETO DOIS A UM · Centro"
                   required
                 />
+              </label>
+              <label>
+                Nosso coordenador (Atlas) — opcional
+                <select
+                  className="input"
+                  value={groupForm.campaign_coordinator_id}
+                  onChange={(e) => setGroupForm({ ...groupForm, campaign_coordinator_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {campaignCoords.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Coordenador das dobras — opcional
+                <select
+                  className="input"
+                  value={groupForm.dobra_coordinator_id}
+                  onChange={(e) => setGroupForm({ ...groupForm, dobra_coordinator_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {dobraCoords.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 Link de convite WhatsApp
@@ -688,12 +688,16 @@ export default function GruposDobraPage() {
               >
                 <strong>{dep.name}</strong>
                 <span>{dep.group_count || 0} grupo(s)</span>
-                <span className="demand-card-btn__stats">
-                  Nosso: {dep.campaign_coordinator_name || '—'}
-                </span>
-                <span className="demand-card-btn__stats">
-                  Dobra: {dep.dobra_coordinator_name || '—'}
-                </span>
+                {(dep.campaign_coordinator_name || dep.dobra_coordinator_name) ? (
+                  <>
+                    <span className="demand-card-btn__stats">
+                      Nosso: {dep.campaign_coordinator_name || '—'}
+                    </span>
+                    <span className="demand-card-btn__stats">
+                      Dobra: {dep.dobra_coordinator_name || '—'}
+                    </span>
+                  </>
+                ) : null}
                 <span className="demand-card-btn__stats">
                   {dep.members_initial || 0} início · {dep.members_current || 0} agora
                 </span>
@@ -701,8 +705,7 @@ export default function GruposDobraPage() {
             ))}
             {!deputies.length ? (
               <EmptyState>
-                Ainda não há Deputados Estaduais. Crie o card (ex.: Beto Dois a Um), escolha
-                o nosso coordenador e o coordenador das dobras — depois cadastre os grupos.
+                Crie o Deputado Estadual pelo nome (ex.: Beto Dois a Um). Depois, em Cadastrar grupo, só seleciona.
               </EmptyState>
             ) : null}
           </div>

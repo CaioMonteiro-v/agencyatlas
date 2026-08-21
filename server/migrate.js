@@ -688,11 +688,7 @@ function migrateAnalyticsSchema(db) {
         )
       `);
     }
-    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id)');
+    // Colunas primeiro — tabela antiga já existe sem deputy_id; índice antes quebrava o migrate
     ensureColumn(db, 'dobra_groups', 'coordinator_label', 'TEXT');
     ensureColumn(db, 'dobra_groups', 'deputy_name', 'TEXT');
     ensureColumn(db, 'dobra_groups', 'deputy_id', 'INTEGER');
@@ -701,6 +697,18 @@ function migrateAnalyticsSchema(db) {
     ensureColumn(db, 'dobra_deputies', 'campaign_coordinator_id', 'INTEGER');
     ensureColumn(db, 'dobra_deputies', 'dobra_coordinator_id', 'INTEGER');
     ensureColumn(db, 'dobra_deputies', 'notes', 'TEXT');
+
+    const safeIndex = (sql) => {
+      try { db.exec(sql); } catch (err) {
+        console.warn('migrate dobra index:', err.message);
+      }
+    };
+    safeIndex('CREATE INDEX IF NOT EXISTS idx_dobra_groups_campaign ON dobra_groups(campaign_id)');
+    safeIndex('CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id)');
+    safeIndex('CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id)');
+    safeIndex('CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id)');
+    safeIndex('CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id)');
+
     try {
       db.exec(`
         UPDATE dobra_groups
@@ -733,4 +741,52 @@ function migrateAnalyticsSchema(db) {
   }
 }
 
-module.exports = { migrateAnalyticsSchema, ensureColumn, backfillEventMunicipalitiesFromLocation };
+/** Garante schema da dobra mesmo se o boot anterior falhou no meio. */
+function ensureDobraSchema(db) {
+  try {
+    if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_deputies (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          campaign_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          dobra_coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_deputies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          campaign_coordinator_id INTEGER,
+          dobra_coordinator_id INTEGER,
+          notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+    }
+  } catch (err) {
+    console.warn('ensureDobraSchema table:', err.message);
+  }
+  ensureColumn(db, 'dobra_groups', 'coordinator_label', 'TEXT');
+  ensureColumn(db, 'dobra_groups', 'deputy_name', 'TEXT');
+  ensureColumn(db, 'dobra_groups', 'deputy_id', 'INTEGER');
+  ensureColumn(db, 'dobra_groups', 'campaign_coordinator_id', 'INTEGER');
+  ensureColumn(db, 'dobra_groups', 'dobra_coordinator_id', 'INTEGER');
+  ensureColumn(db, 'dobra_deputies', 'campaign_coordinator_id', 'INTEGER');
+  ensureColumn(db, 'dobra_deputies', 'dobra_coordinator_id', 'INTEGER');
+  ensureColumn(db, 'dobra_deputies', 'notes', 'TEXT');
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id)');
+  } catch {
+    /* ignore */
+  }
+}
+
+module.exports = { migrateAnalyticsSchema, ensureColumn, ensureDobraSchema, backfillEventMunicipalitiesFromLocation };

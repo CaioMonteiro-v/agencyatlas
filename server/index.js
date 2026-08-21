@@ -56,6 +56,7 @@ const {
   updateDeputy: updateDobraDeputy,
   deleteDeputy: deleteDobraDeputy,
 } = require('./dobra-deputies');
+const { ensureDobraSchema } = require('./migrate');
 const supabaseStorage = require('./supabase-storage');
 
 const nano = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 8);
@@ -1918,6 +1919,7 @@ app.get('/api/campaigns/:slug/investments/:id', (req, res) => {
 /** Deputados Estaduais da dobra — cards + hierarquia de coordenadores */
 app.get('/api/campaigns/:slug/deputies', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const deputies = listDobraDeputies(db, campaign.id);
@@ -1942,6 +1944,7 @@ app.get('/api/campaigns/:slug/deputies', (req, res) => {
 
 app.post('/api/campaigns/:slug/deputies', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const deputy = createDobraDeputy(db, campaign.id, req.body || {});
@@ -1957,6 +1960,7 @@ app.post('/api/campaigns/:slug/deputies', (req, res) => {
 
 app.patch('/api/campaigns/:slug/deputies/:id', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const deputy = updateDobraDeputy(db, campaign.id, Number(req.params.id), req.body || {});
@@ -1972,6 +1976,7 @@ app.patch('/api/campaigns/:slug/deputies/:id', (req, res) => {
 
 app.delete('/api/campaigns/:slug/deputies/:id', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const result = deleteDobraDeputy(db, campaign.id, Number(req.params.id));
@@ -1988,6 +1993,7 @@ app.delete('/api/campaigns/:slug/deputies/:id', (req, res) => {
 /** Grupos WhatsApp criados via dobra — controle + Bitly + foto */
 app.get('/api/campaigns/:slug/groups', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const groups = listDobraGroups(db, campaign.id, {
@@ -2011,6 +2017,7 @@ app.get('/api/campaigns/:slug/groups', (req, res) => {
 
 app.post('/api/campaigns/:slug/groups', async (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const result = await createDobraGroup(db, campaign.id, req.body || {});
@@ -2028,6 +2035,7 @@ app.post('/api/campaigns/:slug/groups', async (req, res) => {
 
 app.patch('/api/campaigns/:slug/groups/:id', async (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const group = await updateDobraGroup(db, campaign.id, Number(req.params.id), req.body || {});
@@ -2041,6 +2049,7 @@ app.patch('/api/campaigns/:slug/groups/:id', async (req, res) => {
 
 app.delete('/api/campaigns/:slug/groups/:id', (req, res) => {
   try {
+    ensureDobraSchema(db);
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
     const result = deleteDobraGroup(db, campaign.id, Number(req.params.id));
