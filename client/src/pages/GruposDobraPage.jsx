@@ -19,7 +19,7 @@ const emptyForm = {
   bitly_url: '',
   members_initial: '13',
   members_current: '13',
-  coordinator_label: '',
+  deputy_name: '',
   municipality_id: '',
   opened_at: new Date().toISOString().slice(0, 10),
   notes: '',
@@ -34,7 +34,7 @@ function formFromGroup(g) {
     bitly_url: g.bitly_url || '',
     members_initial: String(g.members_initial ?? 0),
     members_current: String(g.members_current ?? 0),
-    coordinator_label: g.coordinator_label || g.coordinator_name || '',
+    deputy_name: g.deputy_name || g.coordinator_label || '',
     municipality_id: g.municipality_id ? String(g.municipality_id) : '',
     opened_at: g.opened_at ? String(g.opened_at).slice(0, 10) : '',
     notes: g.notes || '',
@@ -43,8 +43,9 @@ function formFromGroup(g) {
   };
 }
 
-function personKey(g) {
-  return String(g.coordinator_label || g.coordinator_name || '').trim() || 'Sem nome';
+/** Nome do Deputado Estadual da dobra (não coordenador regional). */
+function deputyKey(g) {
+  return String(g.deputy_name || g.coordinator_label || '').trim() || 'Sem deputado';
 }
 
 export default function GruposDobraPage() {
@@ -71,11 +72,11 @@ export default function GruposDobraPage() {
     [allMunicipalities],
   );
 
-  /** Quadradinhos por nome do responsável da dobra */
+  /** Quadradinhos por Deputado Estadual */
   const peopleCards = useMemo(() => {
     const map = new Map();
     for (const g of groups.filter((x) => x.status !== 'arquivado')) {
-      const key = personKey(g);
+      const key = deputyKey(g);
       if (!map.has(key)) {
         map.set(key, {
           name: key,
@@ -132,7 +133,7 @@ export default function GruposDobraPage() {
     setEditingId(null);
     setForm({
       ...emptyForm,
-      coordinator_label: prefillName || selectedPerson || '',
+      deputy_name: prefillName || selectedPerson || '',
       opened_at: new Date().toISOString().slice(0, 10),
     });
     setShowForm(true);
@@ -162,8 +163,8 @@ export default function GruposDobraPage() {
       setToast('Informe o nome do grupo');
       return;
     }
-    if (!form.coordinator_label.trim()) {
-      setToast('Informe o nome do responsável da dobra (aparece no quadradinho)');
+    if (!form.deputy_name.trim()) {
+      setToast('Informe o Deputado Estadual da dobra (aparece no quadradinho)');
       return;
     }
     setSaving(true);
@@ -174,7 +175,7 @@ export default function GruposDobraPage() {
         bitly_url: form.bitly_url.trim() || null,
         members_initial: Number(form.members_initial) || 0,
         members_current: Number(form.members_current) || Number(form.members_initial) || 0,
-        coordinator_label: form.coordinator_label.trim() || null,
+        deputy_name: form.deputy_name.trim() || null,
         municipality_id: form.municipality_id ? Number(form.municipality_id) : null,
         opened_at: form.opened_at || null,
         notes: form.notes.trim() || null,
@@ -201,7 +202,7 @@ export default function GruposDobraPage() {
 
       setGroups(res.groups || []);
       setSummary(res.summary || null);
-      if (body.coordinator_label) setSelectedPerson(body.coordinator_label);
+      if (body.deputy_name) setSelectedPerson(body.deputy_name);
       closeForm();
     } catch (err) {
       setToast(err.message);
@@ -272,8 +273,8 @@ export default function GruposDobraPage() {
           <p className="eyebrow">Material de mobilização</p>
           <h2>Grupos Dobra</h2>
           <p>
-            Na criação, coloca o <strong>nome do responsável da dobra</strong>.
-            A tela fica em <strong>quadradinhos por nome</strong> — clica para ver e editar os grupos dele.
+            Na criação, coloca o <strong>Deputado Estadual</strong> da dobra.
+            A tela fica em <strong>quadradinhos por deputado</strong> — clica para ver e editar os grupos.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
             <button type="button" className="btn btn-accent btn-sm" onClick={() => openCreate()}>
@@ -295,12 +296,12 @@ export default function GruposDobraPage() {
             <h3 style={{ marginTop: 0 }}>{isEditing ? 'Editar grupo' : 'Novo grupo'}</h3>
             <div className="dobra-form__grid">
               <label>
-                Nome do responsável da dobra
+                Deputado Estadual
                 <input
                   className="input"
-                  value={form.coordinator_label}
-                  onChange={(e) => setForm({ ...form, coordinator_label: e.target.value })}
-                  placeholder="Ex.: Domingos Savio / Leonardo Oliveira"
+                  value={form.deputy_name}
+                  onChange={(e) => setForm({ ...form, deputy_name: e.target.value })}
+                  placeholder="Ex.: nome do Deputado Estadual"
                   required
                 />
               </label>
@@ -423,7 +424,7 @@ export default function GruposDobraPage() {
               closeForm();
             }}
           >
-            Nomes
+            Deputados
           </button>
           {selectedPerson ? (
             <>
@@ -437,7 +438,7 @@ export default function GruposDobraPage() {
           <div className="dobra-print-stats no-print" style={{ marginTop: '1rem' }}>
             <div className="dobra-print-stat">
               <strong>{peopleCards.length}</strong>
-              <span>Nomes</span>
+              <span>Deputados</span>
             </div>
             <div className="dobra-print-stat">
               <strong>{summary.groups_active}</strong>
@@ -477,7 +478,7 @@ export default function GruposDobraPage() {
             ))}
             {!peopleCards.length ? (
               <EmptyState>
-                Ainda não há grupos. Cadastre o primeiro e coloque o nome do responsável da dobra —
+                Ainda não há grupos. Cadastre o primeiro e coloque o Deputado Estadual —
                 ele vira o quadradinho.
               </EmptyState>
             ) : null}
@@ -489,7 +490,7 @@ export default function GruposDobraPage() {
                 Novo grupo de {selectedPerson}
               </button>
               <button type="button" className="btn btn-soft btn-sm" onClick={() => setSelectedPerson(null)}>
-                Voltar aos nomes
+                Voltar aos deputados
               </button>
             </div>
 
@@ -509,7 +510,7 @@ export default function GruposDobraPage() {
                 </div>
                 <div className="dobra-print-stat">
                   <strong>{selectedPerson}</strong>
-                  <span>Responsável</span>
+                  <span>Dep. Estadual</span>
                 </div>
               </div>
 
@@ -529,7 +530,7 @@ export default function GruposDobraPage() {
                       )}
                       <div className="dobra-print-card__body">
                         <p className="dobra-print-card__meta">
-                          Coord. {selectedPerson}
+                          Dep. {selectedPerson}
                           {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                           {g.opened_at ? ` · ${g.opened_at}` : ''}
                         </p>
@@ -607,7 +608,7 @@ export default function GruposDobraPage() {
               </div>
               <div className="dobra-print-stat">
                 <strong>{peopleCards.length}</strong>
-                <span>Nomes</span>
+                <span>Deputados</span>
               </div>
             </div>
             <div className="dobra-print-grid">
@@ -620,7 +621,9 @@ export default function GruposDobraPage() {
                   )}
                   <div className="dobra-print-card__body">
                     <p className="dobra-print-card__meta">
-                      {g.coordinator_name ? `Coord. ${g.coordinator_name}` : 'Sem nome'}
+                      {(g.deputy_name || g.coordinator_label)
+                        ? `Dep. ${g.deputy_name || g.coordinator_label}`
+                        : 'Sem deputado'}
                       {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                     </p>
                     <h3>{g.name}</h3>

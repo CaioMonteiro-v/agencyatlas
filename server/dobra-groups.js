@@ -73,8 +73,8 @@ function enrichGroup(row) {
   const current = Math.max(0, Number(row.members_current) || 0);
   const growth = current - initial;
   const multiplier = initial > 0 ? Math.round((current / initial) * 100) / 100 : null;
-  const label = String(row.coordinator_label || '').trim();
-  const linked = String(row.linked_coordinator_name || '').trim();
+  // Deputado Estadual da dobra (não é coordenador regional)
+  const deputy = String(row.deputy_name || row.coordinator_label || '').trim() || null;
   return {
     ...row,
     members_initial: initial,
@@ -84,9 +84,10 @@ function enrichGroup(row) {
     clicks: Math.max(0, Number(row.clicks) || 0),
     clicks_30d: Math.max(0, Number(row.clicks_30d) || 0),
     clicks_series: parseSeries(row.clicks_series),
-    // Nome bonito no card/PDF: o que digitou no grupo, senão o cadastro Atlas
-    coordinator_name: label || linked || null,
-    coordinator_label: label || null,
+    deputy_name: deputy,
+    // compat: telas antigas / PDF
+    coordinator_name: deputy,
+    coordinator_label: deputy,
   };
 }
 
@@ -115,12 +116,11 @@ function listGroups(db, campaignId, { coordinatorId, municipalityId, status, q }
   }
   if (q) {
     sql += ` AND (
-      LOWER(COALESCE(g.coordinator_label, '')) LIKE LOWER(?)
-      OR LOWER(COALESCE(c.name, '')) LIKE LOWER(?)
+      LOWER(COALESCE(g.deputy_name, g.coordinator_label, '')) LIKE LOWER(?)
       OR LOWER(g.name) LIKE LOWER(?)
     )`;
     const like = `%${String(q).trim()}%`;
-    params.push(like, like, like);
+    params.push(like, like);
   }
   sql += ' ORDER BY g.opened_at DESC NULLS LAST, g.id DESC';
   try {
@@ -201,7 +201,9 @@ async function createGroup(db, campaignId, body = {}) {
   let bitlyError = null;
 
   const coordinatorId = body.coordinator_id ? Number(body.coordinator_id) : null;
-  const coordinatorLabel = String(body.coordinator_label || body.coordinator_name || '').trim() || null;
+  const deputyName = String(
+    body.deputy_name || body.coordinator_label || body.coordinator_name || '',
+  ).trim() || null;
   const municipalityId = body.municipality_id ? Number(body.municipality_id) : null;
   if (coordinatorId) assertCoordMuni(db, campaignId, coordinatorId, municipalityId);
 
@@ -232,9 +234,9 @@ async function createGroup(db, campaignId, body = {}) {
   const result = db.prepare(`
     INSERT INTO dobra_groups (
       campaign_id, name, photo_url, invite_link, bitly_url, destination_url,
-      members_initial, members_current, coordinator_id, coordinator_label, municipality_id,
+      members_initial, members_current, coordinator_id, coordinator_label, deputy_name, municipality_id,
       notes, status, opened_at, bitly_last_error, members_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
   `).run(
     campaignId,
     name,
@@ -245,7 +247,8 @@ async function createGroup(db, campaignId, body = {}) {
     membersInitial,
     membersCurrent,
     coordinatorId,
-    coordinatorLabel,
+    deputyName,
+    deputyName,
     municipalityId,
     body.notes ? String(body.notes).trim() : null,
     body.status === 'arquivado' ? 'arquivado' : 'ativo',
@@ -269,9 +272,11 @@ async function updateGroup(db, campaignId, id, body = {}) {
   const coordinatorId = body.coordinator_id !== undefined
     ? (body.coordinator_id ? Number(body.coordinator_id) : null)
     : existing.coordinator_id;
-  const coordinatorLabel = body.coordinator_label !== undefined || body.coordinator_name !== undefined
-    ? (String(body.coordinator_label || body.coordinator_name || '').trim() || null)
-    : (existing.coordinator_label || null);
+  const deputyName = (body.deputy_name !== undefined
+    || body.coordinator_label !== undefined
+    || body.coordinator_name !== undefined)
+    ? (String(body.deputy_name || body.coordinator_label || body.coordinator_name || '').trim() || null)
+    : (existing.deputy_name || existing.coordinator_label || null);
   const municipalityId = body.municipality_id !== undefined
     ? (body.municipality_id ? Number(body.municipality_id) : null)
     : existing.municipality_id;
@@ -337,6 +342,7 @@ async function updateGroup(db, campaignId, id, body = {}) {
       members_current = ?,
       coordinator_id = ?,
       coordinator_label = ?,
+      deputy_name = ?,
       municipality_id = ?,
       notes = ?,
       status = ?,
@@ -354,7 +360,8 @@ async function updateGroup(db, campaignId, id, body = {}) {
     membersInitial,
     membersCurrent,
     coordinatorId,
-    coordinatorLabel,
+    deputyName,
+    deputyName,
     municipalityId,
     body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : existing.notes,
     body.status === 'arquivado' ? 'arquivado' : (body.status === 'ativo' ? 'ativo' : existing.status),

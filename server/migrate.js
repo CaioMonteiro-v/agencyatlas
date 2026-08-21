@@ -604,6 +604,7 @@ function migrateAnalyticsSchema(db) {
           members_current INTEGER DEFAULT 0,
           coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
           coordinator_label TEXT,
+          deputy_name TEXT,
           municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
@@ -632,6 +633,7 @@ function migrateAnalyticsSchema(db) {
           members_current INTEGER DEFAULT 0,
           coordinator_id INTEGER,
           coordinator_label TEXT,
+          deputy_name TEXT,
           municipality_id INTEGER,
           notes TEXT,
           status TEXT DEFAULT 'ativo',
@@ -654,6 +656,19 @@ function migrateAnalyticsSchema(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id)');
     ensureColumn(db, 'dobra_groups', 'coordinator_label', 'TEXT');
+    ensureColumn(db, 'dobra_groups', 'deputy_name', 'TEXT');
+    try {
+      // Migra nomes antigos (label) → deputado estadual
+      db.exec(`
+        UPDATE dobra_groups
+        SET deputy_name = coordinator_label
+        WHERE (deputy_name IS NULL OR deputy_name = '')
+          AND coordinator_label IS NOT NULL
+          AND coordinator_label != ''
+      `);
+    } catch {
+      /* ignore */
+    }
   } catch (err) {
     console.warn('migrate dobra_groups:', err.message);
   }

@@ -393,6 +393,7 @@ function initSqliteSchema(db) {
       members_current INTEGER DEFAULT 0,
       coordinator_id INTEGER,
       coordinator_label TEXT,
+      deputy_name TEXT,
       municipality_id INTEGER,
       notes TEXT,
       status TEXT DEFAULT 'ativo',
