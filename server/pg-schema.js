@@ -325,6 +325,40 @@ CREATE INDEX IF NOT EXISTS idx_dobra_groups_coord ON dobra_groups(coordinator_id
 CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
 CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id);
+
+CREATE TABLE IF NOT EXISTS dobra_videos (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  destination_url TEXT NOT NULL,
+  notes TEXT,
+  posted_at TEXT,
+  status TEXT DEFAULT 'ativo',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dobra_video_links (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  video_id INTEGER NOT NULL REFERENCES dobra_videos(id) ON DELETE CASCADE,
+  group_id INTEGER NOT NULL REFERENCES dobra_groups(id) ON DELETE CASCADE,
+  title TEXT,
+  bitly_url TEXT,
+  destination_url TEXT,
+  clicks INTEGER DEFAULT 0,
+  clicks_30d INTEGER DEFAULT 0,
+  clicks_series TEXT,
+  bitly_synced_at TIMESTAMPTZ,
+  bitly_last_error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (video_id, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dobra_videos_campaign ON dobra_videos(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_video_links_video ON dobra_video_links(video_id);
+CREATE INDEX IF NOT EXISTS idx_dobra_video_links_group ON dobra_video_links(group_id);
 `;
 
 module.exports = { PG_SCHEMA };

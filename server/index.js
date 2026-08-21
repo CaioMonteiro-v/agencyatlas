@@ -57,6 +57,17 @@ const {
   updateDeputy: updateDobraDeputy,
   deleteDeputy: deleteDobraDeputy,
 } = require('./dobra-deputies');
+const {
+  listVideos: listDobraVideos,
+  getVideo: getDobraVideo,
+  listVideoLinks: listDobraVideoLinks,
+  createVideo: createDobraVideo,
+  updateVideo: updateDobraVideo,
+  deleteVideo: deleteDobraVideo,
+  generateLinksForVideo: generateDobraVideoLinks,
+  syncVideoLinks: syncDobraVideoLinks,
+  videoBoard: dobraVideoBoard,
+} = require('./dobra-videos');
 const { ensureDobraSchema } = require('./migrate');
 const supabaseStorage = require('./supabase-storage');
 
@@ -2120,6 +2131,7 @@ app.get('/api/campaigns/:slug/groups/bitly', (req, res) => {
     const withBitly = groups.filter((g) => g.bitly_url);
     const pending = groups.filter((g) => !g.bitly_url && (g.invite_link || g.destination_url));
     const noInvite = groups.filter((g) => !g.bitly_url && !(g.invite_link || g.destination_url));
+    const videos = dobraVideoBoard(db, campaign.id);
     res.json({
       bitly: bitlyStatus(),
       summary: {
@@ -2131,10 +2143,126 @@ app.get('/api/campaigns/:slug/groups/bitly', (req, res) => {
       },
       groups,
       pending,
+      videos: videos.videos,
+      video_summary: videos.summary,
     });
   } catch (err) {
     console.error('GET groups bitly:', err);
     res.status(500).json({ error: err.message || 'Erro ao listar Bitlys dos grupos' });
+  }
+});
+
+/** Vídeos da dobra: 1 URL → N Bitlys (um por grupo) */
+app.get('/api/campaigns/:slug/dobra-videos', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const board = dobraVideoBoard(db, campaign.id);
+    res.json({ ...board, bitly: bitlyStatus() });
+  } catch (err) {
+    console.error('GET dobra-videos:', err);
+    res.status(500).json({ error: err.message || 'Erro ao listar vídeos' });
+  }
+});
+
+app.post('/api/campaigns/:slug/dobra-videos', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const video = createDobraVideo(db, campaign.id, req.body || {});
+    res.status(201).json({
+      video,
+      ...dobraVideoBoard(db, campaign.id),
+      bitly: bitlyStatus(),
+    });
+  } catch (err) {
+    console.error('POST dobra-videos:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao criar vídeo' });
+  }
+});
+
+app.get('/api/campaigns/:slug/dobra-videos/:id', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const video = getDobraVideo(db, campaign.id, Number(req.params.id));
+    if (!video) return res.status(404).json({ error: 'Vídeo não encontrado' });
+    res.json({
+      video,
+      links: listDobraVideoLinks(db, campaign.id, video.id),
+      bitly: bitlyStatus(),
+    });
+  } catch (err) {
+    console.error('GET dobra-video:', err);
+    res.status(500).json({ error: err.message || 'Erro ao carregar vídeo' });
+  }
+});
+
+app.patch('/api/campaigns/:slug/dobra-videos/:id', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const video = updateDobraVideo(db, campaign.id, Number(req.params.id), req.body || {});
+    res.json({
+      video,
+      links: listDobraVideoLinks(db, campaign.id, video.id),
+      ...dobraVideoBoard(db, campaign.id),
+    });
+  } catch (err) {
+    console.error('PATCH dobra-video:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao atualizar vídeo' });
+  }
+});
+
+app.delete('/api/campaigns/:slug/dobra-videos/:id', (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = deleteDobraVideo(db, campaign.id, Number(req.params.id));
+    res.json({ ...result, ...dobraVideoBoard(db, campaign.id) });
+  } catch (err) {
+    console.error('DELETE dobra-video:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Erro ao remover vídeo' });
+  }
+});
+
+app.post('/api/campaigns/:slug/dobra-videos/:id/generate', async (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = await generateDobraVideoLinks(db, campaign.id, Number(req.params.id), {
+      deputyId: req.body?.deputy_id || null,
+      limit: req.body?.limit,
+    });
+    res.json({ ...result, bitly: bitlyStatus(), ...dobraVideoBoard(db, campaign.id) });
+  } catch (err) {
+    console.error('POST dobra-video generate:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Erro ao gerar Bitlys do vídeo',
+      bitly: bitlyStatus(),
+    });
+  }
+});
+
+app.post('/api/campaigns/:slug/dobra-videos/:id/sync', async (req, res) => {
+  try {
+    ensureDobraSchema(db);
+    const campaign = getCampaignBySlug(req.params.slug);
+    if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+    const result = await syncDobraVideoLinks(db, campaign.id, Number(req.params.id));
+    res.json({ ...result, bitly: bitlyStatus(), ...dobraVideoBoard(db, campaign.id) });
+  } catch (err) {
+    console.error('POST dobra-video sync:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Erro ao sincronizar cliques do vídeo',
+      bitly: bitlyStatus(),
+    });
   }
 });
 

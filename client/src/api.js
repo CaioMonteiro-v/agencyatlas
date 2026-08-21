@@ -161,6 +161,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  getDobraVideos: (slug) =>
+    request(`/api/campaigns/${slug}/dobra-videos`),
+  createDobraVideo: (slug, body) =>
+    request(`/api/campaigns/${slug}/dobra-videos`, { method: 'POST', body: JSON.stringify(body) }),
+  getDobraVideo: (slug, id) =>
+    request(`/api/campaigns/${slug}/dobra-videos/${id}`),
+  updateDobraVideo: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/dobra-videos/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteDobraVideo: (slug, id) =>
+    request(`/api/campaigns/${slug}/dobra-videos/${id}`, { method: 'DELETE' }),
+  generateDobraVideoLinks: (slug, id, body = {}) =>
+    request(`/api/campaigns/${slug}/dobra-videos/${id}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  syncDobraVideoLinks: (slug, id) =>
+    request(`/api/campaigns/${slug}/dobra-videos/${id}/sync`, { method: 'POST', body: '{}' }),
   getDobraDeputies: (slug) =>
     request(`/api/campaigns/${slug}/deputies`),
   createDobraDeputy: (slug, body) =>

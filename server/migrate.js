@@ -736,6 +736,8 @@ function migrateAnalyticsSchema(db) {
     } catch (err) {
       console.warn('backfillDeputiesFromGroups:', err.message);
     }
+    // Garante tabelas de vídeo×grupo também no migrate boot
+    ensureDobraSchema(db);
   } catch (err) {
     console.warn('migrate dobra_groups:', err.message);
   }
@@ -786,6 +788,82 @@ function ensureDobraSchema(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id)');
   } catch {
     /* ignore */
+  }
+
+  // Vídeo → N Bitlys (um por grupo)
+  try {
+    if (db.dialect === 'postgres') {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_videos (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          destination_url TEXT NOT NULL,
+          notes TEXT,
+          posted_at TEXT,
+          status TEXT DEFAULT 'ativo',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_video_links (
+          id SERIAL PRIMARY KEY,
+          campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          video_id INTEGER NOT NULL REFERENCES dobra_videos(id) ON DELETE CASCADE,
+          group_id INTEGER NOT NULL REFERENCES dobra_groups(id) ON DELETE CASCADE,
+          title TEXT,
+          bitly_url TEXT,
+          destination_url TEXT,
+          clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
+          bitly_synced_at TIMESTAMPTZ,
+          bitly_last_error TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE (video_id, group_id)
+        )
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_videos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          destination_url TEXT NOT NULL,
+          notes TEXT,
+          posted_at TEXT,
+          status TEXT DEFAULT 'ativo',
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS dobra_video_links (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_id INTEGER NOT NULL,
+          video_id INTEGER NOT NULL,
+          group_id INTEGER NOT NULL,
+          title TEXT,
+          bitly_url TEXT,
+          destination_url TEXT,
+          clicks INTEGER DEFAULT 0,
+          clicks_30d INTEGER DEFAULT 0,
+          clicks_series TEXT,
+          bitly_synced_at TEXT,
+          bitly_last_error TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE (video_id, group_id)
+        )
+      `);
+    }
+    try { db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_videos_campaign ON dobra_videos(campaign_id)'); } catch { /* ignore */ }
+    try { db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_video_links_video ON dobra_video_links(video_id)'); } catch { /* ignore */ }
+    try { db.exec('CREATE INDEX IF NOT EXISTS idx_dobra_video_links_group ON dobra_video_links(group_id)'); } catch { /* ignore */ }
+  } catch (err) {
+    console.warn('ensureDobraSchema videos:', err.message);
   }
 }
 

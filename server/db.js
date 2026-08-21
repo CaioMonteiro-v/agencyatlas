@@ -448,6 +448,44 @@ function initSqliteSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_dobra_groups_muni ON dobra_groups(municipality_id);
     CREATE INDEX IF NOT EXISTS idx_dobra_deputies_campaign ON dobra_deputies(campaign_id);
     CREATE INDEX IF NOT EXISTS idx_dobra_groups_deputy ON dobra_groups(deputy_id);
+
+    CREATE TABLE IF NOT EXISTS dobra_videos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      destination_url TEXT NOT NULL,
+      notes TEXT,
+      posted_at TEXT,
+      status TEXT DEFAULT 'ativo',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS dobra_video_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      video_id INTEGER NOT NULL,
+      group_id INTEGER NOT NULL,
+      title TEXT,
+      bitly_url TEXT,
+      destination_url TEXT,
+      clicks INTEGER DEFAULT 0,
+      clicks_30d INTEGER DEFAULT 0,
+      clicks_series TEXT,
+      bitly_synced_at TEXT,
+      bitly_last_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE (video_id, group_id),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (video_id) REFERENCES dobra_videos(id) ON DELETE CASCADE,
+      FOREIGN KEY (group_id) REFERENCES dobra_groups(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dobra_videos_campaign ON dobra_videos(campaign_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_video_links_video ON dobra_video_links(video_id);
+    CREATE INDEX IF NOT EXISTS idx_dobra_video_links_group ON dobra_video_links(group_id);
   `);
 }
 
