@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -8,6 +8,7 @@ import { EmptyState, StatusBadge, Toast } from '../components/Ui';
 export default function AdminPage() {
   const [summary, setSummary] = useState(null);
   const [municipalities, setMunicipalities] = useState([]);
+  const [coordinators, setCoordinators] = useState([]);
   const [toast, setToast] = useState('');
   const [campaignForm, setCampaignForm] = useState({
     name: '',
@@ -24,16 +25,36 @@ export default function AdminPage() {
     municipality_id: '',
     phone: '',
   });
+  const [coordForm, setCoordForm] = useState({
+    campaign_slug: 'fabio-garcia',
+    name: '',
+    phone: '',
+    municipality_ids: [],
+  });
+  const [editingCoordId, setEditingCoordId] = useState(null);
+  const [muniSearch, setMuniSearch] = useState('');
 
   async function refresh() {
-    const [s, m] = await Promise.all([api.getAgencySummary(), api.getMunicipalities()]);
+    const slug = coordForm.campaign_slug || 'fabio-garcia';
+    const [s, m, coords] = await Promise.all([
+      api.getAgencySummary(),
+      api.getMunicipalities(),
+      api.getCoordinators(slug).catch(() => ({ coordinators: [] })),
+    ]);
     setSummary(s);
     setMunicipalities(m);
+    setCoordinators(coords.coordinators || []);
   }
 
   useEffect(() => {
     refresh().catch((err) => setToast(err.message));
   }, []);
+
+  const filteredMunicipalities = useMemo(() => {
+    const q = muniSearch.trim().toLowerCase();
+    if (!q) return municipalities;
+    return municipalities.filter((m) => m.name.toLowerCase().includes(q));
+  }, [municipalities, muniSearch]);
 
   async function createCampaign(e) {
     e.preventDefault();
@@ -71,6 +92,92 @@ export default function AdminPage() {
     }
   }
 
+  function toggleMuni(id) {
+    setCoordForm((prev) => {
+      const has = prev.municipality_ids.includes(id);
+      return {
+        ...prev,
+        municipality_ids: has
+          ? prev.municipality_ids.filter((x) => x !== id)
+          : [...prev.municipality_ids, id],
+      };
+    });
+  }
+
+  function startEditCoordinator(coord) {
+    setEditingCoordId(coord.id);
+    setCoordForm({
+      campaign_slug: coordForm.campaign_slug,
+      name: coord.name,
+      phone: coord.phone || '',
+      municipality_ids: (coord.municipalities || []).map((m) => m.id),
+    });
+  }
+
+  function resetCoordForm() {
+    setEditingCoordId(null);
+    setCoordForm((prev) => ({
+      ...prev,
+      name: '',
+      phone: '',
+      municipality_ids: [],
+    }));
+    setMuniSearch('');
+  }
+
+  async function saveCoordinator(e) {
+    e.preventDefault();
+    if (!coordForm.name.trim()) {
+      setToast('Informe o nome do coordenador');
+      return;
+    }
+    try {
+      if (editingCoordId) {
+        await api.updateCoordinator(coordForm.campaign_slug, editingCoordId, {
+          name: coordForm.name.trim(),
+          phone: coordForm.phone,
+          municipality_ids: coordForm.municipality_ids,
+        });
+        setToast('Coordenador atualizado');
+      } else {
+        await api.createCoordinator(coordForm.campaign_slug, {
+          name: coordForm.name.trim(),
+          phone: coordForm.phone,
+          municipality_ids: coordForm.municipality_ids,
+        });
+        setToast('Coordenador cadastrado');
+      }
+      resetCoordForm();
+      await refresh();
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  async function removeCoordinator(coord) {
+    try {
+      await api.deleteCoordinator(coordForm.campaign_slug, coord.id);
+      setToast(`Coordenador ${coord.name} removido`);
+      if (editingCoordId === coord.id) resetCoordForm();
+      await refresh();
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
+  async function changeCoordCampaign(slug) {
+    setCoordForm((prev) => ({ ...prev, campaign_slug: slug }));
+    setLeaderForm((prev) => ({ ...prev, campaign_slug: slug }));
+    try {
+      const coords = await api.getCoordinators(slug);
+      setCoordinators(coords.coordinators || []);
+      resetCoordForm();
+      setCoordForm((prev) => ({ ...prev, campaign_slug: slug }));
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
   return (
     <>
       <Header />
@@ -78,7 +185,7 @@ export default function AdminPage() {
         <div className="section__head">
           <p className="eyebrow">Administração</p>
           <h1>Gestão Atlas Agency</h1>
-          <p>Crie campanhas e lideranças com a mesma delicadeza da experiência pública.</p>
+          <p>Crie campanhas, lideranças e coordenadores territoriais com dados reais.</p>
         </div>
 
         <div className="layout-split">
@@ -158,6 +265,128 @@ export default function AdminPage() {
         </div>
 
         <section className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
+          <div className="section__head" style={{ marginBottom: '0.85rem' }}>
+            <p className="eyebrow">Território</p>
+            <h3 style={{ margin: 0 }}>Coordenadores (ex.: Ogeda, Jurandir, Barbara)</h3>
+            <p style={{ margin: '0.35rem 0 0' }}>
+              Cadastre o coordenador e marque os municípios dele. Depois, na aba Coordenadores da campanha,
+              defina expectativa de voto e meta de conteúdo — o sistema gera alarmes e o Relatório monta
+              a chamada de atenção.
+            </p>
+          </div>
+
+          <form className="form-grid" onSubmit={saveCoordinator}>
+            <label>
+              Campanha
+              <select
+                className="select"
+                value={coordForm.campaign_slug}
+                onChange={(e) => changeCoordCampaign(e.target.value)}
+              >
+                {(summary?.campaigns || []).map((c) => (
+                  <option key={c.id} value={c.slug}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Nome do coordenador
+              <input
+                className="input"
+                required
+                value={coordForm.name}
+                onChange={(e) => setCoordForm({ ...coordForm, name: e.target.value })}
+                placeholder="Ex.: Ogeda"
+              />
+            </label>
+            <label>
+              Telefone
+              <input
+                className="input"
+                value={coordForm.phone}
+                onChange={(e) => setCoordForm({ ...coordForm, phone: e.target.value })}
+                placeholder="Opcional"
+              />
+            </label>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.45rem' }}>
+                Municípios deste coordenador ({coordForm.municipality_ids.length} selecionados)
+              </label>
+              <input
+                className="input"
+                value={muniSearch}
+                onChange={(e) => setMuniSearch(e.target.value)}
+                placeholder="Buscar município…"
+                style={{ marginBottom: '0.55rem' }}
+              />
+              <div className="muni-check-grid">
+                {filteredMunicipalities.map((m) => {
+                  const checked = coordForm.municipality_ids.includes(m.id);
+                  return (
+                    <label key={m.id} className={`muni-check ${checked ? 'is-checked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleMuni(m.id)}
+                      />
+                      <span>{m.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="submit">
+                {editingCoordId ? 'Salvar alterações' : 'Cadastrar coordenador'}
+              </button>
+              {editingCoordId && (
+                <button className="btn btn-soft" type="button" onClick={resetCoordForm}>
+                  Cancelar edição
+                </button>
+              )}
+            </div>
+          </form>
+
+          <div className="admin-coord-list" style={{ marginTop: '1.25rem' }}>
+            <h4 style={{ marginBottom: '0.65rem' }}>Já cadastrados</h4>
+            {!coordinators.length && (
+              <EmptyState>Nenhum coordenador nesta campanha ainda.</EmptyState>
+            )}
+            {coordinators.map((coord) => (
+              <div className="admin-coord-row" key={coord.id}>
+                <div>
+                  <strong>{coord.name}</strong>
+                  <p style={{ margin: '0.2rem 0 0' }}>
+                    {coord.totals.municipalities} município(s) · {coord.totals.registrations} cadastro(s)
+                    {coord.health?.label ? ` · ${coord.health.label}` : ''}
+                  </p>
+                  {!!coord.municipalities?.length && (
+                    <p className="admin-coord-munis">
+                      {coord.municipalities.map((m) => m.name).join(', ')}
+                    </p>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                  <button className="btn btn-soft btn-sm" type="button" onClick={() => startEditCoordinator(coord)}>
+                    Editar
+                  </button>
+                  <Link
+                    className="btn btn-accent btn-sm"
+                    to={`/campanha/${coordForm.campaign_slug}/coordenadores`}
+                  >
+                    Ver painel
+                  </Link>
+                  <button className="btn btn-sm btn-warn-soft" type="button" onClick={() => removeCoordinator(coord)}>
+                    Remover
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
           <h3>Campanhas</h3>
           {!summary && <EmptyState>Carregando…</EmptyState>}
           <div className="campaign-list" style={{ marginTop: '0.85rem' }}>
@@ -171,8 +400,8 @@ export default function AdminPage() {
                   </div>
                   <p style={{ marginBottom: 0 }}>{campaign.description}</p>
                 </div>
-                <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/mobilizacao`}>
-                  Abrir
+                <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/coordenadores`}>
+                  Coordenadores
                 </Link>
               </div>
             ))}
