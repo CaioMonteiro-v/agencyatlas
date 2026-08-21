@@ -218,7 +218,20 @@ export default function GruposDobraPage() {
     });
   }
 
-  const visible = groups.filter((g) => g.status !== 'arquivado');
+  const visible = useMemo(() => {
+    const list = groups.filter((g) => g.status !== 'arquivado');
+    const q = filterQ.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((g) => {
+      const hay = [
+        g.name,
+        g.coordinator_name,
+        g.coordinator_label,
+        g.municipality_name,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [groups, filterQ]);
 
   return (
     <div className="dobra-page">
@@ -441,7 +454,8 @@ export default function GruposDobraPage() {
                   )}
                   <div className="dobra-print-card__body">
                     <p className="dobra-print-card__meta">
-                      {[g.coordinator_name, g.municipality_name].filter(Boolean).join(' · ') || 'Sem território'}
+                      {g.coordinator_name ? `Coord. ${g.coordinator_name}` : 'Sem coordenador'}
+                      {g.municipality_name ? ` · ${g.municipality_name}` : ''}
                       {g.opened_at ? ` · ${g.opened_at}` : ''}
                     </p>
                     <h3>{g.name}</h3>
