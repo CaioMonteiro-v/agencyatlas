@@ -2758,6 +2758,10 @@ th {
   margin-bottom: 0.85rem;
 }
 
+.dobra-screen-print-only {
+  display: none;
+}
+
 .dobra-filters {
   margin: 0 0 1.25rem;
   max-width: 280px;
