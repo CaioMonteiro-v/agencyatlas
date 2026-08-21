@@ -152,12 +152,21 @@ function getGroup(db, campaignId, id) {
 
 function assertCoordMuni(db, campaignId, coordinatorId, municipalityId) {
   if (!coordinatorId || !municipalityId) return;
+  const coord = db.prepare('SELECT id, coord_type FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(Number(coordinatorId), campaignId);
+  if (!coord) {
+    const err = new Error('Coordenador não encontrado');
+    err.status = 400;
+    throw err;
+  }
+  // Coordenadores de dobra (ex.: Cuiabá) podem atuar em município sem vínculo exclusivo
+  if (String(coord.coord_type || '').toLowerCase() === 'dobra') return;
+
   const ok = db.prepare(`
     SELECT 1 AS ok
     FROM coordinator_municipalities cm
-    JOIN coordinators c ON c.id = cm.coordinator_id
-    WHERE c.campaign_id = ? AND cm.coordinator_id = ? AND cm.municipality_id = ?
-  `).get(campaignId, Number(coordinatorId), Number(municipalityId));
+    WHERE cm.coordinator_id = ? AND cm.municipality_id = ?
+  `).get(Number(coordinatorId), Number(municipalityId));
   if (!ok) {
     const err = new Error('Esse município não está vinculado a esse coordenador no Atlas');
     err.status = 400;

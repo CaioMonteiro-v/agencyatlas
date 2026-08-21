@@ -49,6 +49,7 @@ export default function GruposDobraPage() {
   const [summary, setSummary] = useState(null);
   const [bitlyConfigured, setBitlyConfigured] = useState(false);
   const [coordinators, setCoordinators] = useState([]);
+  const [allMunicipalities, setAllMunicipalities] = useState([]);
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -63,32 +64,40 @@ export default function GruposDobraPage() {
   const isEditing = editingId != null;
 
   const muniOptions = useMemo(() => {
-    if (!form.coordinator_id) {
-      const all = [];
+    const selectedCoord = coordinators.find((c) => String(c.id) === String(form.coordinator_id));
+    const isDobra = selectedCoord?.coord_type === 'dobra';
+
+    // Dobra (ex. Cuiabá): pode escolher qualquer município, mesmo sem vínculo exclusivo
+    if (isDobra || !form.coordinator_id) {
+      const fromCoord = [];
       for (const c of coordinators) {
         for (const m of c.municipalities || []) {
-          if (!all.some((x) => x.id === m.id)) all.push(m);
+          if (!fromCoord.some((x) => x.id === m.id)) fromCoord.push(m);
         }
       }
-      return all.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      const base = allMunicipalities.length ? allMunicipalities : fromCoord;
+      return base.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     }
-    const coord = coordinators.find((c) => String(c.id) === String(form.coordinator_id));
+
+    const coord = selectedCoord;
     return (coord?.municipalities || []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-  }, [coordinators, form.coordinator_id]);
+  }, [coordinators, form.coordinator_id, allMunicipalities]);
 
   async function load() {
     setLoading(true);
     try {
-      const [res, coords] = await Promise.all([
+      const [res, coords, munis] = await Promise.all([
         api.getDobraGroups(campaign.slug, {
           coordinator_id: filterCoord || undefined,
         }),
         api.getCoordinators(campaign.slug),
+        api.getMunicipalities().catch(() => []),
       ]);
       setGroups(res.groups || []);
       setSummary(res.summary || null);
       setBitlyConfigured(Boolean(res.bitly_configured));
       setCoordinators(coords.coordinators || coords || []);
+      setAllMunicipalities(Array.isArray(munis) ? munis : (munis.municipalities || []));
       setError('');
     } catch (err) {
       setError(err.message || 'Erro ao carregar grupos');
@@ -239,7 +248,8 @@ export default function GruposDobraPage() {
           <h2>Grupos Dobra</h2>
           <p>
             Cadastre cada grupo WhatsApp criado com a dobra: foto, link de convite (Bitly separado)
-            e membros. Use <strong>Editar</strong> para atualizar a quantidade de pessoas e o link.
+            e membros. Pode vincular a coordenadores <strong>regionais</strong> ou de{' '}
+            <strong>dobra</strong> (ex.: Cuiabá). Use <strong>Editar</strong> para atualizar pessoas e o link.
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.85rem' }}>
             <button type="button" className="btn btn-accent btn-sm" onClick={openCreate}>
@@ -331,7 +341,9 @@ export default function GruposDobraPage() {
                 >
                   <option value="">—</option>
                   {coordinators.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {c.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -408,7 +420,9 @@ export default function GruposDobraPage() {
             >
               <option value="">Todos</option>
               {coordinators.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name} · {c.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
+                </option>
               ))}
             </select>
           </label>

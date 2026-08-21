@@ -29,10 +29,12 @@ export default function AdminPage() {
     campaign_slug: 'fabio-garcia',
     name: '',
     phone: '',
+    coord_type: 'regional',
     municipality_ids: [],
   });
   const [editingCoordId, setEditingCoordId] = useState(null);
   const [muniSearch, setMuniSearch] = useState('');
+  const [coordTypeFilter, setCoordTypeFilter] = useState('all');
 
   async function refresh() {
     const slug = coordForm.campaign_slug || 'fabio-garcia';
@@ -110,6 +112,7 @@ export default function AdminPage() {
       campaign_slug: coordForm.campaign_slug,
       name: coord.name,
       phone: coord.phone || '',
+      coord_type: coord.coord_type === 'dobra' ? 'dobra' : 'regional',
       municipality_ids: (coord.municipalities || []).map((m) => m.id),
     });
   }
@@ -120,6 +123,7 @@ export default function AdminPage() {
       ...prev,
       name: '',
       phone: '',
+      coord_type: 'regional',
       municipality_ids: [],
     }));
     setMuniSearch('');
@@ -132,20 +136,22 @@ export default function AdminPage() {
       return;
     }
     try {
+      const payload = {
+        name: coordForm.name.trim(),
+        phone: coordForm.phone,
+        coord_type: coordForm.coord_type === 'dobra' ? 'dobra' : 'regional',
+        municipality_ids: coordForm.municipality_ids,
+      };
       if (editingCoordId) {
-        await api.updateCoordinator(coordForm.campaign_slug, editingCoordId, {
-          name: coordForm.name.trim(),
-          phone: coordForm.phone,
-          municipality_ids: coordForm.municipality_ids,
-        });
+        await api.updateCoordinator(coordForm.campaign_slug, editingCoordId, payload);
         setToast('Coordenador atualizado');
       } else {
-        await api.createCoordinator(coordForm.campaign_slug, {
-          name: coordForm.name.trim(),
-          phone: coordForm.phone,
-          municipality_ids: coordForm.municipality_ids,
-        });
-        setToast('Coordenador cadastrado');
+        await api.createCoordinator(coordForm.campaign_slug, payload);
+        setToast(
+          payload.coord_type === 'dobra'
+            ? 'Coordenador de dobra cadastrado'
+            : 'Coordenador regional cadastrado',
+        );
       }
       resetCoordForm();
       await refresh();
@@ -267,11 +273,10 @@ export default function AdminPage() {
         <section className="panel panel-pad" style={{ marginTop: '1.25rem' }}>
           <div className="section__head" style={{ marginBottom: '0.85rem' }}>
             <p className="eyebrow">Território</p>
-            <h3 style={{ margin: 0 }}>Coordenadores (ex.: Ogeda, Jurandir, Barbara)</h3>
+            <h3 style={{ margin: 0 }}>Coordenadores (regionais + dobra)</h3>
             <p style={{ margin: '0.35rem 0 0' }}>
-              Cadastre o coordenador e marque os municípios dele. Depois, na aba Coordenadores da campanha,
-              defina expectativa de voto e meta de conteúdo — o sistema gera alarmes e o Relatório monta
-              a chamada de atenção.
+              Cadastre coordenadores <strong>regionais</strong> (território) e também os de{' '}
+              <strong>dobra</strong> (ex.: grupos em Cuiabá). Depois use na aba Coordenadores e em Grupos Dobra.
             </p>
           </div>
 
@@ -289,13 +294,24 @@ export default function AdminPage() {
               </select>
             </label>
             <label>
+              Tipo
+              <select
+                className="select"
+                value={coordForm.coord_type}
+                onChange={(e) => setCoordForm({ ...coordForm, coord_type: e.target.value })}
+              >
+                <option value="regional">Regional (território)</option>
+                <option value="dobra">Dobra (ex.: Cuiabá / grupos)</option>
+              </select>
+            </label>
+            <label>
               Nome do coordenador
               <input
                 className="input"
                 required
                 value={coordForm.name}
                 onChange={(e) => setCoordForm({ ...coordForm, name: e.target.value })}
-                placeholder="Ex.: Ogeda"
+                placeholder={coordForm.coord_type === 'dobra' ? 'Ex.: Coordenador dobra Cuiabá' : 'Ex.: Ogeda'}
               />
             </label>
             <label>
@@ -311,6 +327,11 @@ export default function AdminPage() {
             <div>
               <label style={{ display: 'block', marginBottom: '0.45rem' }}>
                 Municípios deste coordenador ({coordForm.municipality_ids.length} selecionados)
+                {coordForm.coord_type === 'dobra' ? (
+                  <span style={{ display: 'block', fontWeight: 400, color: 'var(--muted)', marginTop: 4 }}>
+                    Opcional para dobra — pode marcar Cuiabá sem tirar do regional.
+                  </span>
+                ) : null}
               </label>
               <input
                 className="input"
@@ -350,13 +371,36 @@ export default function AdminPage() {
 
           <div className="admin-coord-list" style={{ marginTop: '1.25rem' }}>
             <h4 style={{ marginBottom: '0.65rem' }}>Já cadastrados</h4>
+            <div className="chip-group" style={{ marginBottom: '0.75rem' }}>
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'regional', label: 'Regionais' },
+                { id: 'dobra', label: 'Dobra' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`chip ${coordTypeFilter === opt.id ? 'active' : ''}`}
+                  onClick={() => setCoordTypeFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             {!coordinators.length && (
               <EmptyState>Nenhum coordenador nesta campanha ainda.</EmptyState>
             )}
-            {coordinators.map((coord) => (
+            {coordinators
+              .filter((c) => coordTypeFilter === 'all' || (c.coord_type || 'regional') === coordTypeFilter)
+              .map((coord) => (
               <div className="admin-coord-row" key={coord.id}>
                 <div>
-                  <strong>{coord.name}</strong>
+                  <strong>
+                    {coord.name}
+                    <span className={`coord-type-pill coord-type-pill--${coord.coord_type === 'dobra' ? 'dobra' : 'regional'}`}>
+                      {coord.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
+                    </span>
+                  </strong>
                   <p style={{ margin: '0.2rem 0 0' }}>
                     {coord.totals.municipalities} município(s) · {coord.totals.registrations} cadastro(s)
                     {coord.health?.label ? ` · ${coord.health.label}` : ''}

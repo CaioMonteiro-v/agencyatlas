@@ -1229,11 +1229,18 @@ app.patch('/api/campaigns/:slug/missions/:id/progress', (req, res) => {
 });
 
 /* ---------- Coordinators ---------- */
+function normalizeCoordType(raw) {
+  const t = String(raw || 'regional').trim().toLowerCase();
+  if (t === 'dobra' || t === 'mobilizacao' || t === 'mobilização') return 'dobra';
+  return 'regional';
+}
+
 function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds) {
   const coord = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
     .get(coordinatorId, campaignId);
   if (!coord) return null;
 
+  const isDobra = normalizeCoordType(coord.coord_type) === 'dobra';
   const ids = [...new Set((municipalityIds || []).map(Number).filter((n) => Number.isFinite(n) && n > 0))];
   const prev = db.prepare('SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?')
     .all(coordinatorId);
@@ -1261,16 +1268,19 @@ function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds
       const exists = db.prepare('SELECT id FROM municipalities WHERE id = ?').get(mid);
       if (!exists) continue;
 
-      const others = db.prepare(`
-        SELECT cm.coordinator_id
-        FROM coordinator_municipalities cm
-        JOIN coordinators c ON c.id = cm.coordinator_id
-        WHERE cm.municipality_id = ? AND c.campaign_id = ? AND cm.coordinator_id != ?
-      `).all(mid, campaignId, coordinatorId);
+      // Regionais: município exclusivo. Dobra (ex. Cuiabá): pode compartilhar com regional.
+      if (!isDobra) {
+        const others = db.prepare(`
+          SELECT cm.coordinator_id
+          FROM coordinator_municipalities cm
+          JOIN coordinators c ON c.id = cm.coordinator_id
+          WHERE cm.municipality_id = ? AND c.campaign_id = ? AND cm.coordinator_id != ?
+        `).all(mid, campaignId, coordinatorId);
 
-      for (const o of others) {
-        db.prepare('DELETE FROM coordinator_municipalities WHERE coordinator_id = ? AND municipality_id = ?')
-          .run(o.coordinator_id, mid);
+        for (const o of others) {
+          db.prepare('DELETE FROM coordinator_municipalities WHERE coordinator_id = ? AND municipality_id = ?')
+            .run(o.coordinator_id, mid);
+        }
       }
 
       const keep = prevMetrics[mid] || {};
@@ -1290,7 +1300,10 @@ function setCoordinatorMunicipalities(campaignId, coordinatorId, municipalityIds
         keep.ig_reach || 0,
         keep.last_meta_sync || null,
       );
-      db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?').run(coord.name, mid);
+      // Nome “oficial” do município fica com o regional
+      if (!isDobra) {
+        db.prepare('UPDATE municipalities SET coordinator_name = ? WHERE id = ?').run(coord.name, mid);
+      }
     }
   })();
 
@@ -1312,6 +1325,8 @@ app.get('/api/campaigns/:slug/coordinators', async (req, res) => {
   const coordinators = rows.map((c) => detailFor(campaign, c));
   const summary = {
     total: coordinators.length,
+    regional: coordinators.filter((c) => normalizeCoordType(c.coord_type) === 'regional').length,
+    dobra: coordinators.filter((c) => normalizeCoordType(c.coord_type) === 'dobra').length,
     municipalities_assigned: coordinators.reduce((s, c) => s + c.totals.municipalities, 0),
     registrations: coordinators.reduce((s, c) => s + c.totals.registrations, 0),
     vote_expectation: coordinators.reduce((s, c) => s + c.totals.vote_expectation, 0),
@@ -1352,20 +1367,22 @@ app.post('/api/campaigns/:slug/coordinators', (req, res) => {
     const campaign = getCampaignBySlug(req.params.slug);
     if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-    const { name, phone, photo_url, notes, municipality_ids } = req.body;
+    const { name, phone, photo_url, notes, municipality_ids, coord_type } = req.body;
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'Nome do coordenador é obrigatório' });
     }
 
+    const type = normalizeCoordType(coord_type);
     const result = db.prepare(`
-      INSERT INTO coordinators (campaign_id, name, phone, photo_url, notes)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO coordinators (campaign_id, name, phone, photo_url, notes, coord_type)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       campaign.id,
       String(name).trim(),
       phone || null,
       photo_url || null,
       notes || null,
+      type,
     );
 
     const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ?').get(result.lastInsertRowid);
@@ -1395,10 +1412,13 @@ app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
     const phone = req.body.phone !== undefined ? (req.body.phone || null) : coordinator.phone;
     const photo_url = req.body.photo_url !== undefined ? (req.body.photo_url || null) : coordinator.photo_url;
     const notes = req.body.notes !== undefined ? (req.body.notes || null) : coordinator.notes;
+    const type = req.body.coord_type !== undefined
+      ? normalizeCoordType(req.body.coord_type)
+      : normalizeCoordType(coordinator.coord_type);
 
     db.prepare(`
-      UPDATE coordinators SET name = ?, phone = ?, photo_url = ?, notes = ? WHERE id = ?
-    `).run(name, phone, photo_url, notes, coordinator.id);
+      UPDATE coordinators SET name = ?, phone = ?, photo_url = ?, notes = ?, coord_type = ? WHERE id = ?
+    `).run(name, phone, photo_url, notes, type, coordinator.id);
 
     if (name !== coordinator.name) {
       db.prepare(`
@@ -1406,7 +1426,8 @@ app.patch('/api/campaigns/:slug/coordinators/:id', (req, res) => {
         WHERE id IN (
           SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
         )
-      `).run(name, coordinator.id);
+        AND COALESCE(coordinator_name, '') = ?
+      `).run(name, coordinator.id, coordinator.name);
     }
 
     if (Array.isArray(req.body.municipality_ids)) {

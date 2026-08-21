@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS coordinators (
   phone TEXT,
   photo_url TEXT,
   notes TEXT,
+  coord_type TEXT DEFAULT 'regional',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

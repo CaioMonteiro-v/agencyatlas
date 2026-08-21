@@ -245,6 +245,7 @@ function initSqliteSchema(db) {
       phone TEXT,
       photo_url TEXT,
       notes TEXT,
+      coord_type TEXT DEFAULT 'regional',
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );

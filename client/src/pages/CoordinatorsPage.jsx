@@ -32,6 +32,7 @@ export default function CoordinatorsPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [toast, setToast] = useState('');
   const [editingMuni, setEditingMuni] = useState(null);
   const [metricsForm, setMetricsForm] = useState({
@@ -60,6 +61,22 @@ export default function CoordinatorsPage() {
     () => data?.coordinators?.find((c) => c.id === selectedId) || null,
     [data, selectedId],
   );
+
+  const visibleCoordinators = useMemo(() => {
+    const list = data?.coordinators || [];
+    if (typeFilter === 'all') return list;
+    return list.filter((c) => (c.coord_type || 'regional') === typeFilter);
+  }, [data, typeFilter]);
+
+  useEffect(() => {
+    if (!visibleCoordinators.length) {
+      setSelectedId(null);
+      return;
+    }
+    if (!visibleCoordinators.some((c) => c.id === selectedId)) {
+      setSelectedId(visibleCoordinators[0].id);
+    }
+  }, [visibleCoordinators, selectedId]);
 
   const filteredMunicipalities = useMemo(() => {
     if (!selected) return [];
@@ -151,13 +168,19 @@ export default function CoordinatorsPage() {
         <p className="eyebrow">Coordenação territorial</p>
         <h2>Coordenadores</h2>
         <p>
-          Dois acompanhamentos separados: <strong>expectativa de voto</strong> (norte eleitoral —
-          quantos cadastros/público equivalem à meta) e <strong>comunicação</strong> (se o conteúdo
-          está sendo visto / comentado no município). Alarmes aparecem quando algum dos dois falha.
+          Aqui entram os <strong>regionais</strong> e também os de <strong>dobra</strong> (ex.: grupos em Cuiabá).
+          Regionais acompanham expectativa de voto e comunicação por município; dobra serve para controle
+          dos grupos de mobilização.
         </p>
         <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.55rem' }}>
           <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/relatorio`}>
             Abrir Relatório
+          </Link>
+          <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/grupos`}>
+            Grupos Dobra
+          </Link>
+          <Link className="btn btn-soft btn-sm" to="/admin">
+            Cadastrar / editar
           </Link>
           <button className="btn btn-accent btn-sm" type="button" disabled={syncing} onClick={syncMeta}>
             {syncing ? 'Sincronizando…' : 'Sincronizar Instagram (Meta)'}
@@ -226,6 +249,14 @@ export default function CoordinatorsPage() {
           <span>Coordenadores</span>
         </div>
         <div className="stat">
+          <strong>{data.summary.regional ?? data.coordinators.filter((c) => (c.coord_type || 'regional') === 'regional').length}</strong>
+          <span>Regionais</span>
+        </div>
+        <div className="stat">
+          <strong>{data.summary.dobra ?? data.coordinators.filter((c) => c.coord_type === 'dobra').length}</strong>
+          <span>Dobra</span>
+        </div>
+        <div className="stat">
           <strong>{data.summary.municipalities_assigned}</strong>
           <span>Municípios</span>
         </div>
@@ -255,8 +286,24 @@ export default function CoordinatorsPage() {
           <aside className="panel panel-pad coord-list">
             <p className="eyebrow">Equipe</p>
             <h3 style={{ marginTop: 0 }}>Coordenadores</h3>
+            <div className="chip-group" style={{ marginBottom: '0.75rem' }}>
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'regional', label: 'Regionais' },
+                { id: 'dobra', label: 'Dobra' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`chip ${typeFilter === opt.id ? 'active' : ''}`}
+                  onClick={() => setTypeFilter(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <div className="coord-cards">
-              {data.coordinators.map((coord) => (
+              {visibleCoordinators.map((coord) => (
                 <button
                   key={coord.id}
                   type="button"
@@ -275,6 +322,9 @@ export default function CoordinatorsPage() {
                       {coord.name}
                       {coord.totals.alarms > 0 && <span className="alarm-dot" title="Há alarmes" />}
                     </strong>
+                    <span className={`coord-type-pill coord-type-pill--${coord.coord_type === 'dobra' ? 'dobra' : 'regional'}`}>
+                      {coord.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
+                    </span>
                     <span>
                       {coord.totals.municipalities} mun.
                       {' · '}
@@ -287,6 +337,12 @@ export default function CoordinatorsPage() {
                   </div>
                 </button>
               ))}
+              {!visibleCoordinators.length ? (
+                <EmptyState>
+                  Nenhum coordenador {typeFilter === 'dobra' ? 'de dobra' : typeFilter === 'regional' ? 'regional' : ''} aqui.
+                  Cadastre em <a href="/admin">/admin</a>.
+                </EmptyState>
+              ) : null}
             </div>
           </aside>
 
@@ -299,8 +355,15 @@ export default function CoordinatorsPage() {
                   <div style={{ display: 'flex', gap: '0.9rem', alignItems: 'center' }}>
                     <Avatar name={selected.name} photo={selected.photo_url} size={56} />
                     <div>
-                      <p className="eyebrow" style={{ marginBottom: 4 }}>Painel do coordenador</p>
-                      <h3 style={{ margin: 0 }}>{selected.name}</h3>
+                      <p className="eyebrow" style={{ marginBottom: 4 }}>
+                        {selected.coord_type === 'dobra' ? 'Coordenador de dobra' : 'Painel do coordenador regional'}
+                      </p>
+                      <h3 style={{ margin: 0 }}>
+                        {selected.name}
+                        <span className={`coord-type-pill coord-type-pill--${selected.coord_type === 'dobra' ? 'dobra' : 'regional'}`}>
+                          {selected.coord_type === 'dobra' ? 'Dobra' : 'Regional'}
+                        </span>
+                      </h3>
                       {selected.phone && <p style={{ margin: '0.2rem 0 0' }}>{selected.phone}</p>}
                     </div>
                   </div>

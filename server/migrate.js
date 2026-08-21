@@ -113,6 +113,19 @@ function backfillEventMunicipalitiesFromLocation(db) {
 }
 
 function migrateAnalyticsSchema(db) {
+  // Tipo de coordenador: regional (território) | dobra (ex.: grupos em Cuiabá)
+  try {
+    ensureColumn(db, 'coordinators', 'coord_type', "TEXT DEFAULT 'regional'");
+    // Backfill nulos
+    try {
+      db.prepare(`UPDATE coordinators SET coord_type = 'regional' WHERE coord_type IS NULL OR coord_type = ''`).run();
+    } catch {
+      /* ignore */
+    }
+  } catch (err) {
+    console.warn('migrate coordinators.coord_type:', err.message);
+  }
+
   // Mobilizers (código pessoal) — criar antes da FK em registrations
   if (db.dialect === 'postgres') {
     db.exec(`
