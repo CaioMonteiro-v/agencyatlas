@@ -24,12 +24,15 @@ export default function RegistrationsTable({ campaignSlug }) {
         <div>
           <p className="eyebrow">Base</p>
           <h3>Registro de cadastros</h3>
-          <p>Detalhes de cada inscrição rastreada nesta campanha.</p>
+          <p>
+            <strong>Mobilizador</strong> = quem fechou o evento/link conosco (norte de desempenho).{' '}
+            <strong>Organiz./Coord.</strong> = referência do município (texto livre).
+          </p>
         </div>
         <div className="filters">
           <input
             className="input"
-            placeholder="Buscar nome, telefone ou origem"
+            placeholder="Buscar nome, telefone, mobilizador…"
             value={query}
             onChange={(e) => {
               setPage(1);
@@ -49,6 +52,7 @@ export default function RegistrationsTable({ campaignSlug }) {
               <th>Telefone</th>
               <th>Data/Hora</th>
               <th>Mobilizador</th>
+              <th>Organiz./Coord.</th>
               <th>Total do mobilizador</th>
               <th>Origem</th>
             </tr>
@@ -60,11 +64,12 @@ export default function RegistrationsTable({ campaignSlug }) {
                 <td>{row.phone}</td>
                 <td>{formatDateTime(row.created_at)}</td>
                 <td>
-                  {row.leader_name || '—'}
+                  {row.mobilizer_display || row.mobilizer_name || row.leader_name || '—'}
                   <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
                     {row.municipality_name || ''}
                   </div>
                 </td>
+                <td>{row.organizer_name || '—'}</td>
                 <td>{row.mobilizer_total}</td>
                 <td>
                   <code style={{ fontSize: '0.8rem' }}>{row.source || row.referral_code || 'direto'}</code>
