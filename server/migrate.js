@@ -185,6 +185,7 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'events', 'coordinator_id', 'INTEGER');
   ensureColumn(db, 'events', 'channel_link', 'TEXT');
   ensureColumn(db, 'events', 'channel_name', 'TEXT');
+  ensureColumn(db, 'events', 'invite_bitly_url', 'TEXT');
   ensureColumn(db, 'events', 'municipality_id', 'INTEGER');
   ensureColumn(db, 'event_registrations', 'organizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'organizer_name', 'TEXT');

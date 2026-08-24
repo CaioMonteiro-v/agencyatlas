@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS events (
   coordinator_id INTEGER REFERENCES coordinators(id) ON DELETE SET NULL,
   channel_link TEXT,
   channel_name TEXT,
+  invite_bitly_url TEXT,
   municipality_id INTEGER REFERENCES municipalities(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

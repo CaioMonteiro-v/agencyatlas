@@ -681,6 +681,7 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     coordinator_id,
     channel_link,
     channel_name,
+    invite_bitly_url,
     municipality_id,
   } = req.body;
   if (!name || !event_date) return res.status(400).json({ error: 'Nome e data são obrigatórios' });
@@ -717,6 +718,7 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
   const channelLink = channel_link ? String(channel_link).trim() : null;
   const channelName = channel_name ? String(channel_name).trim() : null;
+  const inviteBitlyUrl = invite_bitly_url ? String(invite_bitly_url).trim() : null;
 
   const muniRow = db.prepare('SELECT * FROM municipalities WHERE id = ?').get(resolvedMuniId);
   const locationText = location || muniRow?.name || '';
@@ -724,9 +726,10 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   const result = db.prepare(`
     INSERT INTO events (
       campaign_id, name, description, location, event_date, event_time,
-      slug, organizer_name, organizer_role, coordinator_id, channel_link, channel_name, municipality_id
+      slug, organizer_name, organizer_role, coordinator_id, channel_link, channel_name,
+      invite_bitly_url, municipality_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     name,
@@ -740,6 +743,7 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
     resolvedCoordinatorId,
     channelLink || null,
     channelName || null,
+    inviteBitlyUrl || null,
     resolvedMuniId,
   );
 
@@ -789,6 +793,9 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
   const channelName = req.body.channel_name !== undefined
     ? (req.body.channel_name ? String(req.body.channel_name).trim() : null)
     : event.channel_name;
+  const inviteBitlyUrl = req.body.invite_bitly_url !== undefined
+    ? (req.body.invite_bitly_url ? String(req.body.invite_bitly_url).trim() : null)
+    : event.invite_bitly_url;
 
   let resolvedMuniId = event.municipality_id || null;
   if (req.body.municipality_id !== undefined) {
@@ -811,6 +818,7 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
       coordinator_id = ?,
       channel_link = ?,
       channel_name = ?,
+      invite_bitly_url = ?,
       municipality_id = ?
     WHERE id = ?
   `).run(
@@ -824,6 +832,7 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
     resolvedCoordinatorId,
     channelLink || null,
     channelName || null,
+    inviteBitlyUrl || null,
     resolvedMuniId,
     event.id,
   );

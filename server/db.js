@@ -195,6 +195,7 @@ function initSqliteSchema(db) {
       coordinator_id INTEGER,
       channel_link TEXT,
       channel_name TEXT,
+      invite_bitly_url TEXT,
       municipality_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,

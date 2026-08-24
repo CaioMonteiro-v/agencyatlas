@@ -34,7 +34,7 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
-  const [waOpened, setWaOpened] = useState(false);
+  const [openedHint, setOpenedHint] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
     email: '',
@@ -60,8 +60,12 @@ export default function EventRegistrationPage() {
       });
   }, [eventSlug]);
 
-  const hasChannel = Boolean(String(event?.channel_link || '').trim());
-  const channelHref = hasChannel ? normalizeExternalUrl(event.channel_link) : '';
+  const whatsappInvite = normalizeExternalUrl(event?.channel_link);
+  const bitlyInvite = normalizeExternalUrl(event?.invite_bitly_url);
+  const hasWhatsAppInvite = Boolean(whatsappInvite);
+  const hasBitlyInvite = Boolean(bitlyInvite);
+  const hasMunicipalInvite = hasWhatsAppInvite || hasBitlyInvite;
+
   const municipio = String(event?.municipality_name || event?.location || '').trim() || 'Mato Grosso';
   const channelLabel = String(event?.channel_name || '').trim() || 'nosso grupo de elite';
 
@@ -70,11 +74,15 @@ export default function EventRegistrationPage() {
     : '';
 
   const fabioHref = buildWhatsAppLink(event?.whatsapp_url, waMessage);
-  const ctaHref = hasChannel ? channelHref : fabioHref;
+  // Prefer WhatsApp invite for auto-open; else Bitly; else campaign WhatsApp
+  const autoOpenHref = hasWhatsAppInvite
+    ? whatsappInvite
+    : hasBitlyInvite
+      ? bitlyInvite
+      : fabioHref;
 
-  function openCta() {
-    setWaOpened(true);
-    window.open(ctaHref, '_blank', 'noopener,noreferrer');
+  function markOpened() {
+    setOpenedHint(true);
   }
 
   async function onSubmit(e) {
@@ -97,20 +105,21 @@ export default function EventRegistrationPage() {
       setDone(true);
       setToast('Presença confirmada');
 
-      const href = hasChannel
-        ? normalizeExternalUrl(event.channel_link)
-        : buildWhatsAppLink(
-          event?.whatsapp_url,
-          `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a deputado federal.`,
-        );
+      const href = hasWhatsAppInvite
+        ? whatsappInvite
+        : hasBitlyInvite
+          ? bitlyInvite
+          : buildWhatsAppLink(
+            event?.whatsapp_url,
+            `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event?.name || ''}". Quero apoiar a campanha a deputado federal.`,
+          );
 
-      // Abre o destino na sequência do cadastro (melhor no celular)
       window.setTimeout(() => {
         try {
           window.location.href = href;
-          setWaOpened(true);
+          markOpened();
         } catch {
-          /* usuário usa o botão abaixo */
+          /* usuário usa os botões abaixo */
         }
       }, 450);
     } catch (err) {
@@ -143,29 +152,55 @@ export default function EventRegistrationPage() {
                   Obrigado, {firstName(form.full_name)}! Seu cadastro foi registrado.
                 </p>
 
-                {hasChannel ? (
+                {hasMunicipalInvite ? (
                   <>
                     <p className="event-done__lead">
                       Você acabou de fazer parte da nossa história em {municipio}.
                       Quero te convidar para o nosso grupo de elite, {channelLabel} —
                       aqui só entra quem realmente faz parte da mudança.
                     </p>
-                    <a
-                      className="btn btn-whatsapp event-done__cta"
-                      href={ctaHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setWaOpened(true)}
+
+                    {hasWhatsAppInvite ? (
+                      <a
+                        className="btn btn-whatsapp event-done__cta"
+                        href={whatsappInvite}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={markOpened}
+                      >
+                        Entrar pelo WhatsApp
+                      </a>
+                    ) : null}
+
+                    {hasBitlyInvite ? (
+                      <a
+                        className={`btn ${hasWhatsAppInvite ? 'btn-accent' : 'btn-whatsapp'} event-done__cta`}
+                        href={bitlyInvite}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={markOpened}
+                        style={hasWhatsAppInvite ? { marginTop: '0.55rem' } : undefined}
+                      >
+                        Entrar pelo link Bitly
+                      </a>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => {
+                        markOpened();
+                        window.open(autoOpenHref, '_blank', 'noopener,noreferrer');
+                      }}
                     >
-                      Entrar no canal
-                    </a>
-                    <button type="button" className="btn btn-soft" onClick={openCta}>
                       Abrir de novo
                     </button>
                     <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
-                      {waOpened
-                        ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
-                        : 'Convite exclusivo do canal municipal deste evento.'}
+                      {openedHint
+                        ? 'Se não abriu, toque no botão verde (WhatsApp) ou no Bitly acima.'
+                        : hasWhatsAppInvite && hasBitlyInvite
+                          ? 'Você pode entrar pelo WhatsApp ou pelo Bitly — os dois levam ao canal.'
+                          : 'Convite exclusivo do canal municipal deste evento.'}
                     </p>
                   </>
                 ) : (
@@ -178,15 +213,22 @@ export default function EventRegistrationPage() {
                       href={fabioHref}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={() => setWaOpened(true)}
+                      onClick={markOpened}
                     >
                       Falar com Fábio no WhatsApp
                     </a>
-                    <button type="button" className="btn btn-soft" onClick={openCta}>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => {
+                        markOpened();
+                        window.open(fabioHref, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
                       Abrir de novo
                     </button>
                     <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
-                      {waOpened
+                      {openedHint
                         ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
                         : 'Link: bit.ly/FalaFabio · mensagem pronta se o app permitir.'}
                     </p>
@@ -196,8 +238,8 @@ export default function EventRegistrationPage() {
             ) : (
               <>
                 <p style={{ fontSize: '0.92rem' }}>
-                  {hasChannel
-                    ? 'Confirme sua presença. Em seguida você recebe o convite do canal municipal.'
+                  {hasMunicipalInvite
+                    ? 'Confirme sua presença. Em seguida você recebe o convite do canal (WhatsApp e/ou Bitly).'
                     : 'Confirme sua presença. Em seguida você já pode falar com o Fábio no WhatsApp.'}
                 </p>
                 <form className="form-grid" onSubmit={onSubmit}>
@@ -238,7 +280,7 @@ export default function EventRegistrationPage() {
                     E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
                   </p>
                   <button className="btn btn-primary" type="submit">
-                    {hasChannel ? 'Confirmar presença' : 'Confirmar e falar com o Fábio'}
+                    {hasMunicipalInvite ? 'Confirmar presença' : 'Confirmar e falar com o Fábio'}
                   </button>
                 </form>
               </>

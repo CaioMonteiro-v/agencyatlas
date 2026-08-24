@@ -32,6 +32,7 @@ function emptyForm() {
     coordinator_id: '',
     channel_link: '',
     channel_name: '',
+    invite_bitly_url: '',
     municipality_id: '',
   };
 }
@@ -161,6 +162,7 @@ export default function EventsPanel({ campaignSlug }) {
         coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : null,
         channel_link: form.channel_link.trim() || null,
         channel_name: form.channel_name.trim() || null,
+        invite_bitly_url: form.invite_bitly_url.trim() || null,
         municipality_id: Number(form.municipality_id),
       });
       setShowForm(false);
@@ -179,6 +181,7 @@ export default function EventsPanel({ campaignSlug }) {
       [event.id]: {
         channel_link: event.channel_link || '',
         channel_name: event.channel_name || '',
+        invite_bitly_url: event.invite_bitly_url || '',
         municipality_id: event.municipality_id ? String(event.municipality_id) : '',
       },
     }));
@@ -190,10 +193,11 @@ export default function EventsPanel({ campaignSlug }) {
       await api.updateEvent(campaignSlug, event.id, {
         channel_link: (draft.channel_link || '').trim() || null,
         channel_name: (draft.channel_name || '').trim() || null,
+        invite_bitly_url: (draft.invite_bitly_url || '').trim() || null,
         municipality_id: draft.municipality_id ? Number(draft.municipality_id) : null,
       });
       setEditingId(null);
-      setToast('Evento atualizado (canal / município)');
+      setToast('Evento atualizado (convites / município)');
       await load(publicBase);
     } catch (err) {
       setToast(err.message);
@@ -289,13 +293,23 @@ export default function EventsPanel({ campaignSlug }) {
           </label>
 
           <label>
-            Link do Canal (WhatsApp)
+            Convite WhatsApp do canal (opcional)
             <input
               className="input"
               type="url"
               value={form.channel_link}
               onChange={(e) => setForm({ ...form, channel_link: e.target.value })}
               placeholder="https://chat.whatsapp.com/..."
+            />
+          </label>
+          <label>
+            Convite Bitly do canal (opcional)
+            <input
+              className="input"
+              type="url"
+              value={form.invite_bitly_url}
+              onChange={(e) => setForm({ ...form, invite_bitly_url: e.target.value })}
+              placeholder="https://bit.ly/..."
             />
           </label>
           <label>
@@ -308,8 +322,10 @@ export default function EventsPanel({ campaignSlug }) {
             />
           </label>
           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Se preencher o link do canal, a confirmação de presença convida a pessoa para esse canal
-            em vez do bit.ly/FalaFabio. Sem link, o fluxo atual permanece.
+            Depois do cadastro no QR, a pessoa pode receber o convite pelo <strong>WhatsApp</strong>
+            {' '}e/ou pelo <strong>Bitly</strong> (os dois, se preencher).
+            O WhatsApp da campanha (Fala Fábio) serve só para <strong>distribuir o QR</strong> —
+            não é o convite do canal municipal.
           </p>
 
           <div>
@@ -417,19 +433,36 @@ export default function EventsPanel({ campaignSlug }) {
                     {event.organizer_role === 'coordinator' ? ' · vinculado' : ''}
                   </p>
                 )}
-                {event.channel_link ? (
-                  <p style={{ marginBottom: 0 }}>
-                    <strong>Canal WhatsApp:</strong>{' '}
-                    {event.channel_name ? `${event.channel_name} · ` : ''}
-                    <a href={event.channel_link} target="_blank" rel="noreferrer">
-                      link cadastrado
-                    </a>
-                  </p>
+                {(event.channel_link || event.invite_bitly_url) ? (
+                  <>
+                    {event.channel_link ? (
+                      <p style={{ marginBottom: 0 }}>
+                        <strong>Convite WhatsApp:</strong>{' '}
+                        {event.channel_name ? `${event.channel_name} · ` : ''}
+                        <a href={event.channel_link} target="_blank" rel="noreferrer">
+                          abrir
+                        </a>
+                      </p>
+                    ) : null}
+                    {event.invite_bitly_url ? (
+                      <p style={{ marginBottom: 0 }}>
+                        <strong>Convite Bitly:</strong>{' '}
+                        <a href={event.invite_bitly_url} target="_blank" rel="noreferrer">
+                          {event.invite_bitly_url}
+                        </a>
+                      </p>
+                    ) : null}
+                  </>
                 ) : (
                   <p style={{ marginBottom: 0, color: 'var(--muted)' }}>
-                    Sem canal municipal — CTA pós-cadastro usa bit.ly/FalaFabio
+                    Sem convite de canal — após o QR, cai no WhatsApp da campanha (só se não houver
+                    WhatsApp nem Bitly do canal).
                   </p>
                 )}
+                <p style={{ marginBottom: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
+                  Dica: baixe o QR e mande no WhatsApp da campanha para distribuir. O convite do
+                  canal é outro passo (links acima).
+                </p>
                 <p>{event.description}</p>
                 <span className="badge">{event.attendees || 0} inscritos</span>
               </div>
@@ -477,7 +510,7 @@ export default function EventsPanel({ campaignSlug }) {
                     </select>
                   </label>
                   <label>
-                    Link do Canal (WhatsApp)
+                    Convite WhatsApp do canal
                     <input
                       className="input"
                       type="url"
@@ -492,6 +525,24 @@ export default function EventsPanel({ campaignSlug }) {
                         }))
                       }
                       placeholder="https://chat.whatsapp.com/..."
+                    />
+                  </label>
+                  <label>
+                    Convite Bitly do canal
+                    <input
+                      className="input"
+                      type="url"
+                      value={channelDrafts[event.id]?.invite_bitly_url || ''}
+                      onChange={(e) =>
+                        setChannelDrafts((prev) => ({
+                          ...prev,
+                          [event.id]: {
+                            ...(prev[event.id] || {}),
+                            invite_bitly_url: e.target.value,
+                          },
+                        }))
+                      }
+                      placeholder="https://bit.ly/..."
                     />
                   </label>
                   <label>
@@ -540,7 +591,9 @@ export default function EventsPanel({ campaignSlug }) {
                   Ver inscritos ({event.attendees || 0})
                 </button>
                 <button type="button" className="btn btn-soft btn-sm" onClick={() => startEditChannel(event)}>
-                  {event.channel_link || event.municipality_id ? 'Editar canal/município' : 'Vincular canal/município'}
+                  {event.channel_link || event.invite_bitly_url || event.municipality_id
+                    ? 'Editar convites/município'
+                    : 'Vincular convites/município'}
                 </button>
                 {qr && (
                   <>
