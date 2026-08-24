@@ -27,9 +27,9 @@ function formatDemandDate(value) {
 }
 
 function listTitle(filter) {
-  if (filter === 'standby') return 'Todas em standby';
-  if (filter === 'resolvido') return 'Todas resolvidas';
-  return 'Todos os relatórios';
+  if (filter === 'standby') return 'Tudo em aberto';
+  if (filter === 'resolvido') return 'Tudo resolvido';
+  return 'Todos os registros';
 }
 
 export default function DemandFunnelPanel({ campaignSlug }) {
@@ -207,7 +207,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         resolution_notes: notes,
         unresolved_reason: null,
       });
-      setToast('Demanda marcada como resolvida');
+      setToast('Marcado como resolvido');
       await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
@@ -229,7 +229,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         status: 'standby',
         unresolved_reason: String(reason).trim(),
       });
-      setToast('Demanda mantida em standby');
+      setToast('Mantido em aberto');
       await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
@@ -242,7 +242,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         status: 'standby',
         unresolved_reason: demand.unresolved_reason || 'Reaberta — aguardando situação',
       });
-      setToast('Demanda reaberta em standby');
+      setToast('Reaberto — ainda em aberto');
       await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
@@ -250,10 +250,10 @@ export default function DemandFunnelPanel({ campaignSlug }) {
   }
 
   async function removeDemand(demand) {
-    if (!window.confirm('Remover esta demanda do funil?')) return;
+    if (!window.confirm('Remover este registro?')) return;
     try {
       await api.deleteDemand(campaignSlug, demand.id);
-      setToast('Demanda removida');
+      setToast('Registro removido');
       await refreshCurrentView();
     } catch (err) {
       setToast(err.message);
@@ -287,10 +287,10 @@ export default function DemandFunnelPanel({ campaignSlug }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
           <div>
             <span className={`badge badge--${demand.status === 'resolvido' ? 'ok' : 'warn'}`}>
-              {demand.status === 'resolvido' ? 'Resolvido' : 'Standby'}
+              {demand.status === 'resolvido' ? 'Resolvido' : 'Em aberto'}
             </span>
             <h4 style={{ margin: '0.45rem 0 0.2rem' }}>
-              {demand.title || 'Demanda sem título'}
+              {demand.title || 'Sem título'}
             </h4>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.88rem' }}>
               {formatDemandDate(demand.occurred_at)}
@@ -317,7 +317,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                   className="btn btn-soft btn-sm"
                   onClick={() => keepStandby(demand)}
                 >
-                  Atualizar standby
+                  Atualizar motivo
                 </button>
               </>
             ) : (
@@ -407,22 +407,23 @@ export default function DemandFunnelPanel({ campaignSlug }) {
     <section className="panel panel-pad demand-funnel">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <p className="eyebrow">Funil territorial</p>
-          <h3 style={{ marginTop: 0 }}>Demandas por coordenador</h3>
+          <p className="eyebrow">Por cidade</p>
+          <h3 style={{ marginTop: 0 }}>Anote o que aconteceu</h3>
           <p>
-            Clique no coordenador → município → registre o que houve (texto, data, prints).
-            Ou clique em <strong>standby</strong> / <strong>resolvidas</strong> / <strong>total</strong> para ver a lista geral dos relatórios.
+            Clique no coordenador → cidade → registre o que houve (texto, data e prints do WhatsApp).
+            Ou use os números à direita para ver tudo <strong>em aberto</strong>,{' '}
+            <strong>resolvido</strong> ou o <strong>total</strong>.
           </p>
         </div>
         {summary && (
-          <div className="demand-summary" role="group" aria-label="Filtros do funil">
+          <div className="demand-summary" role="group" aria-label="Filtros dos registros">
             <button
               type="button"
               className={`demand-summary__btn ${listFilter === 'standby' ? 'is-active' : ''}`}
               onClick={() => openSummaryList('standby')}
             >
               <strong>{summary.standby}</strong>
-              <span>standby</span>
+              <span>em aberto</span>
             </button>
             <button
               type="button"
@@ -430,7 +431,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
               onClick={() => openSummaryList('resolvido')}
             >
               <strong>{summary.resolvido}</strong>
-              <span>resolvidas</span>
+              <span>resolvidos</span>
             </button>
             <button
               type="button"
@@ -446,9 +447,8 @@ export default function DemandFunnelPanel({ campaignSlug }) {
 
       {storageInfo && storageInfo.provider !== 'supabase' && (
         <div className="demand-storage-warn" role="status">
-          Prints ainda estão no disco temporário do Render (Storage não configurado).
-          Confira no Render: <code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_ROLE_KEY</code>,
-          salve e faça Manual Deploy. Texto do relatório não some — só as imagens.
+          As fotos dos prints podem sumir se o armazenamento de imagens não estiver configurado.
+          O texto do registro continua salvo. Peça à equipe técnica para conferir o Storage no servidor.
         </div>
       )}
 
@@ -491,10 +491,10 @@ export default function DemandFunnelPanel({ campaignSlug }) {
               {!demands.length && (
                 <EmptyState>
                   {listFilter === 'standby'
-                    ? 'Nenhuma demanda em standby no momento.'
+                    ? 'Nada em aberto no momento.'
                     : listFilter === 'resolvido'
-                      ? 'Nenhuma demanda resolvida ainda.'
-                      : 'Nenhum relatório registrado ainda.'}
+                      ? 'Nada resolvido ainda.'
+                      : 'Nenhum registro ainda.'}
                 </EmptyState>
               )}
             </>
@@ -512,9 +512,9 @@ export default function DemandFunnelPanel({ campaignSlug }) {
               onClick={() => openCoordinator(coord)}
             >
               <strong>{coord.name}</strong>
-              <span>{coord.municipalities.length} município(s)</span>
+              <span>{coord.municipalities.length} cidade(s)</span>
               <span className="demand-card-btn__stats">
-                {coord.demands_standby} standby · {coord.demands_resolvido} ok
+                {coord.demands_standby} em aberto · {coord.demands_resolvido} ok
               </span>
             </button>
           ))}
@@ -537,12 +537,12 @@ export default function DemandFunnelPanel({ campaignSlug }) {
             >
               <strong>{muni.name}</strong>
               <span className="demand-card-btn__stats">
-                {muni.demands_standby} standby · {muni.demands_resolvido} ok
+                {muni.demands_standby} em aberto · {muni.demands_resolvido} ok
               </span>
             </button>
           ))}
           {!coordinator.municipalities.length && (
-            <EmptyState>Este coordenador ainda não tem municípios vinculados.</EmptyState>
+            <EmptyState>Este coordenador ainda não tem cidades vinculadas.</EmptyState>
           )}
         </div>
       )}
@@ -552,7 +552,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
             <div>
               <h4 style={{ margin: 0 }}>
-                Funil · {municipality.name}
+                {municipality.name}
               </h4>
               <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)' }}>
                 Coordenador: {coordinator.name}
@@ -563,7 +563,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
               className="btn btn-accent btn-sm"
               onClick={() => setShowForm((v) => !v)}
             >
-              {showForm ? 'Fechar' : 'Nova demanda (Para)'}
+              {showForm ? 'Fechar' : 'Novo registro'}
             </button>
           </div>
 
@@ -589,14 +589,14 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                 />
               </label>
               <label>
-                O que houve *
+                O que aconteceu *
                 <textarea
                   className="textarea"
                   required
                   rows={5}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Escreva a demanda como um 'para': contexto, o que pediram, o que aconteceu…"
+                  placeholder="Contexto, o que pediram, o que aconteceu…"
                 />
               </label>
               <label>
@@ -610,7 +610,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                 />
               </label>
               <label>
-                Prints / prints de WhatsApp
+                Prints do WhatsApp (fotos)
                 <input
                   className="input"
                   type="file"
@@ -620,7 +620,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
                 />
               </label>
               <button className="btn btn-primary" type="submit" disabled={busy}>
-                {busy ? 'Salvando…' : 'Registrar no funil'}
+                {busy ? 'Salvando…' : 'Salvar registro'}
               </button>
             </form>
           )}
@@ -631,7 +631,7 @@ export default function DemandFunnelPanel({ campaignSlug }) {
 
           {!demands.length && (
             <EmptyState>
-              Nenhuma demanda neste município ainda. Registre a primeira com “Nova demanda (Para)”.
+              Ainda não há registros nesta cidade. Clique em “Novo registro” para começar.
             </EmptyState>
           )}
         </div>

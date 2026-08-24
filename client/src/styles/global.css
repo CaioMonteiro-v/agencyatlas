@@ -1554,6 +1554,31 @@ th {
   max-width: 46rem;
 }
 
+.system-guide__steps,
+.system-guide__list {
+  margin: 0.65rem 0 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.55rem;
+  line-height: 1.5;
+}
+
+.system-guide__card {
+  margin-top: 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.system-guide__card:first-of-type {
+  margin-top: 0.55rem;
+}
+
+.system-guide__card p:last-child {
+  margin-bottom: 0;
+}
+
 .report-alarm-list,
 .call-sheet {
   display: grid;

@@ -3,10 +3,11 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 import DemandFunnelPanel from '../components/DemandFunnelPanel';
+import SystemSimpleGuide from '../components/SystemSimpleGuide';
 
 export default function ReportPage() {
   const { campaign } = useOutletContext();
-  const [tab, setTab] = useState('funil');
+  const [tab, setTab] = useState('guia');
   const [report, setReport] = useState(null);
   const [briefing, setBriefing] = useState(null);
   const [error, setError] = useState('');
@@ -39,7 +40,11 @@ export default function ReportPage() {
     try {
       const res = await api.runAssistant(campaign.slug);
       setBriefing(res);
-      setToast(res.source === 'openai' ? 'Briefing gerado com IA' : 'Briefing gerado pela Atlas Assistente');
+      setToast(
+        res.source === 'openai'
+          ? 'Texto da reunião pronto'
+          : 'Resumo pronto (versão simples do Atlas)',
+      );
     } catch (err) {
       setToast(err.message);
     } finally {
@@ -52,7 +57,7 @@ export default function ReportPage() {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      setToast('Briefing copiado');
+      setToast('Texto copiado');
     } catch (_) {
       setToast('Não foi possível copiar automaticamente');
     }
@@ -63,34 +68,43 @@ export default function ReportPage() {
   return (
     <div className="container section report-page" style={{ paddingTop: 0 }}>
       <div className="section__head">
-        <p className="eyebrow">Inteligência de campanha</p>
-        <h2>Relatório</h2>
+        <p className="eyebrow">Relatório do Sistema</p>
+        <h2>Entenda a campanha de forma simples</h2>
         <p>
-          Funil de demandas por coordenador/município e relatório executivo —
-          registre o que houve, prints e o que ficou resolvido ou em standby.
+          Comece por <strong>Como funciona</strong> se você não é da área técnica.
+          Depois use as outras abas para anotar o que aconteceu nas cidades e ver o panorama geral.
         </p>
         <div className="chip-group" style={{ marginTop: '0.75rem' }}>
+          <button
+            type="button"
+            className={`chip ${tab === 'guia' ? 'active' : ''}`}
+            onClick={() => setTab('guia')}
+          >
+            Como funciona
+          </button>
           <button
             type="button"
             className={`chip ${tab === 'funil' ? 'active' : ''}`}
             onClick={() => setTab('funil')}
           >
-            Funil de demandas
+            O que aconteceu nas cidades
           </button>
           <button
             type="button"
             className={`chip ${tab === 'executivo' ? 'active' : ''}`}
             onClick={() => setTab('executivo')}
           >
-            Relatório executivo
+            Panorama da campanha
           </button>
         </div>
       </div>
 
+      {tab === 'guia' && <SystemSimpleGuide campaign={campaign} />}
+
       {tab === 'funil' && <DemandFunnelPanel campaignSlug={campaign.slug} />}
 
       {tab === 'executivo' && loadingReport && (
-        <EmptyState>Montando relatório…</EmptyState>
+        <EmptyState>Carregando os números…</EmptyState>
       )}
 
       {tab === 'executivo' && !loadingReport && error && (
@@ -101,22 +115,22 @@ export default function ReportPage() {
         <>
           <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
             <button className="btn btn-primary btn-sm" type="button" onClick={() => window.print()}>
-              Imprimir / PDF
+              Imprimir / salvar em PDF
             </button>
             <button className="btn btn-accent btn-sm" type="button" disabled={loadingAssistant} onClick={generateAssistant}>
-              {loadingAssistant ? 'Analisando…' : 'Gerar análise da Atlas Assistente'}
+              {loadingAssistant ? 'Preparando…' : 'Gerar texto para reunião'}
             </button>
             <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/coordenadores`}>
-              Voltar aos coordenadores
+              Ir para Coordenadores
             </Link>
           </div>
 
           <section className="panel panel-pad report-hero">
-            <p className="eyebrow">Resumo executivo</p>
+            <p className="eyebrow">Resumo em poucas linhas</p>
             <h3 style={{ marginTop: 0 }}>{campaign.candidate || campaign.name}</h3>
             <p className="report-lead">{report.executive_summary}</p>
             <p className="meta-hint">
-              Gerado em {new Date(report.generated_at).toLocaleString('pt-BR')}
+              Atualizado em {new Date(report.generated_at).toLocaleString('pt-BR')}
               {report.meta ? ` · Instagram: ${report.meta.mode}` : ''}
             </p>
           </section>
@@ -128,26 +142,26 @@ export default function ReportPage() {
             </div>
             <div className="stat">
               <strong>{s.municipalities_assigned}</strong>
-              <span>Municípios</span>
+              <span>Cidades na operação</span>
             </div>
             <div className="stat">
               <strong>{s.vote_progress_pct != null ? `${s.vote_progress_pct}%` : '—'}</strong>
-              <span>Expectativa de voto</span>
+              <span>% da meta de cadastros</span>
             </div>
             <div className="stat">
               <strong className={s.alarms_critical ? 'stat-alarm' : undefined}>
                 {s.alarms_critical}/{s.alarms_attention}
               </strong>
-              <span>Críticos / Atenção</span>
+              <span>Urgente / Precisa olhar</span>
             </div>
           </div>
 
           <div className="layout-split">
             <section className="panel panel-pad">
-              <p className="eyebrow">Alarmes</p>
-              <h3 style={{ marginTop: 0 }}>Falhas e conteúdo abaixo da meta</h3>
+              <p className="eyebrow">Atenção</p>
+              <h3 style={{ marginTop: 0 }}>Onde a operação está atrasada</h3>
               {!report.alarms.length ? (
-                <EmptyState>Nenhum alarme no momento.</EmptyState>
+                <EmptyState>Nada urgente no momento.</EmptyState>
               ) : (
                 <div className="report-alarm-list">
                   {report.alarms.slice(0, 20).map((a, idx) => (
@@ -166,7 +180,7 @@ export default function ReportPage() {
 
             <section className="panel panel-pad">
               <p className="eyebrow">Próximos passos</p>
-              <h3 style={{ marginTop: 0 }}>Prioridades da campanha</h3>
+              <h3 style={{ marginTop: 0 }}>O que priorizar agora</h3>
               <ul className="report-steps">
                 {report.next_steps.map((step) => (
                   <li key={step}>{step}</li>
@@ -176,10 +190,10 @@ export default function ReportPage() {
           </div>
 
           <section className="panel panel-pad" style={{ marginTop: '1.1rem' }}>
-            <p className="eyebrow">Chamada de atenção</p>
-            <h3 style={{ marginTop: 0 }}>Folha de ligação dos coordenadores</h3>
+            <p className="eyebrow">Para ligar</p>
+            <h3 style={{ marginTop: 0 }}>Quem precisa de uma conversa</h3>
             {!report.call_sheet.length ? (
-              <EmptyState>Nenhum coordenador precisa de chamada agora.</EmptyState>
+              <EmptyState>Nenhum coordenador precisa de ligação agora.</EmptyState>
             ) : (
               <div className="call-sheet">
                 {report.call_sheet.map((row) => (
@@ -193,7 +207,7 @@ export default function ReportPage() {
                         {row.status}
                       </span>
                     </header>
-                    <p className="eyebrow" style={{ marginTop: '0.75rem' }}>Pontos da ligação</p>
+                    <p className="eyebrow" style={{ marginTop: '0.75rem' }}>O que falar na ligação</p>
                     <ul>
                       {row.talking_points.map((t) => (
                         <li key={t}>{t}</li>
@@ -201,7 +215,7 @@ export default function ReportPage() {
                     </ul>
                     {!!row.municipalities_in_fail?.length && (
                       <>
-                        <p className="eyebrow">Municípios</p>
+                        <p className="eyebrow">Cidades</p>
                         <ul>
                           {row.municipalities_in_fail.map((m) => (
                             <li key={m.name}>
@@ -220,11 +234,11 @@ export default function ReportPage() {
           <section className="panel panel-pad assistant-panel" style={{ marginTop: '1.1rem' }}>
             <div className="coord-detail__head">
               <div>
-                <p className="eyebrow">Atlas Assistente</p>
-                <h3 style={{ marginTop: 0 }}>Análise para reunião / ligação</h3>
+                <p className="eyebrow">Ajuda para reunião</p>
+                <h3 style={{ marginTop: 0 }}>Texto pronto para falar com a equipe</h3>
                 <p>
-                  A assistente cruza cadastros, expectativa de voto, visualização de conteúdo e sinais do Instagram
-                  para sugerir o que falar com cada coordenador.
+                  O Atlas junta cadastros, metas e sinais do Instagram e monta um texto
+                  simples do que cobrar ou reforçar com cada coordenador.
                 </p>
               </div>
               {briefing && (
@@ -236,14 +250,12 @@ export default function ReportPage() {
 
             {!briefing ? (
               <EmptyState>
-                Clique em <strong>Gerar análise da Atlas Assistente</strong> para montar o briefing.
-                Com <code>OPENAI_API_KEY</code> no servidor, o texto fica ainda mais elaborado.
+                Clique em <strong>Gerar texto para reunião</strong> para montar o resumo.
               </EmptyState>
             ) : (
               <div className="briefing-box">
                 <p className="meta-hint">
-                  Fonte: {briefing.source === 'openai' ? 'OpenAI + Atlas' : 'Atlas local'}
-                  {briefing.openai_error ? ` · fallback: ${briefing.openai_error}` : ''}
+                  {briefing.source === 'openai' ? 'Versão elaborada' : 'Versão simples do Atlas'}
                 </p>
                 <pre>{briefing.text}</pre>
               </div>
@@ -251,19 +263,19 @@ export default function ReportPage() {
           </section>
 
           <section className="panel panel-pad" style={{ marginTop: '1.1rem' }}>
-            <p className="eyebrow">Detalhe por coordenador</p>
-            <h3 style={{ marginTop: 0 }}>Totais e proporções</h3>
+            <p className="eyebrow">Por coordenador</p>
+            <h3 style={{ marginTop: 0 }}>Números de cada um</h3>
             <div className="report-coord-table-wrap">
               <table className="report-table">
                 <thead>
                   <tr>
                     <th>Coordenador</th>
-                    <th>Mun.</th>
+                    <th>Cidades</th>
                     <th>Cadastros</th>
-                    <th>Meta voto</th>
-                    <th>Conteúdo</th>
-                    <th>IG</th>
-                    <th>Status</th>
+                    <th>Meta de voto</th>
+                    <th>Conteúdo visto</th>
+                    <th>Comentários IG</th>
+                    <th>Situação</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,7 +294,7 @@ export default function ReportPage() {
                           ? `${c.totals.content_views_actual}/${c.totals.content_views_expected} (${c.totals.content_progress_pct ?? 0}%)`
                           : '—'}
                       </td>
-                      <td>{c.totals.ig_comments} com.</td>
+                      <td>{c.totals.ig_comments}</td>
                       <td>{c.health.label}</td>
                     </tr>
                   ))}
