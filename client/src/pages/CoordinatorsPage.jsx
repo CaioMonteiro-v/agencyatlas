@@ -188,7 +188,12 @@ export default function CoordinatorsPage() {
         </div>
         {data.meta && (
           <p className="meta-hint">
-            Meta API: <strong>{data.meta.mode === 'live' ? 'conectada' : 'modo manual'}</strong>
+            Meta API:{' '}
+            <strong>
+              {data.meta.token_ok === false
+                ? 'token expirado/inválido'
+                : (data.meta.mode === 'live' ? 'conectada' : 'modo manual')}
+            </strong>
             {' — '}
             {data.meta.hint}
           </p>
