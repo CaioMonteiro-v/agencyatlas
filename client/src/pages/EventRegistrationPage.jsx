@@ -215,11 +215,6 @@ export default function EventRegistrationPage() {
               >
                 Falar com Fábio no WhatsApp
               </a>
-              <p className="event-qr-done__linkhint">
-                <a href={fabioHref} target="_blank" rel="noreferrer" onClick={openFabioWhatsApp}>
-                  {FABIO_WHATSAPP_URL}
-                </a>
-              </p>
               {openedHint ? (
                 <p className="meta-hint" style={{ marginBottom: 0 }}>
                   Se o WhatsApp não abriu, toque de novo no botão verde.
