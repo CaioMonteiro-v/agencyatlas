@@ -120,10 +120,16 @@ async function probeMetaToken() {
     const res = await fetch(url);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      const errMsg = data?.error?.message || `Meta HTTP ${res.status}`;
+      const expired = /expired|expir/i.test(errMsg);
       return {
         ...metaStatus(),
         token_ok: false,
-        token_error: data?.error?.message || `Meta HTTP ${res.status}`,
+        token_error: errMsg,
+        mode: 'manual',
+        hint: expired
+          ? 'Token Meta expirado — gere um novo no Meta Developers e atualize META_ACCESS_TOKEN no Render (+ Manual Deploy). Enquanto isso, use métricas manuais.'
+          : `Token Meta inválido: ${errMsg}. Atualize META_ACCESS_TOKEN no Render.`,
       };
     }
     return {

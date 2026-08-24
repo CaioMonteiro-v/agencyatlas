@@ -227,7 +227,12 @@ export default function ContentPage() {
         </div>
         {data.meta && (
           <p className="meta-hint" style={{ marginTop: '0.75rem' }}>
-            Meta API: <strong>{data.meta.mode === 'live' ? 'conectada' : 'modo manual'}</strong>
+            Meta API:{' '}
+            <strong>
+              {data.meta.token_ok === false
+                ? 'token expirado/inválido'
+                : (data.meta.mode === 'live' ? 'conectada' : 'modo manual')}
+            </strong>
             {' · '}
             {data.meta.hint}
           </p>
