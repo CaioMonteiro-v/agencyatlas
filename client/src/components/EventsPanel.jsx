@@ -303,7 +303,7 @@ export default function EventsPanel({ campaignSlug }) {
             />
           </label>
           <label>
-            Convite Bitly do canal (opcional)
+            Bitly do canal (só para contar cliques)
             <input
               className="input"
               type="url"
@@ -322,10 +322,11 @@ export default function EventsPanel({ campaignSlug }) {
             />
           </label>
           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Depois do cadastro no QR, a pessoa pode receber o convite pelo <strong>WhatsApp</strong>
-            {' '}e/ou pelo <strong>Bitly</strong> (os dois, se preencher).
-            O WhatsApp da campanha (Fala Fábio) serve só para <strong>distribuir o QR</strong> —
-            não é o convite do canal municipal.
+            Depois do QR, a pessoa <strong>cai direto no WhatsApp</strong>
+            {' '}(canal municipal se tiver link, senão o WhatsApp da campanha).
+            O Bitly, se preenchido, só <strong>conta o clique</strong> em segundo plano —
+            a pessoa não fica na página do Bitly.
+            O WhatsApp da campanha também serve para <strong>distribuir o QR</strong>.
           </p>
 
           <div>
@@ -446,10 +447,11 @@ export default function EventsPanel({ campaignSlug }) {
                     ) : null}
                     {event.invite_bitly_url ? (
                       <p style={{ marginBottom: 0 }}>
-                        <strong>Convite Bitly:</strong>{' '}
+                        <strong>Bitly (contagem):</strong>{' '}
                         <a href={event.invite_bitly_url} target="_blank" rel="noreferrer">
                           {event.invite_bitly_url}
                         </a>
+                        <span style={{ color: 'var(--muted)' }}> — pessoa não fica nesta página</span>
                       </p>
                     ) : null}
                   </>
@@ -528,7 +530,7 @@ export default function EventsPanel({ campaignSlug }) {
                     />
                   </label>
                   <label>
-                    Convite Bitly do canal
+                    Bitly do canal (só conta cliques)
                     <input
                       className="input"
                       type="url"
