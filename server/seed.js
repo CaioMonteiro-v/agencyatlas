@@ -66,13 +66,15 @@ function ensureBaseCampaign(db) {
         name = ?,
         candidate = ?,
         description = ?,
-        mission = ?
+        mission = ?,
+        whatsapp_url = ?
       WHERE slug = 'fabio-garcia'
     `).run(
       'Campanha Fábio Garcia — Deputado Federal',
       'Fábio Garcia · Deputado Federal por Mato Grosso',
       'Mobilização federal em todo o Mato Grosso: território, lideranças e conversão digital.',
       'Articular os 142 municípios, conectar coordenadores e transformar presença em voto federal.',
+      'https://wa.me/message/PV764OTMN3GEE1',
     );
     return db.prepare("SELECT * FROM campaigns WHERE slug = 'fabio-garcia'").get();
   }
@@ -89,7 +91,7 @@ function ensureBaseCampaign(db) {
     'ativa',
     '#0033A0',
     '/logos/fabio-garcia.png',
-    'https://bit.ly/FalaFabio'
+    'https://wa.me/message/PV764OTMN3GEE1'
   );
   return db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
 }

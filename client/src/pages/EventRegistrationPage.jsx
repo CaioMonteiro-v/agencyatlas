@@ -3,22 +3,11 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from '../components/Ui';
 
+/** WhatsApp oficial da campanha (mensagem pronta / click-to-chat). */
+export const FABIO_WHATSAPP_URL = 'https://wa.me/message/PV764OTMN3GEE1';
+
 function firstName(full) {
   return String(full || '').trim().split(/\s+/)[0] || '';
-}
-
-function buildWhatsAppLink(baseUrl, text) {
-  const fallback = (baseUrl || 'https://bit.ly/FalaFabio').trim();
-  try {
-    const u = new URL(fallback);
-    if (/wa\.me|api\.whatsapp\.com|whatsapp\.com/i.test(u.hostname)) {
-      u.searchParams.set('text', text);
-      return u.toString();
-    }
-  } catch {
-    /* ignore */
-  }
-  return fallback;
 }
 
 function normalizeExternalUrl(url) {
@@ -28,7 +17,17 @@ function normalizeExternalUrl(url) {
   return `https://${raw}`;
 }
 
-/** Conta clique no Bitly sem abrir a página (a pessoa não fica presa no Bitly). */
+/**
+ * Link do Fábio: usa o wa.me/message oficial.
+ * Não acrescenta ?text= em links /message/ (quebra o convite).
+ */
+function resolveFabioWhatsApp(campaignUrl) {
+  const fromCampaign = normalizeExternalUrl(campaignUrl);
+  if (/wa\.me\/message\//i.test(fromCampaign)) return fromCampaign;
+  return FABIO_WHATSAPP_URL;
+}
+
+/** Conta clique no Bitly sem abrir a página. */
 function trackBitlyClick(url) {
   const href = normalizeExternalUrl(url);
   if (!href) return;
@@ -52,6 +51,7 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [openedHint, setOpenedHint] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
@@ -78,44 +78,27 @@ export default function EventRegistrationPage() {
       });
   }, [eventSlug]);
 
-  const whatsappInvite = normalizeExternalUrl(event?.channel_link);
+  const fabioHref = resolveFabioWhatsApp(event?.whatsapp_url);
   const bitlyInvite = normalizeExternalUrl(event?.invite_bitly_url);
-  const hasWhatsAppInvite = Boolean(whatsappInvite);
-  const hasBitlyInvite = Boolean(bitlyInvite);
-  const hasMunicipalChannel = hasWhatsAppInvite;
+  const channelInvite = normalizeExternalUrl(event?.channel_link);
 
-  const municipio = String(event?.municipality_name || event?.location || '').trim() || 'Mato Grosso';
-  const channelLabel = String(event?.channel_name || '').trim() || 'nosso grupo de elite';
-
-  const waMessage = event
-    ? `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e acabei de me cadastrar no evento "${event.name}". Quero apoiar a campanha a deputado federal.`
-    : '';
-
-  const fabioHref = buildWhatsAppLink(event?.whatsapp_url, waMessage);
-  // Pessoa sempre cai no WhatsApp: canal municipal se tiver, senão WhatsApp da campanha.
-  // Bitly só conta clique em segundo plano — não abre a página do Bitly.
-  const whatsappHref = hasWhatsAppInvite ? whatsappInvite : fabioHref;
-
-  function markOpened() {
+  function openFabioWhatsApp() {
+    if (bitlyInvite) trackBitlyClick(bitlyInvite);
     setOpenedHint(true);
-  }
-
-  function goToWhatsApp() {
-    if (hasBitlyInvite) trackBitlyClick(bitlyInvite);
-    markOpened();
-    window.location.href = whatsappHref;
+    window.open(fabioHref, '_blank', 'noopener,noreferrer');
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     if (!form.full_name.trim()) {
-      setToast('Nome completo é obrigatório');
+      setToast('Informe seu nome');
       return;
     }
     if (!form.phone.trim()) {
-      setToast('Telefone é obrigatório');
+      setToast('Informe seu telefone');
       return;
     }
+    setBusy(true);
     try {
       await api.registerEvent(eventSlug, {
         full_name: form.full_name,
@@ -124,164 +107,135 @@ export default function EventRegistrationPage() {
         connect_whatsapp: true,
       });
       setDone(true);
-      setToast('Presença confirmada');
-
-      window.setTimeout(() => {
-        try {
-          goToWhatsApp();
-        } catch {
-          /* usuário usa o botão abaixo */
-        }
-      }, 450);
+      setToast('Cadastro confirmado');
     } catch (err) {
       setToast(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
+  const whenLabel = event
+    ? [
+        new Date(`${event.event_date}T00:00:00`).toLocaleDateString('pt-BR'),
+        event.event_time || null,
+        event.municipality_name || event.location || null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
   return (
     <div className="public-page">
-      <div className="public-card">
+      <div className="public-card event-qr-card">
         {error && <EmptyState>{error}</EmptyState>}
-        {!event && !error && <EmptyState>Carregando evento…</EmptyState>}
-        {event && (
+        {!event && !error && <EmptyState>Carregando…</EmptyState>}
+
+        {event && !done && (
           <>
-            <p className="eyebrow">{event.campaign_name}</p>
-            <h1 style={{ fontSize: '1.8rem' }}>{event.name}</h1>
-            <p>
-              {new Date(event.event_date + 'T00:00:00').toLocaleDateString('pt-BR')}
-              {event.event_time ? ` · ${event.event_time}` : ''}
-              {event.municipality_name || event.location
-                ? ` · ${event.municipality_name || event.location}`
-                : ''}
+            <p className="eyebrow">{event.campaign_name || 'Campanha Fábio Garcia'}</p>
+            <h1 className="event-qr-card__title">{event.name}</h1>
+            {whenLabel ? <p className="event-qr-card__meta">{whenLabel}</p> : null}
+            {event.description ? <p className="event-qr-card__desc">{event.description}</p> : null}
+
+            <p className="event-qr-card__intro">
+              Preencha seus dados para confirmar presença.
             </p>
-            <p>{event.description}</p>
 
-            {done ? (
-              <div className="event-done">
-                <h3>Presença confirmada</h3>
-                <p>
-                  Obrigado, {firstName(form.full_name)}! Seu cadastro foi registrado.
-                </p>
-
-                {hasMunicipalChannel ? (
-                  <>
-                    <p className="event-done__lead">
-                      Você acabou de fazer parte da nossa história em {municipio}.
-                      Quero te convidar para o nosso grupo de elite, {channelLabel} —
-                      aqui só entra quem realmente faz parte da mudança.
-                    </p>
-                    <a
-                      className="btn btn-whatsapp event-done__cta"
-                      href={whatsappHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        goToWhatsApp();
-                      }}
-                    >
-                      Entrar no WhatsApp
-                    </a>
-                    <button
-                      type="button"
-                      className="btn btn-soft"
-                      onClick={() => goToWhatsApp()}
-                    >
-                      Abrir de novo
-                    </button>
-                    <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
-                      {openedHint
-                        ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
-                        : hasBitlyInvite
-                          ? 'Abrimos o WhatsApp direto. O Bitly só registra o clique em segundo plano.'
-                          : 'Convite exclusivo do canal municipal deste evento.'}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="event-done__lead">
-                      Agora leve o contato do Fábio Garcia no WhatsApp — assim você sai do evento já conectado à campanha a deputado federal.
-                    </p>
-                    <a
-                      className="btn btn-whatsapp event-done__cta"
-                      href={fabioHref}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        goToWhatsApp();
-                      }}
-                    >
-                      Falar com Fábio no WhatsApp
-                    </a>
-                    <button
-                      type="button"
-                      className="btn btn-soft"
-                      onClick={() => goToWhatsApp()}
-                    >
-                      Abrir de novo
-                    </button>
-                    <p style={{ fontSize: '0.88rem', color: 'var(--muted)', marginBottom: 0 }}>
-                      {openedHint
-                        ? 'Se o WhatsApp não abriu, toque no botão verde acima.'
-                        : hasBitlyInvite
-                          ? 'Você cai direto no WhatsApp da campanha. O Bitly só conta o clique.'
-                          : 'Link: bit.ly/FalaFabio · mensagem pronta se o app permitir.'}
-                    </p>
-                  </>
-                )}
-              </div>
-            ) : (
-              <>
-                <p style={{ fontSize: '0.92rem' }}>
-                  {hasMunicipalChannel
-                    ? 'Confirme sua presença. Em seguida você entra no WhatsApp do canal.'
-                    : 'Confirme sua presença. Em seguida você já pode falar com o Fábio no WhatsApp.'}
-                </p>
-                <form className="form-grid" onSubmit={onSubmit}>
-                  <label>
-                    Nome completo *
-                    <input
-                      className="input"
-                      required
-                      value={form.full_name}
-                      onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                      autoComplete="name"
-                    />
-                  </label>
-                  <label>
-                    Telefone *
-                    <input
-                      className="input"
-                      required
-                      value={form.phone}
-                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                      placeholder="(65) 9xxxx-xxxx"
-                      autoComplete="tel"
-                      inputMode="tel"
-                    />
-                  </label>
-                  <label>
-                    E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
-                    <input
-                      className="input"
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="Opcional — se quiser receber novidades da campanha"
-                      autoComplete="email"
-                    />
-                  </label>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-                    E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
-                  </p>
-                  <button className="btn btn-primary" type="submit">
-                    {hasMunicipalChannel ? 'Confirmar presença' : 'Confirmar e falar com o Fábio'}
-                  </button>
-                </form>
-              </>
-            )}
+            <form className="form-grid event-qr-form" onSubmit={onSubmit}>
+              <label>
+                Nome completo *
+                <input
+                  className="input"
+                  required
+                  value={form.full_name}
+                  onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                  placeholder="Seu nome"
+                  autoComplete="name"
+                  autoFocus
+                />
+              </label>
+              <label>
+                Telefone *
+                <input
+                  className="input"
+                  required
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="(65) 9xxxx-xxxx"
+                  autoComplete="tel"
+                  inputMode="tel"
+                />
+              </label>
+              <label>
+                E-mail{' '}
+                <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="Opcional"
+                  autoComplete="email"
+                />
+              </label>
+              <button className="btn btn-primary event-qr-form__ok" type="submit" disabled={busy}>
+                {busy ? 'Salvando…' : 'OK · Confirmar'}
+              </button>
+            </form>
           </>
+        )}
+
+        {event && done && (
+          <div className="event-done event-qr-done">
+            <p className="eyebrow">Tudo certo</p>
+            <h2 className="event-qr-done__hello">
+              Obrigado, {firstName(form.full_name)}!
+            </h2>
+            <p className="event-done__lead">
+              Sua presença foi confirmada
+              {event.municipality_name || event.location
+                ? ` em ${event.municipality_name || event.location}`
+                : ''}
+              .
+            </p>
+
+            <div className="event-qr-done__box">
+              <h3>Quer falar com o Fábio?</h3>
+              <p>Clique no link abaixo e abra a conversa no WhatsApp.</p>
+              <a
+                className="btn btn-whatsapp event-done__cta"
+                href={fabioHref}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openFabioWhatsApp();
+                }}
+              >
+                Falar com Fábio no WhatsApp
+              </a>
+              <p className="event-qr-done__linkhint">
+                <a href={fabioHref} target="_blank" rel="noreferrer" onClick={openFabioWhatsApp}>
+                  {FABIO_WHATSAPP_URL}
+                </a>
+              </p>
+              {openedHint ? (
+                <p className="meta-hint" style={{ marginBottom: 0 }}>
+                  Se o WhatsApp não abriu, toque de novo no botão verde.
+                </p>
+              ) : null}
+            </div>
+
+            {channelInvite ? (
+              <p className="event-qr-done__channel">
+                Também há convite do canal local:{' '}
+                <a href={channelInvite} target="_blank" rel="noreferrer">
+                  entrar no grupo
+                </a>
+              </p>
+            ) : null}
+          </div>
         )}
       </div>
       <Toast message={toast} onClose={() => setToast('')} />

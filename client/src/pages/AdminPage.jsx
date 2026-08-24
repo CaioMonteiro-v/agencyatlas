@@ -16,7 +16,7 @@ export default function AdminPage() {
     description: '',
     mission: '',
     accent_color: '#7BA3B8',
-    whatsapp_url: 'https://bit.ly/FalaFabio',
+    whatsapp_url: 'https://wa.me/message/PV764OTMN3GEE1',
   });
   const [leaderForm, setLeaderForm] = useState({
     campaign_slug: 'fabio-garcia',
@@ -69,7 +69,7 @@ export default function AdminPage() {
         description: '',
         mission: '',
         accent_color: '#7BA3B8',
-        whatsapp_url: 'https://bit.ly/FalaFabio',
+        whatsapp_url: 'https://wa.me/message/PV764OTMN3GEE1',
       });
       await refresh();
     } catch (err) {

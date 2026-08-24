@@ -1156,6 +1156,81 @@ th {
   font-size: 1.05rem;
 }
 
+.event-qr-card__title {
+  margin: 0.15rem 0 0.35rem;
+  font-size: clamp(1.55rem, 5vw, 1.9rem);
+  line-height: 1.15;
+}
+
+.event-qr-card__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.event-qr-card__desc {
+  margin: 0.65rem 0 0;
+  color: var(--ink-soft);
+}
+
+.event-qr-card__intro {
+  margin: 1.15rem 0 0.35rem;
+  font-weight: 600;
+}
+
+.event-qr-form {
+  margin-top: 0.35rem;
+}
+
+.event-qr-form__ok {
+  margin-top: 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.event-qr-done__hello {
+  margin: 0;
+  font-size: clamp(1.45rem, 4.5vw, 1.75rem);
+}
+
+.event-qr-done__box {
+  margin-top: 0.35rem;
+  padding: 1.1rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(37, 211, 102, 0.28);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(37, 211, 102, 0.1));
+  display: grid;
+  gap: 0.65rem;
+}
+
+.event-qr-done__box h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.event-qr-done__box p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.event-qr-done__linkhint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.event-qr-done__linkhint a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.event-qr-done__channel {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .check {
   display: flex;
   align-items: center;

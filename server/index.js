@@ -275,7 +275,7 @@ app.post('/api/campaigns', (req, res) => {
       status || 'ativa',
       accent_color || '#7BA3B8',
       '/logos/atlas-agency.png',
-      whatsapp_url || 'https://bit.ly/FalaFabio'
+      whatsapp_url || 'https://wa.me/message/PV764OTMN3GEE1'
     );
     const created = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(created);

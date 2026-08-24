@@ -8,9 +8,13 @@ function firstName(full) {
 }
 
 function buildWhatsAppLink(baseUrl, text) {
-  const fallback = (baseUrl || 'https://bit.ly/FalaFabio').trim();
+  const fallback = (baseUrl || 'https://wa.me/message/PV764OTMN3GEE1').trim();
   try {
     const u = new URL(fallback);
+    // Links wa.me/message/... já têm mensagem pronta — não alterar
+    if (/wa\.me\/message\//i.test(u.pathname)) {
+      return fallback;
+    }
     if (/wa\.me|api\.whatsapp\.com|whatsapp\.com/i.test(u.hostname)) {
       u.searchParams.set('text', text);
       return u.toString();
@@ -44,7 +48,7 @@ export default function MobilizerCapturePage() {
       info.campaign.whatsapp_url,
       `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e me cadastrei com ${info.mobilizer.name}. Quero apoiar a campanha a deputado federal.`,
     )
-    : 'https://bit.ly/FalaFabio';
+    : 'https://wa.me/message/PV764OTMN3GEE1';
 
   async function onSubmit(e) {
     e.preventDefault();

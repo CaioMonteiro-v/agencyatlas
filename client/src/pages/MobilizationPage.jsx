@@ -51,11 +51,11 @@ export default function MobilizationPage() {
         <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.45rem' }}>
           <a
             className="btn btn-whatsapp"
-            href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
+            href={campaign.whatsapp_url || 'https://wa.me/message/PV764OTMN3GEE1'}
             target="_blank"
             rel="noreferrer"
           >
-            Conversar no WhatsApp · <span style={{ textDecoration: 'underline' }}>bit.ly/FalaFabio</span>
+            Conversar no WhatsApp
           </a>
           <button className="btn btn-soft btn-sm" type="button" onClick={downloadBackup}>
             Baixar backup dos dados

@@ -58,11 +58,11 @@ export default function CampaignLayout() {
           <div className="campaign-top__actions">
             <a
               className="btn btn-whatsapp"
-              href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
+              href={campaign.whatsapp_url || 'https://wa.me/message/PV764OTMN3GEE1'}
               target="_blank"
               rel="noreferrer"
             >
-              WhatsApp · bit.ly/FalaFabio
+              WhatsApp · Fábio
             </a>
             <button type="button" className="btn btn-soft" onClick={onLogout}>
               Sair{user?.name ? ` (${user.name.split(' ')[0]})` : user?.username ? ` (${user.username})` : ''}

@@ -457,8 +457,8 @@ export default function EventsPanel({ campaignSlug }) {
                   </>
                 ) : (
                   <p style={{ marginBottom: 0, color: 'var(--muted)' }}>
-                    Sem convite de canal — após o QR, cai no WhatsApp da campanha (só se não houver
-                    WhatsApp nem Bitly do canal).
+                    Sem convite de canal — após o QR, a pessoa fala com o Fábio no WhatsApp
+                    (wa.me/message/…).
                   </p>
                 )}
                 <p style={{ marginBottom: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
