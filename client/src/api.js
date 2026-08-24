@@ -66,8 +66,14 @@ export const api = {
   getLeader: (slug, id) => request(`/api/campaigns/${slug}/leaders/${id}`),
   createLeader: (slug, body) => request(`/api/campaigns/${slug}/leaders`, { method: 'POST', body: JSON.stringify(body) }),
   getLinks: (slug, origin) => request(`/api/campaigns/${slug}/links?origin=${encodeURIComponent(origin)}`),
-  getRegistrations: (slug, { page = 1, q = '' } = {}) =>
-    request(`/api/campaigns/${slug}/registrations?page=${page}&q=${encodeURIComponent(q)}`),
+  getRegistrations: (slug, { page = 1, q = '', event_id = '' } = {}) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      q: q || '',
+    });
+    if (event_id) params.set('event_id', String(event_id));
+    return request(`/api/campaigns/${slug}/registrations?${params.toString()}`);
+  },
   downloadBackup: (slug) => `/api/campaigns/${slug}/backup`,
   createRegistration: (slug, body) =>
     request(`/api/campaigns/${slug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),

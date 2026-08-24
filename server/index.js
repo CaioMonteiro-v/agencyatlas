@@ -512,16 +512,30 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
   const limit = Math.min(100, parseInt(req.query.limit || '25', 10));
   const offset = (page - 1) * limit;
   const q = (req.query.q || '').trim();
+  const eventId = req.query.event_id ? Number(req.query.event_id) : null;
 
   let where = 'WHERE r.campaign_id = ?';
   const params = [campaign.id];
+
+  if (eventId) {
+    const event = db.prepare(
+      'SELECT id, slug, name FROM events WHERE id = ? AND campaign_id = ?'
+    ).get(eventId, campaign.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento não encontrado' });
+    }
+    where += ' AND r.source = ?';
+    params.push(`evento/${event.slug}`);
+  }
+
   if (q) {
     where += ` AND (
       r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ?
       OR l.name LIKE ? OR r.organizer_name LIKE ? OR r.mobilizer_name LIKE ?
+      OR r.source LIKE ?
     )`;
     const like = `%${q}%`;
-    params.push(like, like, like, like, like, like);
+    params.push(like, like, like, like, like, like, like);
   }
 
   const total = db.prepare(`
@@ -557,7 +571,26 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
     LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
 
-  res.json({ total, page, limit, items: rows });
+  let eventFilter = null;
+  if (eventId) {
+    const event = db.prepare(
+      `SELECT e.id, e.name, e.slug, e.event_date,
+        (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) AS attendees
+       FROM events e WHERE e.id = ? AND e.campaign_id = ?`
+    ).get(eventId, campaign.id);
+    if (event) {
+      eventFilter = {
+        id: event.id,
+        name: event.name,
+        slug: event.slug,
+        event_date: event.event_date,
+        attendees: event.attendees,
+        registrations_total: total,
+      };
+    }
+  }
+
+  res.json({ total, page, limit, items: rows, event_filter: eventFilter });
 });
 
 app.get('/api/campaigns/:slug/backup', (req, res) => {
@@ -660,7 +693,7 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
     FROM events e
     LEFT JOIN municipalities m ON m.id = e.municipality_id
     WHERE e.campaign_id = ?
-    ORDER BY e.event_date ASC
+    ORDER BY e.event_date DESC, e.id DESC
   `).all(campaign.id);
 
   res.json(events);

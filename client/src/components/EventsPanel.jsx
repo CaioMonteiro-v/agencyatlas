@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, Toast } from './Ui';
@@ -56,6 +56,9 @@ export default function EventsPanel({ campaignSlug }) {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [channelDrafts, setChannelDrafts] = useState({});
+  const [filterQ, setFilterQ] = useState('');
+  const [filterMuni, setFilterMuni] = useState('');
+  const [filterOnlyWithPeople, setFilterOnlyWithPeople] = useState(false);
 
   async function load(base = publicBase) {
     try {
@@ -220,17 +223,105 @@ export default function EventsPanel({ campaignSlug }) {
 
   const localWarning = isLocalUrl(publicBase);
 
+  const filteredEvents = useMemo(() => {
+    const needle = filterQ.trim().toLowerCase();
+    return events.filter((event) => {
+      if (filterMuni && String(event.municipality_id || '') !== String(filterMuni)) {
+        return false;
+      }
+      if (filterOnlyWithPeople && !(Number(event.attendees) > 0)) {
+        return false;
+      }
+      if (!needle) return true;
+      const hay = [
+        event.name,
+        event.municipality_name,
+        event.location,
+        event.organizer_name,
+        event.channel_name,
+        event.slug,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [events, filterQ, filterMuni, filterOnlyWithPeople]);
+
+  const filteredPeopleTotal = useMemo(
+    () => filteredEvents.reduce((sum, e) => sum + Number(e.attendees || 0), 0),
+    [filteredEvents],
+  );
+
   return (
     <section className="panel panel-pad">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <p className="eyebrow">Presença</p>
           <h3>Eventos e QR Codes</h3>
-          <p>Gere QR Codes únicos para inscrição rápida em cada evento. As pessoas só veem o formulário e a confirmação — sem acesso ao painel. Os dados aparecem em <strong>Ver inscritos</strong> e também em <strong>Registro de cadastros</strong>.</p>
+          <p>
+            Gere QR Codes únicos para inscrição rápida em cada evento. Use o filtro abaixo
+            para achar o evento e ver o <strong>total de pessoas</strong> cadastradas.
+          </p>
         </div>
         <button type="button" className="btn btn-accent btn-sm" onClick={() => setShowForm((v) => !v)}>
           {showForm ? 'Fechar' : 'Novo evento'}
         </button>
+      </div>
+
+      <div className="filters event-filters" style={{ marginTop: '1rem' }}>
+        <label style={{ flex: '1 1 180px', minWidth: 160 }}>
+          Buscar evento
+          <input
+            className="input"
+            placeholder="Nome, cidade, mobilizador…"
+            value={filterQ}
+            onChange={(e) => setFilterQ(e.target.value)}
+          />
+        </label>
+        <label style={{ flex: '1 1 160px', minWidth: 140 }}>
+          Município
+          <select
+            className="select"
+            value={filterMuni}
+            onChange={(e) => setFilterMuni(e.target.value)}
+          >
+            <option value="">Todos</option>
+            {municipalities.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="check" style={{ alignSelf: 'end', marginBottom: '0.35rem' }}>
+          <input
+            type="checkbox"
+            checked={filterOnlyWithPeople}
+            onChange={(e) => setFilterOnlyWithPeople(e.target.checked)}
+          />
+          Só com inscritos
+        </label>
+      </div>
+
+      <div className="event-filter-summary" style={{ marginTop: '0.75rem' }}>
+        <span className="badge">
+          {filteredEvents.length} evento{filteredEvents.length === 1 ? '' : 's'}
+        </span>
+        <span className="badge badge--ok">
+          {filteredPeopleTotal} pessoa{filteredPeopleTotal === 1 ? '' : 's'} no filtro
+        </span>
+        {(filterQ || filterMuni || filterOnlyWithPeople) && (
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={() => {
+              setFilterQ('');
+              setFilterMuni('');
+              setFilterOnlyWithPeople(false);
+            }}
+          >
+            Limpar filtro
+          </button>
+        )}
       </div>
 
       <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={applyPublicBase}>
@@ -405,7 +496,7 @@ export default function EventsPanel({ campaignSlug }) {
       {error && <EmptyState>{error}</EmptyState>}
 
       <div className="event-grid" style={{ marginTop: '1.1rem' }}>
-        {events.map((event) => {
+        {filteredEvents.map((event) => {
           const qr = qrMap[event.slug];
           return (
             <article className="event-card" key={event.id}>
@@ -464,7 +555,7 @@ export default function EventsPanel({ campaignSlug }) {
                   canal é outro passo (links acima).
                 </p>
                 <p>{event.description}</p>
-                <span className="badge">{event.attendees || 0} inscritos</span>
+                <span className="badge badge--ok">{event.attendees || 0} inscritos</span>
               </div>
               {qr && (
                 <div className="qr-box">
@@ -661,7 +752,13 @@ export default function EventsPanel({ campaignSlug }) {
         </div>
       )}
 
-      {!events.length && <EmptyState>Nenhum evento cadastrado.</EmptyState>}
+      {!filteredEvents.length && (
+        <EmptyState>
+          {events.length
+            ? 'Nenhum evento com esse filtro. Limpe o filtro ou ajuste a busca.'
+            : 'Nenhum evento cadastrado.'}
+        </EmptyState>
+      )}
       <Toast message={toast} onClose={() => setToast('')} />
     </section>
   );
