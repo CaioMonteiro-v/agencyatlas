@@ -322,11 +322,9 @@ export default function EventsPanel({ campaignSlug }) {
             />
           </label>
           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Depois do QR, a pessoa <strong>cai direto no WhatsApp</strong>
-            {' '}(canal municipal se tiver link, senão o WhatsApp da campanha).
-            O Bitly, se preenchido, só <strong>conta o clique</strong> em segundo plano —
-            a pessoa não fica na página do Bitly.
-            O WhatsApp da campanha também serve para <strong>distribuir o QR</strong>.
+            Depois do QR: a pessoa preenche nome e telefone (e-mail opcional), dá OK e na
+            tela seguinte clica para <strong>falar com o Fábio</strong> no WhatsApp
+            (wa.me/message/…). O Bitly, se preenchido, só conta o clique em segundo plano.
           </p>
 
           <div>
