@@ -19,7 +19,7 @@ export default function CampaignOverview() {
             </Link>
             <a
               className="btn btn-whatsapp"
-              href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
+              href={campaign.whatsapp_url || 'https://wa.me/message/PV764OTMN3GEE1'}
               target="_blank"
               rel="noreferrer"
             >
