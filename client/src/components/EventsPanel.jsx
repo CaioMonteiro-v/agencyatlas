@@ -221,6 +221,26 @@ export default function EventsPanel({ campaignSlug }) {
     }
   }
 
+  async function removeEvent(event) {
+    const count = Number(event.attendees || 0);
+    const msg = count > 0
+      ? `Excluir o evento "${event.name}"?\n\nIsso apaga o QR e também os ${count} cadastro(s) deste evento.`
+      : `Excluir o evento "${event.name}"?\n\nO QR deixa de funcionar.`;
+    if (!window.confirm(msg)) return;
+    try {
+      await api.deleteEvent(campaignSlug, event.id);
+      if (attendeesFor?.id === event.id) {
+        setAttendeesFor(null);
+        setAttendees([]);
+      }
+      if (editingId === event.id) setEditingId(null);
+      setToast('Evento excluído');
+      await load(publicBase);
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
+
   const localWarning = isLocalUrl(publicBase);
 
   const filteredEvents = useMemo(() => {
@@ -696,6 +716,13 @@ export default function EventsPanel({ campaignSlug }) {
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => removeEvent(event)}
+                >
+                  Excluir evento
+                </button>
               </div>
             </article>
           );

@@ -81,6 +81,8 @@ export const api = {
   createEvent: (slug, body) => request(`/api/campaigns/${slug}/events`, { method: 'POST', body: JSON.stringify(body) }),
   updateEvent: (slug, id, body) =>
     request(`/api/campaigns/${slug}/events/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteEvent: (slug, id) =>
+    request(`/api/campaigns/${slug}/events/${id}`, { method: 'DELETE' }),
   getEvent: (eventSlug) => request(`/api/events/${eventSlug}`),
   getEventQr: (eventSlug, origin, size = 1024) =>
     request(`/api/events/${eventSlug}/qrcode?origin=${encodeURIComponent(origin)}&size=${size}`),

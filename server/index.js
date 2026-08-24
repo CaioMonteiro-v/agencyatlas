@@ -873,6 +873,36 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
   res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(event.id));
 });
 
+app.delete('/api/campaigns/:slug/events/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const event = db.prepare(
+    'SELECT * FROM events WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
+
+  const attendees = db.prepare(
+    'SELECT COUNT(*) AS c FROM event_registrations WHERE event_id = ?'
+  ).get(event.id).c;
+  const source = `evento/${event.slug}`;
+  const linkedRegs = db.prepare(
+    'SELECT COUNT(*) AS c FROM registrations WHERE campaign_id = ? AND source = ?'
+  ).get(campaign.id, source).c;
+
+  // Remove inscritos do QR, cadastros com origem neste evento, e o evento
+  db.prepare('DELETE FROM event_registrations WHERE event_id = ?').run(event.id);
+  db.prepare('DELETE FROM registrations WHERE campaign_id = ? AND source = ?').run(campaign.id, source);
+  db.prepare('DELETE FROM events WHERE id = ? AND campaign_id = ?').run(event.id, campaign.id);
+
+  res.json({
+    ok: true,
+    deleted_event_id: event.id,
+    deleted_attendees: attendees,
+    deleted_registrations: linkedRegs,
+  });
+});
+
 app.get('/api/events/:slug', (req, res) => {
   const event = db.prepare(`
     SELECT e.*, c.name AS campaign_name, c.slug AS campaign_slug, c.whatsapp_url, c.accent_color,
