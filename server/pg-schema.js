@@ -310,6 +310,10 @@ CREATE TABLE IF NOT EXISTS dobra_groups (
 CREATE INDEX IF NOT EXISTS idx_reg_campaign ON registrations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_reg_leader ON registrations(leader_id);
 CREATE INDEX IF NOT EXISTS idx_reg_muni ON registrations(municipality_id);
+CREATE INDEX IF NOT EXISTS idx_reg_campaign_created ON registrations(campaign_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reg_campaign_source ON registrations(campaign_id, source);
+CREATE INDEX IF NOT EXISTS idx_reg_campaign_mobname ON registrations(campaign_id, mobilizer_name);
+CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations(event_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_campaign ON leaders(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_leaders_code ON leaders(referral_code);
 CREATE INDEX IF NOT EXISTS idx_coord_campaign ON coordinators(campaign_id);

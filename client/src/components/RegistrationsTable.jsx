@@ -48,7 +48,8 @@ export default function RegistrationsTable({ campaignSlug }) {
           <h3>Registro de cadastros</h3>
           <p>
             Filtre por <strong>evento</strong> para ver só quem se cadastrou naquele QR
-            e o total de pessoas.
+            e o total de pessoas. A base está preparada para <strong>100 mil+</strong> contatos
+            (com Postgres no ar).
           </p>
         </div>
         <div className="filters" style={{ alignItems: 'end' }}>

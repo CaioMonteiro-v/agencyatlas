@@ -545,24 +545,14 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
     ${where}
   `).get(...params).c;
 
+  // Lista paginada sem subquery por linha (suporta 100k+ cadastros)
   const rows = db.prepare(`
     SELECT
       r.*,
       l.name AS leader_name,
       l.type AS leader_type,
       m.name AS municipality_name,
-      COALESCE(NULLIF(r.mobilizer_name, ''), l.name) AS mobilizer_display,
-      CASE
-        WHEN r.mobilizer_name IS NOT NULL AND TRIM(r.mobilizer_name) != '' THEN (
-          SELECT COUNT(*) FROM registrations r2
-          WHERE r2.campaign_id = r.campaign_id
-            AND r2.mobilizer_name = r.mobilizer_name
-        )
-        WHEN r.leader_id IS NOT NULL THEN (
-          SELECT COUNT(*) FROM registrations r2 WHERE r2.leader_id = r.leader_id
-        )
-        ELSE 0
-      END AS mobilizer_total
+      COALESCE(NULLIF(r.mobilizer_name, ''), l.name) AS mobilizer_display
     FROM registrations r
     LEFT JOIN leaders l ON l.id = r.leader_id
     LEFT JOIN municipalities m ON m.id = r.municipality_id
@@ -570,6 +560,37 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
     ORDER BY r.created_at DESC
     LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
+
+  const byMobName = new Map(
+    db.prepare(`
+      SELECT mobilizer_name AS k, COUNT(*) AS c
+      FROM registrations
+      WHERE campaign_id = ?
+        AND mobilizer_name IS NOT NULL
+        AND TRIM(mobilizer_name) != ''
+      GROUP BY mobilizer_name
+    `).all(campaign.id).map((row) => [row.k, Number(row.c) || 0]),
+  );
+  const byLeader = new Map(
+    db.prepare(`
+      SELECT leader_id AS k, COUNT(*) AS c
+      FROM registrations
+      WHERE campaign_id = ?
+        AND leader_id IS NOT NULL
+      GROUP BY leader_id
+    `).all(campaign.id).map((row) => [row.k, Number(row.c) || 0]),
+  );
+
+  const items = rows.map((row) => {
+    const mobName = row.mobilizer_name != null ? String(row.mobilizer_name).trim() : '';
+    let mobilizer_total = 0;
+    if (mobName) {
+      mobilizer_total = byMobName.get(row.mobilizer_name) || byMobName.get(mobName) || 0;
+    } else if (row.leader_id != null) {
+      mobilizer_total = byLeader.get(row.leader_id) || 0;
+    }
+    return { ...row, mobilizer_total };
+  });
 
   let eventFilter = null;
   if (eventId) {
@@ -590,7 +611,7 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
     }
   }
 
-  res.json({ total, page, limit, items: rows, event_filter: eventFilter });
+  res.json({ total, page, limit, items, event_filter: eventFilter });
 });
 
 app.get('/api/campaigns/:slug/backup', (req, res) => {

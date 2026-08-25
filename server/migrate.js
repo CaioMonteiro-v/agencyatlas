@@ -197,6 +197,10 @@ function migrateAnalyticsSchema(db) {
   try {
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_mobilizer ON registrations(mobilizer_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_funnel ON registrations(funnel)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_created ON registrations(campaign_id, created_at DESC)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_source ON registrations(campaign_id, source)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_mobname ON registrations(campaign_id, mobilizer_name)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations(event_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_events_muni ON events(municipality_id)');
