@@ -4,16 +4,18 @@ import { api } from '../api';
 
 /**
  * Hierarquia:
- * Coordenador
+ * Coordenador (regional ou dobra)
  *   → Liderança A — total mobilizado
  *   → Liderança B — total mobilizado
  *
- * O coordenador "joga" o link de cada liderança para ela;
- * quem se cadastra pelo link conta no total daquela liderança.
+ * Em dobra, muitas lideranças ficam com município Cuiabá, mas são
+ * lideranças daquele coordenador de dobra — não do regional.
  */
 export default function CoordinatorLeadersPanel({
   campaignSlug,
+  coordinatorId,
   coordinatorName,
+  coordType = 'regional',
   leaders = [],
   municipalities = [],
   compact = false,
@@ -30,6 +32,7 @@ export default function CoordinatorLeadersPanel({
     phone: '',
   });
 
+  const isDobra = coordType === 'dobra';
   const coordLabel = coordinatorName || 'Coordenador';
   const totalPeople = leaders.reduce((sum, l) => sum + Number(l.registrations_count || 0), 0);
   const muniOptions = municipalities.length
@@ -70,6 +73,10 @@ export default function CoordinatorLeadersPanel({
       setError('Selecione o município da liderança');
       return;
     }
+    if (!coordinatorId) {
+      setError('Coordenador não identificado');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -78,6 +85,7 @@ export default function CoordinatorLeadersPanel({
         type: form.type,
         municipality_id: Number(form.municipality_id),
         phone: form.phone.trim() || null,
+        coordinator_id: Number(coordinatorId),
       });
       setForm({
         name: '',
@@ -98,11 +106,21 @@ export default function CoordinatorLeadersPanel({
     <div className={`coord-leaders-panel ${compact ? 'coord-leaders-panel--compact' : ''}`}>
       <div className="coord-leaders-panel__head">
         <div>
-          <p className="eyebrow" style={{ marginBottom: 0 }}>Hierarquia de mobilização</p>
-          <strong>Coordenador {coordLabel}</strong>
+          <p className="eyebrow" style={{ marginBottom: 0 }}>
+            {isDobra ? 'Hierarquia de dobra' : 'Hierarquia de mobilização'}
+          </p>
+          <strong>
+            Coordenador {coordLabel}
+            {isDobra ? (
+              <span className="coord-type-pill coord-type-pill--dobra" style={{ marginLeft: '0.45rem' }}>
+                Dobra
+              </span>
+            ) : null}
+          </strong>
           <p style={{ margin: '0.35rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Cada liderança tem o próprio link. O coordenador joga o link para ela;
-            ela mobiliza; o total aparece embaixo do coordenador.
+            {isDobra
+              ? 'Lideranças de dobra podem estar em Cuiabá no cadastro, mas pertencem a este coordenador de dobra — não ao regional. Cada uma tem o próprio link para jogar.'
+              : 'Cada liderança tem o próprio link. O coordenador joga o link para ela; ela mobiliza; o total aparece embaixo do coordenador.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -115,7 +133,7 @@ export default function CoordinatorLeadersPanel({
               className="btn btn-accent btn-sm"
               onClick={() => setShowForm((v) => !v)}
             >
-              {showForm ? 'Fechar' : 'Nova liderança'}
+              {showForm ? 'Fechar' : isDobra ? 'Nova liderança de dobra' : 'Nova liderança'}
             </button>
           ) : null}
         </div>
@@ -130,7 +148,7 @@ export default function CoordinatorLeadersPanel({
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Ex.: nome da liderança do coordenador"
+              placeholder={isDobra ? 'Ex.: liderança de dobra deste coordenador' : 'Ex.: nome da liderança do coordenador'}
             />
           </label>
           <label>
@@ -145,7 +163,7 @@ export default function CoordinatorLeadersPanel({
             </select>
           </label>
           <label>
-            Município *
+            Município operacional *
             <select
               className="select"
               required
@@ -157,6 +175,11 @@ export default function CoordinatorLeadersPanel({
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
+            {isDobra ? (
+              <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                Em dobra costuma ser Cuiabá — a liderança continua sendo deste coordenador de dobra.
+              </span>
+            ) : null}
           </label>
           <label>
             Telefone
@@ -168,8 +191,8 @@ export default function CoordinatorLeadersPanel({
             />
           </label>
           {error ? <p style={{ margin: 0, color: '#8a5a64' }}>{error}</p> : null}
-          <button className="btn btn-primary" type="submit" disabled={busy || !muniOptions.length}>
-            {busy ? 'Salvando…' : 'Cadastrar liderança e gerar link'}
+          <button className="btn btn-primary" type="submit" disabled={busy || !muniOptions.length || !coordinatorId}>
+            {busy ? 'Salvando…' : isDobra ? 'Cadastrar liderança de dobra e gerar link' : 'Cadastrar liderança e gerar link'}
           </button>
           {!muniOptions.length ? (
             <p style={{ margin: 0, color: '#8a5a64', fontSize: '0.88rem' }}>
@@ -181,13 +204,16 @@ export default function CoordinatorLeadersPanel({
 
       {!leaders.length ? (
         <p style={{ margin: '0.75rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-          Ainda sem lideranças sob <strong>{coordLabel}</strong>. Cadastre a primeira para
-          gerar o link que o coordenador vai jogar para ela.
+          Ainda sem lideranças{isDobra ? ' de dobra' : ''} sob <strong>{coordLabel}</strong>.
+          Cadastre a primeira para gerar o link que o coordenador vai jogar para ela.
         </p>
       ) : (
         <div className="coord-hierarchy" style={{ marginTop: '0.85rem' }}>
           <div className="coord-hierarchy__root">
-            <strong>Coordenador {coordLabel}</strong>
+            <strong>
+              Coordenador {coordLabel}
+              {isDobra ? ' · Dobra' : ''}
+            </strong>
             <span>Total mobilizado: {totalPeople}</span>
           </div>
           <ul className="coord-hierarchy__list">
@@ -195,9 +221,13 @@ export default function CoordinatorLeadersPanel({
               <li key={leader.id} className="coord-hierarchy__item">
                 <div className="coord-hierarchy__main">
                   <div>
-                    <strong>Liderança: {leader.name}</strong>
+                    <strong>
+                      {isDobra || leader.is_dobra ? 'Liderança de dobra: ' : 'Liderança: '}
+                      {leader.name}
+                    </strong>
                     <div style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
                       {leader.municipality_name || 'Sem município'}
+                      {isDobra || leader.is_dobra ? ' · Dobra' : ''}
                       {leader.type === 'multiplicador' ? ' · Multiplicador' : ' · Política'}
                     </div>
                   </div>

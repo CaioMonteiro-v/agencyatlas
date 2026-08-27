@@ -458,19 +458,27 @@ app.post('/api/campaigns/:slug/leaders', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const { name, type, municipality_id, phone, status } = req.body;
+  const { name, type, municipality_id, phone, status, coordinator_id } = req.body;
   if (!name || !type) return res.status(400).json({ error: 'Nome e tipo são obrigatórios' });
   if (!['politica', 'multiplicador'].includes(type)) {
     return res.status(400).json({ error: 'Tipo inválido' });
   }
 
+  let coordinatorId = coordinator_id ? Number(coordinator_id) : null;
+  if (coordinatorId) {
+    const coord = db.prepare('SELECT id FROM coordinators WHERE id = ? AND campaign_id = ?')
+      .get(coordinatorId, campaign.id);
+    if (!coord) return res.status(400).json({ error: 'Coordenador inválido' });
+  }
+
   const code = nano();
   const result = db.prepare(`
-    INSERT INTO leaders (campaign_id, municipality_id, name, type, status, referral_code, phone, bio)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO leaders (campaign_id, municipality_id, coordinator_id, name, type, status, referral_code, phone, bio)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     municipality_id || null,
+    coordinatorId,
     name,
     type,
     status || 'ativo',

@@ -118,6 +118,15 @@ function worstSeverity(alarms, healthStatus) {
 }
 
 function listCoordinatorLeaders(db, campaignId, coordinatorId, campaignSlug = null) {
+  const coord = db.prepare('SELECT id, coord_type FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(coordinatorId, campaignId);
+  if (!coord) return [];
+
+  const isDobra = String(coord.coord_type || '').toLowerCase() === 'dobra';
+
+  // Vinculadas a este coordenador + legado sem vínculo no município dele.
+  // Novas lideranças de dobra gravam coordinator_id e não aparecem no regional
+  // (mesmo quando o município operacional é Cuiabá).
   const rows = db.prepare(`
     SELECT
       l.id,
@@ -127,20 +136,29 @@ function listCoordinatorLeaders(db, campaignId, coordinatorId, campaignSlug = nu
       l.phone,
       l.referral_code,
       l.municipality_id,
+      l.coordinator_id,
       m.name AS municipality_name,
       COALESCE((
         SELECT COUNT(*) FROM registrations r WHERE r.leader_id = l.id
       ), 0) AS registrations_count
     FROM leaders l
-    JOIN coordinator_municipalities cm ON cm.municipality_id = l.municipality_id
     LEFT JOIN municipalities m ON m.id = l.municipality_id
-    WHERE cm.coordinator_id = ?
-      AND l.campaign_id = ?
+    WHERE l.campaign_id = ?
+      AND (
+        l.coordinator_id = ?
+        OR (
+          l.coordinator_id IS NULL
+          AND l.municipality_id IN (
+            SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?
+          )
+        )
+      )
     ORDER BY registrations_count DESC, l.name ASC
-  `).all(coordinatorId, campaignId);
+  `).all(campaignId, coordinatorId, coordinatorId);
 
   return rows.map((row) => ({
     ...row,
+    is_dobra: isDobra,
     link_path: campaignSlug && row.referral_code
       ? `/r/${campaignSlug}/${row.referral_code}`
       : null,

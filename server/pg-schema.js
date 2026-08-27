@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS leaders (
   id SERIAL PRIMARY KEY,
   campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   municipality_id INTEGER REFERENCES municipalities(id),
+  coordinator_id INTEGER,
   name TEXT NOT NULL,
   photo_url TEXT,
   type TEXT NOT NULL CHECK(type IN ('politica', 'multiplicador')),

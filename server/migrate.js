@@ -126,6 +126,23 @@ function migrateAnalyticsSchema(db) {
     console.warn('migrate coordinators.coord_type:', err.message);
   }
 
+  // Liderança pertence a um coordenador (regional ou dobra).
+  // Em Cuiabá, dobra e regional compartilham município — sem isso a lista misturava tudo.
+  try {
+    ensureColumn(db, 'leaders', 'coordinator_id', 'INTEGER');
+    try {
+      if (db.dialect === 'postgres') {
+        db.exec('CREATE INDEX IF NOT EXISTS idx_leaders_coordinator ON leaders(coordinator_id)');
+      } else {
+        db.exec('CREATE INDEX IF NOT EXISTS idx_leaders_coordinator ON leaders(coordinator_id)');
+      }
+    } catch {
+      /* ignore */
+    }
+  } catch (err) {
+    console.warn('migrate leaders.coordinator_id:', err.message);
+  }
+
   // Mobilizers (código pessoal) — criar antes da FK em registrations
   if (db.dialect === 'postgres') {
     db.exec(`

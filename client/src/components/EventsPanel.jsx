@@ -501,8 +501,17 @@ export default function EventsPanel({ campaignSlug }) {
           {form.organizer_role === 'coordinator' && form.coordinator_id ? (
             <CoordinatorLeadersPanel
               campaignSlug={campaignSlug}
+              coordinatorId={form.coordinator_id}
               coordinatorName={coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.name}
+              coordType={
+                coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.coord_type === 'dobra'
+                  ? 'dobra'
+                  : 'regional'
+              }
               leaders={coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.leaders || []}
+              municipalities={
+                coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.municipalities || []
+              }
               compact
             />
           ) : null}
@@ -566,9 +575,18 @@ export default function EventsPanel({ campaignSlug }) {
                 {event.organizer_role === 'coordinator' && event.coordinator_id ? (
                   <CoordinatorLeadersPanel
                     campaignSlug={campaignSlug}
+                    coordinatorId={event.coordinator_id}
                     coordinatorName={event.organizer_name}
+                    coordType={
+                      coordinators.find((c) => Number(c.id) === Number(event.coordinator_id))?.coord_type === 'dobra'
+                        ? 'dobra'
+                        : 'regional'
+                    }
                     leaders={
                       coordinators.find((c) => Number(c.id) === Number(event.coordinator_id))?.leaders || []
+                    }
+                    municipalities={
+                      coordinators.find((c) => Number(c.id) === Number(event.coordinator_id))?.municipalities || []
                     }
                     compact
                   />

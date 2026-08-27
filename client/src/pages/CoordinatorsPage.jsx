@@ -644,7 +644,9 @@ export default function CoordinatorsPage() {
 
                 <CoordinatorLeadersPanel
                   campaignSlug={campaign.slug}
+                  coordinatorId={selected.id}
                   coordinatorName={selected.name}
+                  coordType={selected.coord_type === 'dobra' ? 'dobra' : 'regional'}
                   leaders={selected.leaders || []}
                   municipalities={selected.municipalities || []}
                   onChanged={load}

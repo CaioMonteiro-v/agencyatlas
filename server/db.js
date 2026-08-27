@@ -123,6 +123,7 @@ function initSqliteSchema(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,
       municipality_id INTEGER,
+      coordinator_id INTEGER,
       name TEXT NOT NULL,
       photo_url TEXT,
       type TEXT NOT NULL CHECK(type IN ('politica', 'multiplicador')),
