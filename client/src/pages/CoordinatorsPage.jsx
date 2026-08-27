@@ -30,6 +30,7 @@ function AlarmBanner({ alarms }) {
 export default function CoordinatorsPage() {
   const { campaign } = useOutletContext();
   const [data, setData] = useState(null);
+  const [municipalities, setMunicipalities] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
@@ -44,10 +45,24 @@ export default function CoordinatorsPage() {
     ig_reach: 0,
   });
   const [syncing, setSyncing] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingCoordId, setEditingCoordId] = useState(null);
+  const [muniSearch, setMuniSearch] = useState('');
+  const [busySave, setBusySave] = useState(false);
+  const [coordForm, setCoordForm] = useState({
+    name: '',
+    phone: '',
+    coord_type: 'regional',
+    municipality_ids: [],
+  });
 
   async function load() {
-    const res = await api.getCoordinators(campaign.slug);
+    const [res, munis] = await Promise.all([
+      api.getCoordinators(campaign.slug),
+      api.getMunicipalities().catch(() => []),
+    ]);
     setData(res);
+    setMunicipalities(Array.isArray(munis) ? munis : []);
     setSelectedId((prev) => {
       if (prev && res.coordinators.some((c) => c.id === prev)) return prev;
       return res.coordinators[0]?.id ?? null;
@@ -68,6 +83,12 @@ export default function CoordinatorsPage() {
     if (typeFilter === 'all') return list;
     return list.filter((c) => (c.coord_type || 'regional') === typeFilter);
   }, [data, typeFilter]);
+
+  const filteredMuniOptions = useMemo(() => {
+    const q = muniSearch.trim().toLowerCase();
+    if (!q) return municipalities;
+    return municipalities.filter((m) => String(m.name || '').toLowerCase().includes(q));
+  }, [municipalities, muniSearch]);
 
   useEffect(() => {
     if (!visibleCoordinators.length) {
@@ -95,6 +116,97 @@ export default function CoordinatorsPage() {
       (m) => m.alarm_level === 'ok' || m.alarm_level === 'good',
     );
   }, [selected, filter]);
+
+  function resetCoordForm() {
+    setEditingCoordId(null);
+    setCoordForm({
+      name: '',
+      phone: '',
+      coord_type: 'regional',
+      municipality_ids: [],
+    });
+    setMuniSearch('');
+  }
+
+  function openCreateForm() {
+    resetCoordForm();
+    setShowForm(true);
+  }
+
+  function startEditCoordinator(coord) {
+    setEditingCoordId(coord.id);
+    setCoordForm({
+      name: coord.name || '',
+      phone: coord.phone || '',
+      coord_type: coord.coord_type === 'dobra' ? 'dobra' : 'regional',
+      municipality_ids: (coord.municipalities || []).map((m) => m.id),
+    });
+    setShowForm(true);
+  }
+
+  function toggleMuni(id) {
+    setCoordForm((prev) => {
+      const has = prev.municipality_ids.includes(id);
+      return {
+        ...prev,
+        municipality_ids: has
+          ? prev.municipality_ids.filter((x) => x !== id)
+          : [...prev.municipality_ids, id],
+      };
+    });
+  }
+
+  async function saveCoordinator(e) {
+    e.preventDefault();
+    if (!coordForm.name.trim()) {
+      setToast('Informe o nome do coordenador');
+      return;
+    }
+    setBusySave(true);
+    try {
+      const payload = {
+        name: coordForm.name.trim(),
+        phone: coordForm.phone,
+        coord_type: coordForm.coord_type === 'dobra' ? 'dobra' : 'regional',
+        municipality_ids: coordForm.municipality_ids,
+      };
+      let saved;
+      if (editingCoordId) {
+        saved = await api.updateCoordinator(campaign.slug, editingCoordId, payload);
+        setToast('Coordenador atualizado');
+      } else {
+        saved = await api.createCoordinator(campaign.slug, payload);
+        setToast(
+          payload.coord_type === 'dobra'
+            ? 'Coordenador de dobra cadastrado'
+            : 'Coordenador cadastrado',
+        );
+      }
+      resetCoordForm();
+      setShowForm(false);
+      await load();
+      if (saved?.id) setSelectedId(saved.id);
+    } catch (err) {
+      setToast(err.message);
+    } finally {
+      setBusySave(false);
+    }
+  }
+
+  async function removeCoordinator(coord) {
+    if (!window.confirm(`Remover o coordenador "${coord.name}"?`)) return;
+    try {
+      await api.deleteCoordinator(campaign.slug, coord.id);
+      setToast(`Coordenador ${coord.name} removido`);
+      if (editingCoordId === coord.id) {
+        resetCoordForm();
+        setShowForm(false);
+      }
+      await load();
+    } catch (err) {
+      setToast(err.message);
+    }
+  }
 
   function openMetrics(m) {
     setEditingMuni(m.id);
@@ -169,19 +281,18 @@ export default function CoordinatorsPage() {
         <p className="eyebrow">Coordenação territorial</p>
         <h2>Coordenadores</h2>
         <p>
-          Aqui entram os <strong>regionais</strong> e também os de <strong>dobra</strong> (ex.: grupos em Cuiabá).
-          Regionais acompanham expectativa de voto e comunicação por município; dobra serve para controle
-          dos grupos de mobilização.
+          Cadastre aqui os vários coordenadores (regionais e de dobra), vincule municípios
+          e acompanhe as lideranças de cada um. Não precisa passar pelo Admin.
         </p>
         <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.55rem' }}>
+          <button className="btn btn-primary btn-sm" type="button" onClick={openCreateForm}>
+            Novo coordenador
+          </button>
           <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/relatorio`}>
             Abrir Relatório
           </Link>
           <Link className="btn btn-soft btn-sm" to={`/campanha/${campaign.slug}/grupos`}>
             Grupos Dobra
-          </Link>
-          <Link className="btn btn-soft btn-sm" to="/admin">
-            Cadastrar / editar
           </Link>
           <button className="btn btn-accent btn-sm" type="button" disabled={syncing} onClick={syncMeta}>
             {syncing ? 'Sincronizando…' : 'Sincronizar Instagram (Meta)'}
@@ -280,18 +391,136 @@ export default function CoordinatorsPage() {
         </div>
       </div>
 
+      {showForm && (
+        <section className="panel panel-pad" style={{ marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div>
+              <p className="eyebrow">{editingCoordId ? 'Editar' : 'Novo'}</p>
+              <h3 style={{ marginTop: 0 }}>
+                {editingCoordId ? 'Atualizar coordenador' : 'Cadastrar coordenador'}
+              </h3>
+              <p style={{ margin: 0 }}>
+                Dá para cadastrar vários. Depois use no QR de evento e no controle de lideranças.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-soft btn-sm"
+              onClick={() => {
+                setShowForm(false);
+                resetCoordForm();
+              }}
+            >
+              Fechar
+            </button>
+          </div>
+
+          <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={saveCoordinator}>
+            <label>
+              Tipo
+              <select
+                className="select"
+                value={coordForm.coord_type}
+                onChange={(e) => setCoordForm({ ...coordForm, coord_type: e.target.value })}
+              >
+                <option value="regional">Regional (território)</option>
+                <option value="dobra">Dobra (grupos)</option>
+              </select>
+            </label>
+            <label>
+              Nome do coordenador *
+              <input
+                className="input"
+                required
+                value={coordForm.name}
+                onChange={(e) => setCoordForm({ ...coordForm, name: e.target.value })}
+                placeholder="Ex.: Nome do coordenador"
+              />
+            </label>
+            <label>
+              Telefone
+              <input
+                className="input"
+                value={coordForm.phone}
+                onChange={(e) => setCoordForm({ ...coordForm, phone: e.target.value })}
+                placeholder="Opcional"
+              />
+            </label>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.45rem' }}>
+                Municípios ({coordForm.municipality_ids.length} selecionados)
+              </label>
+              <input
+                className="input"
+                value={muniSearch}
+                onChange={(e) => setMuniSearch(e.target.value)}
+                placeholder="Buscar município…"
+                style={{ marginBottom: '0.55rem' }}
+              />
+              <div className="muni-check-grid">
+                {filteredMuniOptions.map((m) => {
+                  const checked = coordForm.municipality_ids.includes(m.id);
+                  return (
+                    <label key={m.id} className={`muni-check ${checked ? 'is-checked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleMuni(m.id)}
+                      />
+                      <span>{m.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="submit" disabled={busySave}>
+                {busySave
+                  ? 'Salvando…'
+                  : editingCoordId
+                    ? 'Salvar alterações'
+                    : 'Cadastrar coordenador'}
+              </button>
+              {editingCoordId ? (
+                <button
+                  className="btn btn-soft"
+                  type="button"
+                  onClick={() => {
+                    resetCoordForm();
+                    setShowForm(true);
+                  }}
+                >
+                  Limpar / novo
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
+      )}
+
       {!data.coordinators.length ? (
         <section className="panel panel-pad">
           <EmptyState>
-            Nenhum coordenador cadastrado ainda. Cadastre em{' '}
-            <a href="/admin">/admin</a> e defina expectativa de voto + meta de conteúdo.
+            Nenhum coordenador cadastrado ainda.{' '}
+            <button type="button" className="btn btn-primary btn-sm" onClick={openCreateForm}>
+              Cadastrar o primeiro
+            </button>
           </EmptyState>
         </section>
       ) : (
         <div className="coord-layout">
           <aside className="panel panel-pad coord-list">
-            <p className="eyebrow">Equipe</p>
-            <h3 style={{ marginTop: 0 }}>Coordenadores</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div>
+                <p className="eyebrow">Equipe</p>
+                <h3 style={{ marginTop: 0 }}>Coordenadores</h3>
+              </div>
+              <button type="button" className="btn btn-accent btn-sm" onClick={openCreateForm}>
+                Novo
+              </button>
+            </div>
             <div className="chip-group" style={{ marginBottom: '0.75rem' }}>
               {[
                 { id: 'all', label: 'Todos' },
@@ -346,7 +575,7 @@ export default function CoordinatorsPage() {
               {!visibleCoordinators.length ? (
                 <EmptyState>
                   Nenhum coordenador {typeFilter === 'dobra' ? 'de dobra' : typeFilter === 'regional' ? 'regional' : ''} aqui.
-                  Cadastre em <a href="/admin">/admin</a>.
+                  Use <strong>Novo</strong> para cadastrar.
                 </EmptyState>
               ) : null}
             </div>
@@ -373,7 +602,23 @@ export default function CoordinatorsPage() {
                       {selected.phone && <p style={{ margin: '0.2rem 0 0' }}>{selected.phone}</p>}
                     </div>
                   </div>
-                  <HealthPill health={selected.health} />
+                  <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <HealthPill health={selected.health} />
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-sm"
+                      onClick={() => startEditCoordinator(selected)}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => removeCoordinator(selected)}
+                    >
+                      Remover
+                    </button>
+                  </div>
                 </div>
 
                 <p style={{ marginTop: '0.85rem' }}>{selected.health.detail}</p>

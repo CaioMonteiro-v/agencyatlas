@@ -275,8 +275,8 @@ export default function AdminPage() {
             <p className="eyebrow">Território</p>
             <h3 style={{ margin: 0 }}>Coordenadores (regionais + dobra)</h3>
             <p style={{ margin: '0.35rem 0 0' }}>
-              Cadastre coordenadores <strong>regionais</strong> (território) e também os de{' '}
-              <strong>dobra</strong> (ex.: grupos em Cuiabá). Depois use na aba Coordenadores e em Grupos Dobra.
+              O cadastro principal dos coordenadores fica na aba <strong>Coordenadores</strong> da campanha
+              (vários de uma vez, sem misturar com Admin). Aqui ainda dá para ajustar se precisar.
             </p>
           </div>
 
