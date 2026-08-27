@@ -509,8 +509,9 @@ export default function EventsPanel({ campaignSlug }) {
 
           {form.organizer_role === 'coordinator' && !coordinators.length && (
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#8a5a64' }}>
-              Nenhum coordenador cadastrado. Cadastre em{' '}
-              <Link to="/admin">Admin</Link> antes de vincular o evento.
+              Nenhum coordenador cadastrado. Cadastre na aba{' '}
+              <Link to={`/campanha/${campaignSlug}/coordenadores`}>Coordenadores</Link>{' '}
+              antes de vincular o evento.
             </p>
           )}
 
