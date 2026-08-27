@@ -397,35 +397,6 @@ export default function CoordinatorsPage() {
                   </div>
                 </div>
 
-                <div className="coord-mini-stats" style={{ marginTop: 0 }}>
-                  <div>
-                    <strong>
-                      {selected.totals.vote_expectation
-                        ? `${selected.totals.vote_progress_pct ?? 0}%`
-                        : '—'}
-                    </strong>
-                    <span>Expectativa voto</span>
-                  </div>
-                  <div>
-                    <strong>
-                      {selected.totals.content_views_expected
-                        ? `${selected.totals.content_progress_pct ?? 0}%`
-                        : '—'}
-                    </strong>
-                    <span>Conteúdo visto</span>
-                  </div>
-                  <div>
-                    <strong>{selected.totals.ig_comments || 0}</strong>
-                    <span>Comentários IG</span>
-                  </div>
-                  <div>
-                    <strong className={selected.totals.alarms ? 'stat-alarm' : undefined}>
-                      {selected.totals.alarms}
-                    </strong>
-                    <span>Alarmes</span>
-                  </div>
-                </div>
-
                 <CoordinatorLeadersPanel
                   campaignSlug={campaign.slug}
                   coordinatorName={selected.name}
@@ -438,16 +409,16 @@ export default function CoordinatorsPage() {
                     <span>Meta de votos</span>
                   </div>
                   <div>
-                    <strong>{selected.totals.content_views_actual}/{selected.totals.content_views_expected || 0}</strong>
-                    <span>Views conteúdo</span>
-                  </div>
-                  <div>
                     <strong>
                       {selected.totals.vote_expectation
                         ? `${selected.totals.vote_progress_pct ?? 0}%`
                         : '—'}
                     </strong>
                     <span>Expectativa voto</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.content_views_actual}/{selected.totals.content_views_expected || 0}</strong>
+                    <span>Views conteúdo</span>
                   </div>
                   <div>
                     <strong>
