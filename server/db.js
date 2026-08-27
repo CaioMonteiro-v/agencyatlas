@@ -175,7 +175,6 @@ function initSqliteSchema(db) {
       mobilizer_name TEXT,
       mobilizer_id INTEGER,
       funnel TEXT,
-      lgpd_consent INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),
@@ -213,7 +212,6 @@ function initSqliteSchema(db) {
       phone TEXT,
       connect_whatsapp INTEGER DEFAULT 0,
       organizer_name TEXT,
-      lgpd_consent INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
     );

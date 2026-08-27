@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
-import LgpdConsentBox from '../components/LgpdConsentBox';
 import { EmptyState, Toast } from '../components/Ui';
 
 function firstName(full) {
@@ -36,7 +35,6 @@ export default function MobilizerCapturePage() {
     full_name: '',
     phone: '',
     email: '',
-    lgpd_consent: false,
   });
 
   useEffect(() => {
@@ -58,16 +56,11 @@ export default function MobilizerCapturePage() {
       setToast('Nome e telefone são obrigatórios');
       return;
     }
-    if (!form.lgpd_consent) {
-      setToast('Marque a autorização de proteção de dados (LGPD)');
-      return;
-    }
     try {
       await api.registerMobilizer(slug, code, {
         full_name: form.full_name,
         phone: form.phone,
         email: form.email.trim() || null,
-        lgpd_consent: true,
       });
       setDone(true);
       setToast('Cadastro confirmado');
@@ -146,11 +139,6 @@ export default function MobilizerCapturePage() {
                 <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
                   E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
                 </p>
-                <LgpdConsentBox
-                  checked={form.lgpd_consent}
-                  onChange={(lgpd_consent) => setForm({ ...form, lgpd_consent })}
-                  id="mobilizer-lgpd-consent"
-                />
                 <button className="btn btn-primary" type="submit">
                   Confirmar e falar com o Fábio
                 </button>
