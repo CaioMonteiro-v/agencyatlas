@@ -646,6 +646,8 @@ export default function CoordinatorsPage() {
                   campaignSlug={campaign.slug}
                   coordinatorName={selected.name}
                   leaders={selected.leaders || []}
+                  municipalities={selected.municipalities || []}
+                  onChanged={load}
                 />
 
                 <div className="coord-mini-stats" style={{ marginTop: '0.85rem' }}>

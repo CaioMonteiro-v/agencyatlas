@@ -137,7 +137,10 @@ function listCoordinatorLeaders(db, campaignId, coordinatorId) {
     WHERE cm.coordinator_id = ?
       AND l.campaign_id = ?
     ORDER BY registrations_count DESC, l.name ASC
-  `).all(coordinatorId, campaignId);
+  `).all(coordinatorId, campaignId).map((row) => ({
+    ...row,
+    link_path: row.referral_code ? `/r/${/* filled by caller if needed */ ''}${row.referral_code}` : null,
+  }));
 }
 
 function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
