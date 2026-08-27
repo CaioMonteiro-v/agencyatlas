@@ -117,8 +117,8 @@ function worstSeverity(alarms, healthStatus) {
   return 'ok';
 }
 
-function listCoordinatorLeaders(db, campaignId, coordinatorId) {
-  return db.prepare(`
+function listCoordinatorLeaders(db, campaignId, coordinatorId, campaignSlug = null) {
+  const rows = db.prepare(`
     SELECT
       l.id,
       l.name,
@@ -137,9 +137,13 @@ function listCoordinatorLeaders(db, campaignId, coordinatorId) {
     WHERE cm.coordinator_id = ?
       AND l.campaign_id = ?
     ORDER BY registrations_count DESC, l.name ASC
-  `).all(coordinatorId, campaignId).map((row) => ({
+  `).all(coordinatorId, campaignId);
+
+  return rows.map((row) => ({
     ...row,
-    link_path: row.referral_code ? `/r/${/* filled by caller if needed */ ''}${row.referral_code}` : null,
+    link_path: campaignSlug && row.referral_code
+      ? `/r/${campaignSlug}/${row.referral_code}`
+      : null,
   }));
 }
 
