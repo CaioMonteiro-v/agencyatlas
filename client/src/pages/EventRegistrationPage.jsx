@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import LgpdConsentBox from '../components/LgpdConsentBox';
 import { EmptyState, Toast } from '../components/Ui';
 
 /** WhatsApp oficial da campanha (mensagem pronta / click-to-chat). */
@@ -57,6 +58,7 @@ export default function EventRegistrationPage() {
     full_name: '',
     email: '',
     phone: '',
+    lgpd_consent: false,
   });
 
   useEffect(() => {
@@ -98,6 +100,10 @@ export default function EventRegistrationPage() {
       setToast('Informe seu telefone');
       return;
     }
+    if (!form.lgpd_consent) {
+      setToast('Marque a autorização de proteção de dados (LGPD)');
+      return;
+    }
     setBusy(true);
     try {
       await api.registerEvent(eventSlug, {
@@ -105,6 +111,7 @@ export default function EventRegistrationPage() {
         email: form.email.trim() || null,
         phone: form.phone,
         connect_whatsapp: true,
+        lgpd_consent: true,
       });
       setDone(true);
       setToast('Cadastro confirmado');
@@ -179,6 +186,11 @@ export default function EventRegistrationPage() {
                   autoComplete="email"
                 />
               </label>
+              <LgpdConsentBox
+                checked={form.lgpd_consent}
+                onChange={(lgpd_consent) => setForm({ ...form, lgpd_consent })}
+                id="event-lgpd-consent"
+              />
               <button className="btn btn-primary event-qr-form__ok" type="submit" disabled={busy}>
                 {busy ? 'Salvando…' : 'OK · Confirmar'}
               </button>

@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   mobilizer_name TEXT,
   mobilizer_id INTEGER REFERENCES mobilizers(id) ON DELETE SET NULL,
   funnel TEXT,
+  lgpd_consent INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS event_registrations (
   phone TEXT,
   connect_whatsapp INTEGER DEFAULT 0,
   organizer_name TEXT,
+  lgpd_consent INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
