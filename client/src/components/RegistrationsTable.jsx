@@ -1,26 +1,29 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatDateTime } from '../utils/date';
-import { EmptyState } from './Ui';
+import { EmptyState, Toast } from './Ui';
 
 export default function RegistrationsTable({ campaignSlug }) {
   const [query, setQuery] = useState('');
   const [eventId, setEventId] = useState('');
   const [events, setEvents] = useState([]);
+  const [municipalities, setMunicipalities] = useState([]);
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+  const [savingId, setSavingId] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    api.getEvents(campaignSlug)
-      .then((list) => {
-        if (!alive) return;
-        setEvents(Array.isArray(list) ? list : []);
-      })
-      .catch(() => {
-        if (alive) setEvents([]);
-      });
+    Promise.all([
+      api.getEvents(campaignSlug).catch(() => []),
+      api.getMunicipalities().catch(() => []),
+    ]).then(([list, munis]) => {
+      if (!alive) return;
+      setEvents(Array.isArray(list) ? list : []);
+      setMunicipalities(Array.isArray(munis) ? munis : []);
+    });
     return () => { alive = false; };
   }, [campaignSlug]);
 
@@ -36,6 +39,45 @@ export default function RegistrationsTable({ campaignSlug }) {
     return () => { alive = false; };
   }, [campaignSlug, page, query, eventId]);
 
+  async function changeMunicipality(row, nextMuniId) {
+    const value = nextMuniId === '' || nextMuniId == null ? null : Number(nextMuniId);
+    const current = row.municipality_id == null ? null : Number(row.municipality_id);
+    if (value === current) return;
+
+    setSavingId(row.id);
+    try {
+      const updated = await api.updateRegistration(campaignSlug, row.id, {
+        municipality_id: value,
+      });
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((item) => (
+            item.id === row.id
+              ? {
+                  ...item,
+                  municipality_id: updated.municipality_id,
+                  municipality_name: updated.municipality_name || null,
+                  lat: updated.lat,
+                  lng: updated.lng,
+                }
+              : item
+          )),
+        };
+      });
+      setToast(
+        updated.municipality_name
+          ? `Município atualizado: ${updated.municipality_name}`
+          : 'Município removido do cadastro',
+      );
+    } catch (err) {
+      setToast(err.message || 'Não foi possível alterar o município');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
   const selectedEvent = events.find((e) => String(e.id) === String(eventId));
   const eventPeople = data?.event_filter?.attendees ?? selectedEvent?.attendees ?? null;
@@ -47,9 +89,9 @@ export default function RegistrationsTable({ campaignSlug }) {
           <p className="eyebrow">Base</p>
           <h3>Registro de cadastros</h3>
           <p>
-            Filtre por <strong>evento</strong> para ver só quem se cadastrou naquele QR
-            e o total de pessoas. A base está preparada para <strong>100 mil+</strong> contatos
-            (com Postgres no ar).
+            Filtre por <strong>evento</strong> para ver quem veio daquele QR.
+            Se a pessoa entrou pelo QR de uma cidade mas mora em outra, altere o{' '}
+            <strong>município</strong> na coluna ao lado — o mapa acompanha.
           </p>
         </div>
         <div className="filters" style={{ alignItems: 'end' }}>
@@ -124,6 +166,7 @@ export default function RegistrationsTable({ campaignSlug }) {
               <th>Nome</th>
               <th>Telefone</th>
               <th>Data/Hora</th>
+              <th>Município</th>
               <th>Mobilizador</th>
               <th>Organiz./Coord.</th>
               <th>Total do mobilizador</th>
@@ -136,11 +179,23 @@ export default function RegistrationsTable({ campaignSlug }) {
                 <td>{row.full_name}</td>
                 <td>{row.phone}</td>
                 <td>{formatDateTime(row.created_at)}</td>
+                <td style={{ minWidth: 170 }}>
+                  <select
+                    className="select"
+                    style={{ minWidth: 160, fontSize: '0.88rem' }}
+                    value={row.municipality_id != null ? String(row.municipality_id) : ''}
+                    disabled={savingId === row.id}
+                    onChange={(e) => changeMunicipality(row, e.target.value)}
+                    aria-label={`Município de ${row.full_name}`}
+                  >
+                    <option value="">Sem município</option>
+                    {municipalities.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </td>
                 <td>
                   {row.mobilizer_display || row.mobilizer_name || row.leader_name || '—'}
-                  <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                    {row.municipality_name || ''}
-                  </div>
                 </td>
                 <td>{row.organizer_name || '—'}</td>
                 <td>{row.mobilizer_total}</td>
@@ -170,6 +225,8 @@ export default function RegistrationsTable({ campaignSlug }) {
           </button>
         </div>
       </div>
+
+      <Toast message={toast} onClose={() => setToast('')} />
     </section>
   );
 }

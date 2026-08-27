@@ -702,6 +702,46 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
   res.status(201).json(db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid));
 });
 
+/** Corrige município de um cadastro (ex.: veio pelo QR de Cuiabá, mas mora em outra cidade). */
+app.patch('/api/campaigns/:slug/registrations/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const reg = db.prepare(
+    'SELECT * FROM registrations WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!reg) return res.status(404).json({ error: 'Cadastro não encontrado' });
+
+  if (req.body.municipality_id === undefined) {
+    return res.status(400).json({ error: 'Informe o município (municipality_id)' });
+  }
+
+  let municipalityId = req.body.municipality_id ? Number(req.body.municipality_id) : null;
+  let muni = null;
+  if (municipalityId) {
+    muni = db.prepare('SELECT * FROM municipalities WHERE id = ?').get(municipalityId);
+    if (!muni) return res.status(400).json({ error: 'Município inválido' });
+  } else {
+    municipalityId = null;
+  }
+
+  const geo = geoNearMunicipality(muni);
+  db.prepare(`
+    UPDATE registrations
+    SET municipality_id = ?, lat = ?, lng = ?
+    WHERE id = ? AND campaign_id = ?
+  `).run(municipalityId, geo.lat, geo.lng, reg.id, campaign.id);
+
+  const updated = db.prepare(`
+    SELECT r.*, m.name AS municipality_name
+    FROM registrations r
+    LEFT JOIN municipalities m ON m.id = r.municipality_id
+    WHERE r.id = ?
+  `).get(reg.id);
+
+  res.json(updated);
+});
+
 /* ---------- Events + QR ---------- */
 app.get('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);

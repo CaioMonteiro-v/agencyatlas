@@ -77,6 +77,11 @@ export const api = {
   downloadBackup: (slug) => `/api/campaigns/${slug}/backup`,
   createRegistration: (slug, body) =>
     request(`/api/campaigns/${slug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
+  updateRegistration: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/registrations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   getEvents: (slug) => request(`/api/campaigns/${slug}/events`),
   createEvent: (slug, body) => request(`/api/campaigns/${slug}/events`, { method: 'POST', body: JSON.stringify(body) }),
   updateEvent: (slug, id, body) =>
