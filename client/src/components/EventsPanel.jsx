@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import CoordinatorLeadersPanel from './CoordinatorLeadersPanel';
 import { EmptyState, Toast } from './Ui';
 
 const PUBLIC_URL_KEY = 'atlas_public_base_url';
@@ -459,8 +460,13 @@ export default function EventsPanel({ campaignSlug }) {
               </button>
             </div>
             <p style={{ margin: '0.5rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
-              Esse nome vai para a coluna <strong>Mobilizador</strong> na Base — é o norte de quem está trazendo gente.
-              Organiz./Coord. do município fica no painel (não pede mais no QR).
+              {form.organizer_role === 'coordinator'
+                ? 'No QR do coordenador o controle é por lideranças do território — não por total de mobilizadores.'
+                : (
+                  <>
+                    Esse nome vai para a coluna <strong>Mobilizador</strong> na Base — é o norte de quem está trazendo gente.
+                  </>
+                )}
             </p>
           </div>
 
@@ -477,7 +483,7 @@ export default function EventsPanel({ campaignSlug }) {
             </label>
           ) : (
             <label>
-              Coordenador cadastrado (também conta como mobilizador do evento)
+              Coordenador cadastrado
               <select
                 className="select"
                 required
@@ -491,6 +497,15 @@ export default function EventsPanel({ campaignSlug }) {
               </select>
             </label>
           )}
+
+          {form.organizer_role === 'coordinator' && form.coordinator_id ? (
+            <CoordinatorLeadersPanel
+              campaignSlug={campaignSlug}
+              coordinatorName={coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.name}
+              leaders={coordinators.find((c) => String(c.id) === String(form.coordinator_id))?.leaders || []}
+              compact
+            />
+          ) : null}
 
           {form.organizer_role === 'coordinator' && !coordinators.length && (
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#8a5a64' }}>
@@ -536,13 +551,27 @@ export default function EventsPanel({ campaignSlug }) {
                   <strong>Funil:</strong>{' '}
                   {event.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador'}
                 </p>
-                {event.organizer_name && (
+                {event.organizer_role === 'coordinator' ? (
                   <p style={{ marginBottom: 0 }}>
-                    <strong>Mobilizador ({roleLabel(event.organizer_role).toLowerCase()}):</strong>{' '}
-                    {event.organizer_name}
-                    {event.organizer_role === 'coordinator' ? ' · vinculado' : ''}
+                    <strong>Coordenador:</strong> {event.organizer_name || '—'}
                   </p>
+                ) : (
+                  event.organizer_name && (
+                    <p style={{ marginBottom: 0 }}>
+                      <strong>Mobilizador:</strong> {event.organizer_name}
+                    </p>
+                  )
                 )}
+                {event.organizer_role === 'coordinator' && event.coordinator_id ? (
+                  <CoordinatorLeadersPanel
+                    campaignSlug={campaignSlug}
+                    coordinatorName={event.organizer_name}
+                    leaders={
+                      coordinators.find((c) => Number(c.id) === Number(event.coordinator_id))?.leaders || []
+                    }
+                    compact
+                  />
+                ) : null}
                 {(event.channel_link || event.invite_bitly_url) ? (
                   <>
                     {event.channel_link ? (

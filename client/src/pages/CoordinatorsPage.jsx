@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
+import CoordinatorLeadersPanel from '../components/CoordinatorLeadersPanel';
 import { Avatar, EmptyState, Toast } from '../components/Ui';
 
 function HealthPill({ health }) {
@@ -383,8 +384,62 @@ export default function CoordinatorsPage() {
                     <span>Municípios</span>
                   </div>
                   <div>
+                    <strong>{selected.totals.leaders || 0}</strong>
+                    <span>Lideranças</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.people_by_leaders || 0}</strong>
+                    <span>Mobilizadas (lideranças)</span>
+                  </div>
+                  <div>
                     <strong>{selected.totals.registrations}</strong>
-                    <span>Cadastros</span>
+                    <span>Cadastros no território</span>
+                  </div>
+                </div>
+
+                <div className="coord-mini-stats" style={{ marginTop: 0 }}>
+                  <div>
+                    <strong>
+                      {selected.totals.vote_expectation
+                        ? `${selected.totals.vote_progress_pct ?? 0}%`
+                        : '—'}
+                    </strong>
+                    <span>Expectativa voto</span>
+                  </div>
+                  <div>
+                    <strong>
+                      {selected.totals.content_views_expected
+                        ? `${selected.totals.content_progress_pct ?? 0}%`
+                        : '—'}
+                    </strong>
+                    <span>Conteúdo visto</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.ig_comments || 0}</strong>
+                    <span>Comentários IG</span>
+                  </div>
+                  <div>
+                    <strong className={selected.totals.alarms ? 'stat-alarm' : undefined}>
+                      {selected.totals.alarms}
+                    </strong>
+                    <span>Alarmes</span>
+                  </div>
+                </div>
+
+                <CoordinatorLeadersPanel
+                  campaignSlug={campaign.slug}
+                  coordinatorName={selected.name}
+                  leaders={selected.leaders || []}
+                />
+
+                <div className="coord-mini-stats" style={{ marginTop: '0.85rem' }}>
+                  <div>
+                    <strong>{selected.totals.vote_expectation || 0}</strong>
+                    <span>Meta de votos</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.content_views_actual}/{selected.totals.content_views_expected || 0}</strong>
+                    <span>Views conteúdo</span>
                   </div>
                   <div>
                     <strong>
@@ -406,16 +461,12 @@ export default function CoordinatorsPage() {
 
                 <div className="coord-mini-stats" style={{ marginTop: 0 }}>
                   <div>
-                    <strong>{selected.totals.vote_expectation || 0}</strong>
-                    <span>Meta de votos</span>
-                  </div>
-                  <div>
-                    <strong>{selected.totals.content_views_actual}/{selected.totals.content_views_expected || 0}</strong>
-                    <span>Views conteúdo</span>
-                  </div>
-                  <div>
                     <strong>{selected.totals.ig_comments || 0}</strong>
                     <span>Comentários IG</span>
+                  </div>
+                  <div>
+                    <strong>{selected.totals.ig_reach || 0}</strong>
+                    <span>Reach IG</span>
                   </div>
                   <div>
                     <strong className={selected.totals.alarms ? 'stat-alarm' : undefined}>

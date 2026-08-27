@@ -117,6 +117,29 @@ function worstSeverity(alarms, healthStatus) {
   return 'ok';
 }
 
+function listCoordinatorLeaders(db, campaignId, coordinatorId) {
+  return db.prepare(`
+    SELECT
+      l.id,
+      l.name,
+      l.type,
+      l.status,
+      l.phone,
+      l.referral_code,
+      l.municipality_id,
+      m.name AS municipality_name,
+      COALESCE((
+        SELECT COUNT(*) FROM registrations r WHERE r.leader_id = l.id
+      ), 0) AS registrations_count
+    FROM leaders l
+    JOIN coordinator_municipalities cm ON cm.municipality_id = l.municipality_id
+    LEFT JOIN municipalities m ON m.id = l.municipality_id
+    WHERE cm.coordinator_id = ?
+      AND l.campaign_id = ?
+    ORDER BY registrations_count DESC, l.name ASC
+  `).all(coordinatorId, campaignId);
+}
+
 function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
   const munis = db.prepare(`
     SELECT
@@ -195,13 +218,18 @@ function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
     health = { status: 'good', label: 'Tranquilo', detail: 'Municípios recebendo normalmente' };
   }
 
+  const leaders = listCoordinatorLeaders(db, campaign.id, coordinator.id);
+  const peopleByLeaders = leaders.reduce((s, l) => s + Number(l.registrations_count || 0), 0);
+
   return {
     ...coordinator,
     municipalities,
+    leaders,
     totals: {
       municipalities: municipalities.length,
       registrations: totalRegs,
-      leaders: municipalities.reduce((s, m) => s + m.leaders_count, 0),
+      leaders: leaders.length,
+      people_by_leaders: peopleByLeaders,
       critical,
       attention,
       ok,
@@ -348,4 +376,5 @@ module.exports = {
   buildCoordinatorDetail,
   buildCampaignReport,
   getThresholds,
+  listCoordinatorLeaders,
 };
