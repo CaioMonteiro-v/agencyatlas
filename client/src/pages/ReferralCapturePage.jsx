@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
-import LgpdConsentBox from '../components/LgpdConsentBox';
 import { EmptyState, Toast } from '../components/Ui';
 
 export default function ReferralCapturePage() {
@@ -10,7 +9,7 @@ export default function ReferralCapturePage() {
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '', lgpd_consent: false });
+  const [form, setForm] = useState({ full_name: '', phone: '', email: '' });
 
   useEffect(() => {
     api.getCampaignPublic(slug)
@@ -24,17 +23,10 @@ export default function ReferralCapturePage() {
       setToast('Nome e telefone são obrigatórios');
       return;
     }
-    if (!form.lgpd_consent) {
-      setToast('Marque a autorização de proteção de dados (LGPD)');
-      return;
-    }
     try {
       await api.createRegistration(slug, {
-        full_name: form.full_name,
-        phone: form.phone,
-        email: form.email,
+        ...form,
         referral_code: code,
-        lgpd_consent: true,
       });
       setDone(true);
       setToast('Cadastro confirmado');
@@ -72,11 +64,6 @@ export default function ReferralCapturePage() {
             <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
               E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
             </p>
-            <LgpdConsentBox
-              checked={form.lgpd_consent}
-              onChange={(lgpd_consent) => setForm({ ...form, lgpd_consent })}
-              id="leader-lgpd-consent"
-            />
             <button className="btn btn-primary" type="submit">Confirmar cadastro</button>
           </form>
         )}

@@ -672,12 +672,9 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const { full_name, phone, email, referral_code, lgpd_consent } = req.body;
+  const { full_name, phone, email, referral_code } = req.body;
   if (!full_name || !phone) {
     return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
-  }
-  if (!lgpd_consent) {
-    return res.status(400).json({ error: 'É necessário autorizar o uso dos dados (LGPD)' });
   }
 
   let leader = null;
@@ -692,9 +689,9 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, mobilizer_name, funnel, lgpd_consent
+      source, referral_code, lat, lng, mobilizer_name, funnel
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     leader?.id || null,
@@ -708,7 +705,6 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     muni ? muni.lng + (Math.random() - 0.5) * 0.06 : null,
     leader?.name || null,
     leader ? 'coordenador' : null,
-    1,
   );
 
   res.status(201).json(db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid));
@@ -1024,12 +1020,9 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const event = db.prepare('SELECT * FROM events WHERE slug = ?').get(req.params.slug);
   if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
 
-  const { full_name, email, phone, connect_whatsapp, organizer_name, lgpd_consent } = req.body;
+  const { full_name, email, phone, connect_whatsapp, organizer_name } = req.body;
   if (!full_name) return res.status(400).json({ error: 'Nome completo é obrigatório' });
   if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório' });
-  if (!lgpd_consent) {
-    return res.status(400).json({ error: 'É necessário autorizar o uso dos dados (LGPD)' });
-  }
 
   // Mobilizador = quem fechou o evento com a campanha (vem do evento)
   const mobilizer = event.organizer_name ? String(event.organizer_name).trim() : null;
@@ -1042,17 +1035,17 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const geo = geoNearMunicipality(muni);
 
   const result = db.prepare(`
-    INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name, lgpd_consent)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0, organizer, 1);
+    INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(event.id, full_name, email || null, phone || null, connect_whatsapp ? 1 : 0, organizer);
 
   // Também entra no Registro de Cadastros da campanha (origem = evento) + mapa de calor
   const reg = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name, funnel, lgpd_consent
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, funnel
     )
-    VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+    VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
   `).run(
     event.campaign_id,
     muni?.id || null,
@@ -1065,7 +1058,6 @@ app.post('/api/events/:slug/registrations', (req, res) => {
     organizer,
     mobilizer,
     funnel,
-    1,
   );
 
   res.status(201).json({
@@ -1293,12 +1285,9 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
   `).get(campaign.id, String(req.params.code || '').toLowerCase());
   if (!mobilizer) return res.status(404).json({ error: 'Link de mobilizador inválido' });
 
-  const { full_name, phone, email, organizer_name, lgpd_consent } = req.body;
+  const { full_name, phone, email, organizer_name } = req.body;
   if (!full_name || !phone) {
     return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
-  }
-  if (!lgpd_consent) {
-    return res.status(400).json({ error: 'É necessário autorizar o uso dos dados (LGPD)' });
   }
 
   const organizer = organizer_name ? String(organizer_name).trim() : null;
@@ -1306,9 +1295,9 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id, funnel, lgpd_consent
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id, funnel
     )
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?)
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)
   `).run(
     campaign.id,
     full_name,
@@ -1319,7 +1308,6 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
     mobilizer.name,
     mobilizer.id,
     'mobilizador',
-    1,
   );
 
   res.status(201).json({

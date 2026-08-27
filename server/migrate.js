@@ -209,8 +209,6 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
   ensureColumn(db, 'registrations', 'funnel', 'TEXT');
-  ensureColumn(db, 'registrations', 'lgpd_consent', 'INTEGER DEFAULT 0');
-  ensureColumn(db, 'event_registrations', 'lgpd_consent', 'INTEGER DEFAULT 0');
 
   // Índices que dependem de colunas novas (depois do ensureColumn)
   try {
