@@ -221,7 +221,7 @@ function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
     health = { status: 'good', label: 'Tranquilo', detail: 'Municípios recebendo normalmente' };
   }
 
-  const leaders = listCoordinatorLeaders(db, campaign.id, coordinator.id);
+  const leaders = listCoordinatorLeaders(db, campaign.id, coordinator.id, campaign.slug);
   const peopleByLeaders = leaders.reduce((s, l) => s + Number(l.registrations_count || 0), 0);
 
   return {
