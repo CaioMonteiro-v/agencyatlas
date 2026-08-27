@@ -3,8 +3,13 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 /**
- * Controle de lideranças do coordenador:
- * cadastrar liderança, copiar link e ver pessoas mobilizadas.
+ * Hierarquia:
+ * Coordenador
+ *   → Liderança A — total mobilizado
+ *   → Liderança B — total mobilizado
+ *
+ * O coordenador "joga" o link de cada liderança para ela;
+ * quem se cadastra pelo link conta no total daquela liderança.
  */
 export default function CoordinatorLeadersPanel({
   campaignSlug,
@@ -17,6 +22,7 @@ export default function CoordinatorLeadersPanel({
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
   const [form, setForm] = useState({
     name: '',
     type: 'politica',
@@ -24,7 +30,7 @@ export default function CoordinatorLeadersPanel({
     phone: '',
   });
 
-  const totalLeaders = leaders.length;
+  const coordLabel = coordinatorName || 'Coordenador';
   const totalPeople = leaders.reduce((sum, l) => sum + Number(l.registrations_count || 0), 0);
   const muniOptions = municipalities.length
     ? municipalities
@@ -46,7 +52,9 @@ export default function CoordinatorLeadersPanel({
     if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
+      setCopiedId(leader.id);
       setError('');
+      window.setTimeout(() => setCopiedId((id) => (id === leader.id ? null : id)), 2000);
     } catch {
       setError('Não foi possível copiar o link');
     }
@@ -90,18 +98,16 @@ export default function CoordinatorLeadersPanel({
     <div className={`coord-leaders-panel ${compact ? 'coord-leaders-panel--compact' : ''}`}>
       <div className="coord-leaders-panel__head">
         <div>
-          <p className="eyebrow" style={{ marginBottom: 0 }}>Controle de lideranças</p>
-          <strong>
-            {totalLeaders} liderança{totalLeaders === 1 ? '' : 's'}
-            {coordinatorName ? ` · ${coordinatorName}` : ''}
-          </strong>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Cadastre a liderança aqui → copie o link → ela compartilha → o total sobe nesta lista.
+          <p className="eyebrow" style={{ marginBottom: 0 }}>Hierarquia de mobilização</p>
+          <strong>Coordenador {coordLabel}</strong>
+          <p style={{ margin: '0.35rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
+            Cada liderança tem o próprio link. O coordenador joga o link para ela;
+            ela mobiliza; o total aparece embaixo do coordenador.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span className="badge badge--ok">
-            {totalPeople} pessoa{totalPeople === 1 ? '' : 's'} mobilizada{totalPeople === 1 ? '' : 's'}
+            Total mobilizado: {totalPeople}
           </span>
           {!compact ? (
             <button
@@ -124,7 +130,7 @@ export default function CoordinatorLeadersPanel({
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Quem o coordenador está trazendo"
+              placeholder="Ex.: nome da liderança do coordenador"
             />
           </label>
           <label>
@@ -163,73 +169,64 @@ export default function CoordinatorLeadersPanel({
           </label>
           {error ? <p style={{ margin: 0, color: '#8a5a64' }}>{error}</p> : null}
           <button className="btn btn-primary" type="submit" disabled={busy || !muniOptions.length}>
-            {busy ? 'Salvando…' : 'Cadastrar e gerar link'}
+            {busy ? 'Salvando…' : 'Cadastrar liderança e gerar link'}
           </button>
           {!muniOptions.length ? (
             <p style={{ margin: 0, color: '#8a5a64', fontSize: '0.88rem' }}>
-              Este coordenador ainda não tem municípios. Edite o coordenador e vincule as cidades antes.
+              Vincule municípios neste coordenador antes de cadastrar lideranças.
             </p>
           ) : null}
         </form>
       ) : null}
 
       {!leaders.length ? (
-        <p style={{ margin: '0.55rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-          Nenhuma liderança ainda. Clique em <strong>Nova liderança</strong> para o coordenador
-          passar o nome e já gerar o link de mobilização.
+        <p style={{ margin: '0.75rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+          Ainda sem lideranças sob <strong>{coordLabel}</strong>. Cadastre a primeira para
+          gerar o link que o coordenador vai jogar para ela.
         </p>
       ) : (
-        <div className="table-wrap" style={{ marginTop: '0.65rem' }}>
-          <table className="coord-leaders-table">
-            <thead>
-              <tr>
-                <th>Liderança</th>
-                <th>Município</th>
-                <th>Pessoas mobilizadas</th>
-                <th>Link</th>
-                {!compact ? <th></th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {leaders.map((leader) => (
-                <tr key={leader.id}>
-                  <td>
-                    <strong>{leader.name}</strong>
-                    {leader.type ? (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                        {leader.type === 'politica' ? 'Política' : 'Multiplicador'}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td>{leader.municipality_name || '—'}</td>
-                  <td>
-                    <strong>{Number(leader.registrations_count || 0)}</strong>
-                  </td>
-                  <td>
-                    {leader.referral_code || leader.link_path ? (
-                      <button
-                        type="button"
-                        className="btn btn-soft btn-sm"
-                        onClick={() => copyLink(leader)}
-                      >
-                        Copiar link
-                      </button>
-                    ) : '—'}
-                  </td>
-                  {!compact && campaignSlug ? (
-                    <td>
-                      <Link
-                        className="btn btn-soft btn-sm"
-                        to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
-                      >
-                        Ver
-                      </Link>
-                    </td>
+        <div className="coord-hierarchy" style={{ marginTop: '0.85rem' }}>
+          <div className="coord-hierarchy__root">
+            <strong>Coordenador {coordLabel}</strong>
+            <span>Total mobilizado: {totalPeople}</span>
+          </div>
+          <ul className="coord-hierarchy__list">
+            {leaders.map((leader) => (
+              <li key={leader.id} className="coord-hierarchy__item">
+                <div className="coord-hierarchy__main">
+                  <div>
+                    <strong>Liderança: {leader.name}</strong>
+                    <div style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
+                      {leader.municipality_name || 'Sem município'}
+                      {leader.type === 'multiplicador' ? ' · Multiplicador' : ' · Política'}
+                    </div>
+                  </div>
+                  <div className="coord-hierarchy__total">
+                    Total mobilizado: <strong>{Number(leader.registrations_count || 0)}</strong>
+                  </div>
+                </div>
+                <div className="coord-hierarchy__actions">
+                  {(leader.referral_code || leader.link_path) ? (
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-sm"
+                      onClick={() => copyLink(leader)}
+                    >
+                      {copiedId === leader.id ? 'Link copiado' : 'Copiar link para jogar'}
+                    </button>
                   ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  {!compact && campaignSlug ? (
+                    <Link
+                      className="btn btn-soft btn-sm"
+                      to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
+                    >
+                      Ver cadastros
+                    </Link>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
