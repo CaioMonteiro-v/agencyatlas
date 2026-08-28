@@ -955,20 +955,19 @@ app.delete('/api/campaigns/:slug/events/:id', (req, res) => {
     'SELECT COUNT(*) AS c FROM event_registrations WHERE event_id = ?'
   ).get(event.id).c;
   const source = `evento/${event.slug}`;
-  const linkedRegs = db.prepare(
+  const keptRegs = db.prepare(
     'SELECT COUNT(*) AS c FROM registrations WHERE campaign_id = ? AND source = ?'
   ).get(campaign.id, source).c;
 
-  // Remove inscritos do QR, cadastros com origem neste evento, e o evento
+  // Apaga só o evento/QR (link fica inativo). NÃO apaga o histórico em Registro de cadastros.
   db.prepare('DELETE FROM event_registrations WHERE event_id = ?').run(event.id);
-  db.prepare('DELETE FROM registrations WHERE campaign_id = ? AND source = ?').run(campaign.id, source);
   db.prepare('DELETE FROM events WHERE id = ? AND campaign_id = ?').run(event.id, campaign.id);
 
   res.json({
     ok: true,
     deleted_event_id: event.id,
     deleted_attendees: attendees,
-    deleted_registrations: linkedRegs,
+    kept_registrations: keptRegs,
   });
 });
 

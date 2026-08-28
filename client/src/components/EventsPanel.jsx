@@ -221,8 +221,8 @@ export default function EventsPanel({ campaignSlug }) {
   async function removeEvent(event) {
     const count = Number(event.attendees || 0);
     const msg = count > 0
-      ? `Excluir o evento "${event.name}"?\n\nIsso apaga o QR e também os ${count} cadastro(s) deste evento.`
-      : `Excluir o evento "${event.name}"?\n\nO QR deixa de funcionar.`;
+      ? `Excluir o evento "${event.name}"?\n\nO QR e o link ficam inativos.\nOs ${count} cadastro(s) continuam no Registro de cadastros.`
+      : `Excluir o evento "${event.name}"?\n\nO QR e o link ficam inativos.`;
     if (!window.confirm(msg)) return;
     try {
       await api.deleteEvent(campaignSlug, event.id);
@@ -231,7 +231,7 @@ export default function EventsPanel({ campaignSlug }) {
         setAttendees([]);
       }
       if (editingId === event.id) setEditingId(null);
-      setToast('Evento excluído');
+      setToast('Evento excluído — histórico de cadastros mantido');
       await load(publicBase);
     } catch (err) {
       setToast(err.message);
