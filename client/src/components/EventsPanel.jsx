@@ -150,10 +150,6 @@ export default function EventsPanel({ campaignSlug }) {
       setToast('Informe o nome do mobilizador');
       return;
     }
-    if (!form.municipality_id) {
-      setToast('Selecione o município do evento (mapa de calor)');
-      return;
-    }
     try {
       await api.createEvent(campaignSlug, {
         name: form.name,
@@ -167,7 +163,7 @@ export default function EventsPanel({ campaignSlug }) {
         channel_link: form.channel_link.trim() || null,
         channel_name: form.channel_name.trim() || null,
         invite_bitly_url: form.invite_bitly_url.trim() || null,
-        municipality_id: Number(form.municipality_id),
+        municipality_id: form.municipality_id ? Number(form.municipality_id) : null,
       });
       setShowForm(false);
       setForm(emptyForm());
@@ -376,21 +372,23 @@ export default function EventsPanel({ campaignSlug }) {
             <textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </label>
           <label>
-            Município do evento *
+            Município do evento{' '}
+            <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
             <select
               className="select"
-              required
               value={form.municipality_id}
               onChange={(e) => setForm({ ...form, municipality_id: e.target.value })}
             >
-              <option value="">Selecione o município</option>
+              <option value="">Sem município por agora</option>
               {municipalities.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
           </label>
           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Quem se cadastrar neste evento entra no mapa de calor deste município,
+            Pode criar sem município. Depois, em <strong>Registro de cadastros</strong>,
+            você coloca o município de cada pessoa. Se informar aqui, quem se cadastrar
+            neste evento entra no mapa de calor desse município,
             no funil <strong>{form.organizer_role === 'coordinator' ? 'Coordenador' : 'Mobilizador'}</strong>.
           </p>
 

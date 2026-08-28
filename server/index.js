@@ -813,8 +813,6 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   if (resolvedMuniId) {
     const muni = db.prepare('SELECT id FROM municipalities WHERE id = ?').get(resolvedMuniId);
     if (!muni) return res.status(400).json({ error: 'Município inválido' });
-  } else {
-    return res.status(400).json({ error: 'Selecione o município do evento (para o mapa de calor)' });
   }
 
   const slug = `${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${nano().slice(0, 4)}`;
@@ -822,7 +820,9 @@ app.post('/api/campaigns/:slug/events', (req, res) => {
   const channelName = channel_name ? String(channel_name).trim() : null;
   const inviteBitlyUrl = invite_bitly_url ? String(invite_bitly_url).trim() : null;
 
-  const muniRow = db.prepare('SELECT * FROM municipalities WHERE id = ?').get(resolvedMuniId);
+  const muniRow = resolvedMuniId
+    ? db.prepare('SELECT * FROM municipalities WHERE id = ?').get(resolvedMuniId)
+    : null;
   const locationText = location || muniRow?.name || '';
 
   const result = db.prepare(`
