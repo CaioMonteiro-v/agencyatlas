@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import AlreadyRegisteredScreen, {
+  firstName,
+  resolveFabioWhatsApp,
+} from '../components/AlreadyRegisteredScreen';
 import { EmptyState, Toast } from '../components/Ui';
 
-function firstName(full) {
-  return String(full || '').trim().split(/\s+/)[0] || '';
-}
-
 function buildWhatsAppLink(baseUrl, text) {
-  const fallback = (baseUrl || 'https://wa.me/message/PV764OTMN3GEE1').trim();
+  const fallback = resolveFabioWhatsApp(baseUrl);
   try {
     const u = new URL(fallback);
     // Links wa.me/message/... já têm mensagem pronta — não alterar
@@ -31,6 +31,7 @@ export default function MobilizerCapturePage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
     phone: '',
@@ -48,7 +49,7 @@ export default function MobilizerCapturePage() {
       info.campaign.whatsapp_url,
       `Olá, Fábio! Sou ${firstName(form.full_name) || 'de Mato Grosso'} e me cadastrei com ${info.mobilizer.name}. Quero apoiar a campanha a deputado federal.`,
     )
-    : 'https://wa.me/message/PV764OTMN3GEE1';
+    : resolveFabioWhatsApp(null);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -57,11 +58,19 @@ export default function MobilizerCapturePage() {
       return;
     }
     try {
-      await api.registerMobilizer(slug, code, {
+      const res = await api.registerMobilizer(slug, code, {
         full_name: form.full_name,
         phone: form.phone,
         email: form.email.trim() || null,
       });
+      if (res?.already_registered) {
+        if (res.full_name) setForm((prev) => ({ ...prev, full_name: res.full_name }));
+        setAlreadyRegistered(true);
+        setDone(true);
+        setToast('Você já tem cadastro');
+        return;
+      }
+      setAlreadyRegistered(false);
       setDone(true);
       setToast('Cadastro confirmado');
       window.setTimeout(() => {
@@ -89,12 +98,21 @@ export default function MobilizerCapturePage() {
           <>
             <p className="eyebrow">{info.campaign.name}</p>
             <h1 style={{ fontSize: '1.7rem' }}>Cadastro com {info.mobilizer.name}</h1>
-            <p>
-              Confirme seus dados. O crédito deste cadastro fica com <strong>{info.mobilizer.name}</strong>.
-              Em seguida você pode falar com o Fábio no WhatsApp.
-            </p>
+            {!done ? (
+              <p>
+                Confirme seus dados. O crédito deste cadastro fica com <strong>{info.mobilizer.name}</strong>.
+                Em seguida você pode falar com o Fábio no WhatsApp.
+              </p>
+            ) : null}
 
-            {done ? (
+            {done && alreadyRegistered ? (
+              <AlreadyRegisteredScreen
+                fullName={form.full_name}
+                whatsappUrl={info.campaign.whatsapp_url}
+              />
+            ) : null}
+
+            {done && !alreadyRegistered ? (
               <div className="event-done">
                 <h3>Cadastro confirmado</h3>
                 <p>Obrigado, {firstName(form.full_name)}! Agora leve o contato do Fábio.</p>
@@ -102,7 +120,9 @@ export default function MobilizerCapturePage() {
                   Falar com Fábio no WhatsApp
                 </a>
               </div>
-            ) : (
+            ) : null}
+
+            {!done ? (
               <form className="form-grid" onSubmit={onSubmit}>
                 <label>
                   Nome completo *
@@ -143,7 +163,7 @@ export default function MobilizerCapturePage() {
                   Confirmar e falar com o Fábio
                 </button>
               </form>
-            )}
+            ) : null}
           </>
         )}
       </div>

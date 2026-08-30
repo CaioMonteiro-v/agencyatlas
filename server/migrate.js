@@ -209,6 +209,26 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'registrations', 'mobilizer_name', 'TEXT');
   ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
   ensureColumn(db, 'registrations', 'funnel', 'TEXT');
+  ensureColumn(db, 'registrations', 'phone_digits', 'TEXT');
+
+  // Backfill chave de telefone para deduplicar cadastros
+  try {
+    const missing = db.prepare(`
+      SELECT id, phone FROM registrations
+      WHERE phone IS NOT NULL AND phone != ''
+        AND (phone_digits IS NULL OR phone_digits = '')
+    `).all();
+    const upd = db.prepare('UPDATE registrations SET phone_digits = ? WHERE id = ?');
+    for (const row of missing) {
+      const digits = String(row.phone || '').replace(/\D/g, '');
+      const key = digits.length >= 11
+        ? digits.slice(-11)
+        : (digits.length >= 10 ? digits.slice(-10) : digits);
+      if (key) upd.run(key, row.id);
+    }
+  } catch (err) {
+    console.warn('migrate phone_digits backfill:', err.message);
+  }
 
   // Índices que dependem de colunas novas (depois do ensureColumn)
   try {
@@ -217,6 +237,7 @@ function migrateAnalyticsSchema(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_created ON registrations(campaign_id, created_at DESC)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_source ON registrations(campaign_id, source)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_mobname ON registrations(campaign_id, mobilizer_name)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_phone_digits ON registrations(campaign_id, phone_digits)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations(event_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_code ON mobilizers(code)');

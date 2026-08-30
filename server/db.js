@@ -175,6 +175,7 @@ function initSqliteSchema(db) {
       mobilizer_name TEXT,
       mobilizer_id INTEGER,
       funnel TEXT,
+      phone_digits TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
       FOREIGN KEY (leader_id) REFERENCES leaders(id),

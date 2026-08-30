@@ -103,6 +103,69 @@ function funnelFromEventRole(role) {
   return role === 'coordinator' ? 'coordenador' : 'mobilizador';
 }
 
+/** Só dígitos do telefone. */
+function phoneDigits(phone) {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+/**
+ * Chave de comparação BR: últimos 11 dígitos (DDD+celular) ou 10.
+ * Evita contar a mesma pessoa duas vezes com formatos diferentes.
+ */
+function phoneMatchKey(phone) {
+  const d = phoneDigits(phone);
+  if (!d) return '';
+  if (d.length >= 11) return d.slice(-11);
+  if (d.length >= 10) return d.slice(-10);
+  return d;
+}
+
+/** Cadastro existente na campanha pelo mesmo telefone (não conta de novo). */
+function findRegistrationByPhone(campaignId, phone) {
+  const key = phoneMatchKey(phone);
+  if (!key) return null;
+
+  const byDigits = db.prepare(`
+    SELECT * FROM registrations
+    WHERE campaign_id = ? AND phone_digits = ?
+    ORDER BY created_at ASC
+    LIMIT 1
+  `).get(campaignId, key);
+  if (byDigits) return byDigits;
+
+  // Legado sem phone_digits: compara chaves em JS (lote pequeno por campanha)
+  const rows = db.prepare(`
+    SELECT * FROM registrations
+    WHERE campaign_id = ?
+      AND (phone_digits IS NULL OR phone_digits = '')
+      AND phone IS NOT NULL AND phone != ''
+  `).all(campaignId);
+
+  for (const row of rows) {
+    if (phoneMatchKey(row.phone) === key) {
+      try {
+        db.prepare('UPDATE registrations SET phone_digits = ? WHERE id = ?').run(key, row.id);
+      } catch {
+        /* ignore */
+      }
+      return row;
+    }
+  }
+  return null;
+}
+
+function alreadyRegisteredPayload(existing, whatsappUrl = null) {
+  return {
+    ok: true,
+    already_registered: true,
+    registration_id: existing.id,
+    full_name: existing.full_name,
+    phone: existing.phone,
+    whatsapp_url: whatsappUrl || null,
+    message: 'Você já tem cadastro nesta campanha',
+  };
+}
+
 function leaderScoreSql() {
   return `
     SELECT
@@ -723,6 +786,11 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
   }
 
+  const existing = findRegistrationByPhone(campaign.id, phone);
+  if (existing) {
+    return res.json(alreadyRegisteredPayload(existing, campaign.whatsapp_url || null));
+  }
+
   let leader = null;
   if (referral_code) {
     leader = db.prepare('SELECT * FROM leaders WHERE referral_code = ? AND campaign_id = ?').get(referral_code, campaign.id);
@@ -732,12 +800,13 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     ? db.prepare('SELECT * FROM municipalities WHERE id = ?').get(leader.municipality_id)
     : null;
 
+  const digits = phoneMatchKey(phone);
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, mobilizer_name, funnel
+      source, referral_code, lat, lng, mobilizer_name, funnel, phone_digits
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     leader?.id || null,
@@ -751,9 +820,16 @@ app.post('/api/campaigns/:slug/registrations', (req, res) => {
     muni ? muni.lng + (Math.random() - 0.5) * 0.06 : null,
     leader?.name || null,
     leader ? 'coordenador' : null,
+    digits || null,
   );
 
-  res.status(201).json(db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid));
+  const created = db.prepare('SELECT * FROM registrations WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json({
+    ...created,
+    ok: true,
+    already_registered: false,
+    whatsapp_url: campaign.whatsapp_url || null,
+  });
 });
 
 /** Corrige município de um cadastro (ex.: veio pelo QR de Cuiabá, mas mora em outra cidade). */
@@ -1065,9 +1141,15 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const event = db.prepare('SELECT * FROM events WHERE slug = ?').get(req.params.slug);
   if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
 
+  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(event.campaign_id);
   const { full_name, email, phone, connect_whatsapp, organizer_name } = req.body;
   if (!full_name) return res.status(400).json({ error: 'Nome completo é obrigatório' });
   if (!phone) return res.status(400).json({ error: 'Telefone é obrigatório' });
+
+  const existing = findRegistrationByPhone(event.campaign_id, phone);
+  if (existing) {
+    return res.json(alreadyRegisteredPayload(existing, campaign?.whatsapp_url || null));
+  }
 
   // Mobilizador = quem fechou o evento com a campanha (vem do evento)
   const mobilizer = event.organizer_name ? String(event.organizer_name).trim() : null;
@@ -1078,6 +1160,7 @@ app.post('/api/events/:slug/registrations', (req, res) => {
     ? db.prepare('SELECT * FROM municipalities WHERE id = ?').get(event.municipality_id)
     : null;
   const geo = geoNearMunicipality(muni);
+  const digits = phoneMatchKey(phone);
 
   const result = db.prepare(`
     INSERT INTO event_registrations (event_id, full_name, email, phone, connect_whatsapp, organizer_name)
@@ -1088,9 +1171,9 @@ app.post('/api/events/:slug/registrations', (req, res) => {
   const reg = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name, funnel
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, funnel, phone_digits
     )
-    VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+    VALUES (?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
   `).run(
     event.campaign_id,
     muni?.id || null,
@@ -1103,14 +1186,17 @@ app.post('/api/events/:slug/registrations', (req, res) => {
     organizer,
     mobilizer,
     funnel,
+    digits || null,
   );
 
   res.status(201).json({
     id: result.lastInsertRowid,
     registration_id: reg.lastInsertRowid,
     ok: true,
+    already_registered: false,
     organizer_name: organizer,
     mobilizer_name: mobilizer,
+    whatsapp_url: campaign?.whatsapp_url || null,
   });
 });
 
@@ -1335,14 +1421,20 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
     return res.status(400).json({ error: 'Nome e telefone são obrigatórios' });
   }
 
+  const existing = findRegistrationByPhone(campaign.id, phone);
+  if (existing) {
+    return res.json(alreadyRegisteredPayload(existing, campaign.whatsapp_url || null));
+  }
+
   const organizer = organizer_name ? String(organizer_name).trim() : null;
+  const digits = phoneMatchKey(phone);
 
   const result = db.prepare(`
     INSERT INTO registrations (
       campaign_id, leader_id, municipality_id, full_name, phone, email,
-      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id, funnel
+      source, referral_code, lat, lng, organizer_name, mobilizer_name, mobilizer_id, funnel, phone_digits
     )
-    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)
+    VALUES (?, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, ?)
   `).run(
     campaign.id,
     full_name,
@@ -1353,10 +1445,12 @@ app.post('/api/m/:slug/:code/registrations', (req, res) => {
     mobilizer.name,
     mobilizer.id,
     'mobilizador',
+    digits || null,
   );
 
   res.status(201).json({
     ok: true,
+    already_registered: false,
     id: result.lastInsertRowid,
     mobilizer_name: mobilizer.name,
     whatsapp_url: campaign.whatsapp_url,

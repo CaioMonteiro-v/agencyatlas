@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   mobilizer_name TEXT,
   mobilizer_id INTEGER REFERENCES mobilizers(id) ON DELETE SET NULL,
   funnel TEXT,
+  phone_digits TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

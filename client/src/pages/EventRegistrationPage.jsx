@@ -1,31 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import AlreadyRegisteredScreen, {
+  FABIO_WHATSAPP_URL,
+  firstName,
+  normalizeExternalUrl,
+  resolveFabioWhatsApp,
+} from '../components/AlreadyRegisteredScreen';
 import { EmptyState, Toast } from '../components/Ui';
 
-/** WhatsApp oficial da campanha (mensagem pronta / click-to-chat). */
-export const FABIO_WHATSAPP_URL = 'https://wa.me/message/PV764OTMN3GEE1';
-
-function firstName(full) {
-  return String(full || '').trim().split(/\s+/)[0] || '';
-}
-
-function normalizeExternalUrl(url) {
-  const raw = String(url || '').trim();
-  if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
-  return `https://${raw}`;
-}
-
-/**
- * Link do Fábio: usa o wa.me/message oficial.
- * Não acrescenta ?text= em links /message/ (quebra o convite).
- */
-function resolveFabioWhatsApp(campaignUrl) {
-  const fromCampaign = normalizeExternalUrl(campaignUrl);
-  if (/wa\.me\/message\//i.test(fromCampaign)) return fromCampaign;
-  return FABIO_WHATSAPP_URL;
-}
+export { FABIO_WHATSAPP_URL };
 
 /** Conta clique no Bitly sem abrir a página. */
 function trackBitlyClick(url) {
@@ -51,6 +35,7 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [done, setDone] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openedHint, setOpenedHint] = useState(false);
   const [form, setForm] = useState({
@@ -82,10 +67,10 @@ export default function EventRegistrationPage() {
   const bitlyInvite = normalizeExternalUrl(event?.invite_bitly_url);
   const channelInvite = normalizeExternalUrl(event?.channel_link);
 
-  function openFabioWhatsApp() {
+  function openFabioWhatsApp(href = fabioHref) {
     if (bitlyInvite) trackBitlyClick(bitlyInvite);
     setOpenedHint(true);
-    window.open(fabioHref, '_blank', 'noopener,noreferrer');
+    window.open(href || fabioHref, '_blank', 'noopener,noreferrer');
   }
 
   async function onSubmit(e) {
@@ -100,14 +85,22 @@ export default function EventRegistrationPage() {
     }
     setBusy(true);
     try {
-      await api.registerEvent(eventSlug, {
+      const res = await api.registerEvent(eventSlug, {
         full_name: form.full_name,
         email: form.email.trim() || null,
         phone: form.phone,
         connect_whatsapp: true,
       });
-      setDone(true);
-      setToast('Cadastro confirmado');
+      if (res?.already_registered) {
+        if (res.full_name) setForm((prev) => ({ ...prev, full_name: res.full_name }));
+        setAlreadyRegistered(true);
+        setDone(true);
+        setToast('Você já tem cadastro');
+      } else {
+        setAlreadyRegistered(false);
+        setDone(true);
+        setToast('Cadastro confirmado');
+      }
     } catch (err) {
       setToast(err.message);
     } finally {
@@ -186,7 +179,15 @@ export default function EventRegistrationPage() {
           </>
         )}
 
-        {event && done && (
+        {event && done && alreadyRegistered ? (
+          <AlreadyRegisteredScreen
+            fullName={form.full_name}
+            whatsappUrl={event.whatsapp_url}
+            onOpenWhatsApp={openFabioWhatsApp}
+          />
+        ) : null}
+
+        {event && done && !alreadyRegistered && (
           <div className="event-done event-qr-done">
             <p className="eyebrow">Tudo certo</p>
             <h2 className="event-qr-done__hello">
