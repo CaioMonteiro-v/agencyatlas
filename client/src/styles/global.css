@@ -1266,6 +1266,22 @@ th {
   margin-top: 0.55rem;
 }
 
+.coord-hierarchy__qr {
+  margin-top: 0.65rem;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.coord-hierarchy__qr img {
+  width: 148px;
+  height: 148px;
+}
+
+.coord-hierarchy__qr--compact img {
+  width: 112px;
+  height: 112px;
+}
+
 .event-qr-card__title {
   margin: 0.15rem 0 0.35rem;
   font-size: clamp(1.55rem, 5vw, 1.9rem);

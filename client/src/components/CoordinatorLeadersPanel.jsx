@@ -1,12 +1,34 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+
+const PUBLIC_URL_KEY = 'atlas_public_base_url';
+
+function publicOrigin() {
+  try {
+    const saved = localStorage.getItem(PUBLIC_URL_KEY);
+    if (saved) return saved.replace(/\/$/, '');
+  } catch {
+    /* ignore */
+  }
+  return window.location.origin;
+}
+
+function safeFileName(name) {
+  return String(name || 'lideranca')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'lideranca';
+}
 
 /**
  * Hierarquia:
  * Coordenador (regional ou dobra)
- *   → Liderança A — total mobilizado
- *   → Liderança B — total mobilizado
+ *   → Liderança A — total mobilizado + link + QR
+ *   → Liderança B — total mobilizado + link + QR
  *
  * Em dobra, muitas lideranças ficam com município Cuiabá, mas são
  * lideranças daquele coordenador de dobra — não do regional.
@@ -25,6 +47,8 @@ export default function CoordinatorLeadersPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [qrMap, setQrMap] = useState({});
+  const [qrBusyId, setQrBusyId] = useState(null);
   const [form, setForm] = useState({
     name: '',
     type: 'politica',
@@ -43,11 +67,43 @@ export default function CoordinatorLeadersPanel({
         .map((l) => [l.municipality_id, { id: l.municipality_id, name: l.municipality_name || 'Município' }]),
     ).values()];
 
+  useEffect(() => {
+    if (!campaignSlug || !leaders.length) {
+      setQrMap({});
+      return undefined;
+    }
+    let cancelled = false;
+    const origin = publicOrigin();
+
+    (async () => {
+      const entries = await Promise.all(
+        leaders.map(async (leader) => {
+          if (!leader.referral_code && !leader.link_path) return [leader.id, null];
+          try {
+            const qr = await api.getLeaderQr(campaignSlug, leader.id, origin);
+            return [leader.id, qr];
+          } catch {
+            return [leader.id, null];
+          }
+        }),
+      );
+      if (!cancelled) {
+        setQrMap(Object.fromEntries(entries));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignSlug, leaders]);
+
   function leaderLink(leader) {
+    const fromQr = qrMap[leader.id]?.url;
+    if (fromQr) return fromQr;
     const path = leader.link_path
       || (leader.referral_code ? `/r/${campaignSlug}/${leader.referral_code}` : '');
     if (!path) return '';
-    return `${window.location.origin}${path}`;
+    return `${publicOrigin()}${path}`;
   }
 
   async function copyLink(leader) {
@@ -60,6 +116,32 @@ export default function CoordinatorLeadersPanel({
       window.setTimeout(() => setCopiedId((id) => (id === leader.id ? null : id)), 2000);
     } catch {
       setError('Não foi possível copiar o link');
+    }
+  }
+
+  async function downloadQr(leader) {
+    setQrBusyId(leader.id);
+    setError('');
+    try {
+      let qr = qrMap[leader.id];
+      if (!qr?.qrcode) {
+        qr = await api.getLeaderQr(campaignSlug, leader.id, publicOrigin());
+        setQrMap((prev) => ({ ...prev, [leader.id]: qr }));
+      }
+      if (!qr?.qrcode) {
+        setError('Não foi possível gerar o QR Code');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = qr.qrcode;
+      a.download = `qr-lideranca-${safeFileName(leader.name)}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      setError(err.message || 'Falha ao baixar QR Code');
+    } finally {
+      setQrBusyId(null);
     }
   }
 
@@ -119,8 +201,8 @@ export default function CoordinatorLeadersPanel({
           </strong>
           <p style={{ margin: '0.35rem 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
             {isDobra
-              ? 'Lideranças de dobra podem estar em Cuiabá no cadastro, mas pertencem a este coordenador de dobra — não ao regional. Cada uma tem o próprio link para jogar.'
-              : 'Cada liderança tem o próprio link. O coordenador joga o link para ela; ela mobiliza; o total aparece embaixo do coordenador.'}
+              ? 'Cada liderança de dobra tem link e QR próprios. O coordenador joga para ela; o total sobe embaixo dele.'
+              : 'Cada liderança tem link e QR próprios. O coordenador joga para ela; o total sobe embaixo do coordenador.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -202,10 +284,14 @@ export default function CoordinatorLeadersPanel({
         </form>
       ) : null}
 
+      {error && !showForm ? (
+        <p style={{ margin: '0.65rem 0 0', color: '#8a5a64', fontSize: '0.88rem' }}>{error}</p>
+      ) : null}
+
       {!leaders.length ? (
         <p style={{ margin: '0.75rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
           Ainda sem lideranças{isDobra ? ' de dobra' : ''} sob <strong>{coordLabel}</strong>.
-          Cadastre a primeira para gerar o link que o coordenador vai jogar para ela.
+          Cadastre a primeira para gerar o link e o QR que o coordenador vai jogar para ela.
         </p>
       ) : (
         <div className="coord-hierarchy" style={{ marginTop: '0.85rem' }}>
@@ -217,45 +303,68 @@ export default function CoordinatorLeadersPanel({
             <span>Total mobilizado: {totalPeople}</span>
           </div>
           <ul className="coord-hierarchy__list">
-            {leaders.map((leader) => (
-              <li key={leader.id} className="coord-hierarchy__item">
-                <div className="coord-hierarchy__main">
-                  <div>
-                    <strong>
-                      {isDobra || leader.is_dobra ? 'Liderança de dobra: ' : 'Liderança: '}
-                      {leader.name}
-                    </strong>
-                    <div style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
-                      {leader.municipality_name || 'Sem município'}
-                      {isDobra || leader.is_dobra ? ' · Dobra' : ''}
-                      {leader.type === 'multiplicador' ? ' · Multiplicador' : ' · Política'}
+            {leaders.map((leader) => {
+              const qr = qrMap[leader.id];
+              return (
+                <li key={leader.id} className="coord-hierarchy__item">
+                  <div className="coord-hierarchy__main">
+                    <div>
+                      <strong>
+                        {isDobra || leader.is_dobra ? 'Liderança de dobra: ' : 'Liderança: '}
+                        {leader.name}
+                      </strong>
+                      <div style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
+                        {leader.municipality_name || 'Sem município'}
+                        {isDobra || leader.is_dobra ? ' · Dobra' : ''}
+                        {leader.type === 'multiplicador' ? ' · Multiplicador' : ' · Política'}
+                      </div>
+                    </div>
+                    <div className="coord-hierarchy__total">
+                      Total mobilizado: <strong>{Number(leader.registrations_count || 0)}</strong>
                     </div>
                   </div>
-                  <div className="coord-hierarchy__total">
-                    Total mobilizado: <strong>{Number(leader.registrations_count || 0)}</strong>
+                  {(leader.referral_code || leader.link_path) && qr?.qrcode ? (
+                    <div className={`qr-box coord-hierarchy__qr ${compact ? 'coord-hierarchy__qr--compact' : ''}`}>
+                      <img src={qr.qrcode} alt={`QR Code ${leader.name}`} />
+                      {!compact ? (
+                        <code style={{ fontSize: '0.72rem', wordBreak: 'break-all', textAlign: 'center' }}>
+                          {qr.url}
+                        </code>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <div className="coord-hierarchy__actions">
+                    {(leader.referral_code || leader.link_path) ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-soft btn-sm"
+                          onClick={() => copyLink(leader)}
+                        >
+                          {copiedId === leader.id ? 'Link copiado' : 'Copiar link para jogar'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-accent btn-sm"
+                          onClick={() => downloadQr(leader)}
+                          disabled={qrBusyId === leader.id}
+                        >
+                          {qrBusyId === leader.id ? 'Gerando…' : 'Baixar QR'}
+                        </button>
+                      </>
+                    ) : null}
+                    {!compact && campaignSlug ? (
+                      <Link
+                        className="btn btn-soft btn-sm"
+                        to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
+                      >
+                        Ver cadastros
+                      </Link>
+                    ) : null}
                   </div>
-                </div>
-                <div className="coord-hierarchy__actions">
-                  {(leader.referral_code || leader.link_path) ? (
-                    <button
-                      type="button"
-                      className="btn btn-soft btn-sm"
-                      onClick={() => copyLink(leader)}
-                    >
-                      {copiedId === leader.id ? 'Link copiado' : 'Copiar link para jogar'}
-                    </button>
-                  ) : null}
-                  {!compact && campaignSlug ? (
-                    <Link
-                      className="btn btn-soft btn-sm"
-                      to={`/campanha/${campaignSlug}/lideranca/${leader.id}`}
-                    >
-                      Ver cadastros
-                    </Link>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

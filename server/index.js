@@ -454,6 +454,52 @@ app.get('/api/campaigns/:slug/leaders/:id', (req, res) => {
   });
 });
 
+app.get('/api/campaigns/:slug/leaders/:id/qrcode', async (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const leader = db.prepare(`
+    SELECT l.*, m.name AS municipality_name
+    FROM leaders l
+    LEFT JOIN municipalities m ON m.id = l.municipality_id
+    WHERE l.id = ? AND l.campaign_id = ?
+  `).get(req.params.id, campaign.id);
+  if (!leader) return res.status(404).json({ error: 'Liderança não encontrada' });
+  if (!leader.referral_code) {
+    return res.status(400).json({ error: 'Liderança sem código de link' });
+  }
+
+  const envOrigin = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const queryOrigin = (req.query.origin || '').replace(/\/$/, '');
+  const hostOrigin = `${req.protocol}://${req.get('host')}`.replace(':3001', ':5173');
+  const origin = queryOrigin || envOrigin || hostOrigin;
+  const url = `${origin}/r/${campaign.slug}/${leader.referral_code}`;
+
+  try {
+    const size = Math.min(2048, Math.max(320, parseInt(req.query.size || '1024', 10) || 1024));
+    const dataUrl = await QRCode.toDataURL(url, {
+      width: size,
+      margin: 2,
+      color: { dark: '#2C3E3A', light: '#FFFFFF' },
+    });
+    res.json({
+      url,
+      qrcode: dataUrl,
+      leader: {
+        id: leader.id,
+        name: leader.name,
+        referral_code: leader.referral_code,
+        municipality_name: leader.municipality_name || null,
+      },
+      warning: /localhost|127\.0\.0\.1/.test(origin)
+        ? 'URL local: QR não funciona em outro celular. Defina PUBLIC_APP_URL ou a URL pública no painel.'
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Falha ao gerar QR Code', detail: err.message });
+  }
+});
+
 app.post('/api/campaigns/:slug/leaders', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });

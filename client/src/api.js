@@ -65,6 +65,8 @@ export const api = {
   getLeaders: (slug) => request(`/api/campaigns/${slug}/leaders`),
   getLeader: (slug, id) => request(`/api/campaigns/${slug}/leaders/${id}`),
   createLeader: (slug, body) => request(`/api/campaigns/${slug}/leaders`, { method: 'POST', body: JSON.stringify(body) }),
+  getLeaderQr: (slug, id, origin, size = 1024) =>
+    request(`/api/campaigns/${slug}/leaders/${id}/qrcode?origin=${encodeURIComponent(origin)}&size=${size}`),
   getLinks: (slug, origin) => request(`/api/campaigns/${slug}/links?origin=${encodeURIComponent(origin)}`),
   getRegistrations: (slug, { page = 1, q = '', event_id = '' } = {}) => {
     const params = new URLSearchParams({
