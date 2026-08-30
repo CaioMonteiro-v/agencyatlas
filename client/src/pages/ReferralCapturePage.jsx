@@ -43,7 +43,7 @@ export default function ReferralCapturePage() {
         )}
         <p className="eyebrow">Cadastro de presença</p>
         <h1 style={{ fontSize: '1.7rem' }}>{campaign?.name || 'Campanha'}</h1>
-        <p>Preencha seus dados para confirmar. Esta página é só para cadastro — sem acesso ao painel da campanha.</p>
+        <p>Preencha seus dados para confirmar.</p>
 
         {error && <EmptyState>{error}</EmptyState>}
 
