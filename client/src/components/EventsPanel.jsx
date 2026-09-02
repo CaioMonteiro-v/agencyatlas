@@ -2,9 +2,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import CoordinatorLeadersPanel from './CoordinatorLeadersPanel';
+import { formatDate, formatDateTime } from '../utils/date';
 import { EmptyState, Toast } from './Ui';
 
 const PUBLIC_URL_KEY = 'atlas_public_base_url';
+
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function csvEscape(value) {
+  const text = value == null ? '' : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
 
 function defaultPublicBase() {
   const saved = localStorage.getItem(PUBLIC_URL_KEY);
@@ -60,6 +75,10 @@ export default function EventsPanel({ campaignSlug }) {
   const [filterQ, setFilterQ] = useState('');
   const [filterMuni, setFilterMuni] = useState('');
   const [filterOnlyWithPeople, setFilterOnlyWithPeople] = useState(false);
+  const [reportDate, setReportDate] = useState(todayISO);
+  const [reportEventId, setReportEventId] = useState('');
+  const [report, setReport] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
 
   async function load(base = publicBase) {
     try {
@@ -218,6 +237,72 @@ export default function EventsPanel({ campaignSlug }) {
     }
   }
 
+  async function generateDailyReport(e) {
+    if (e) e.preventDefault();
+    if (!reportDate) {
+      setToast('Escolha a data do relatório');
+      return;
+    }
+    setReportBusy(true);
+    try {
+      const res = await api.getEventsDailyReport(campaignSlug, {
+        date: reportDate,
+        event_id: reportEventId || undefined,
+      });
+      setReport(res);
+      setToast(
+        res.total
+          ? `Relatório do dia: ${res.total} cadastro(s)`
+          : 'Nenhum cadastro nesse dia',
+      );
+    } catch (err) {
+      setToast(err.message || 'Falha ao gerar relatório');
+      setReport(null);
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  function downloadDailyReportCsv() {
+    if (!report?.items?.length) {
+      setToast('Gere o relatório antes de baixar');
+      return;
+    }
+    const header = [
+      'Data do cadastro',
+      'Nome',
+      'Telefone',
+      'E-mail',
+      'Evento',
+      'Município do evento',
+      'Organiz./Coord.',
+      'WhatsApp',
+    ];
+    const lines = [header.map(csvEscape).join(',')];
+    for (const row of report.items) {
+      lines.push([
+        formatDateTime(row.created_at),
+        row.full_name,
+        row.phone || '',
+        row.email || '',
+        row.event_name || '',
+        row.municipality_name || '',
+        row.organizer_name || row.event_organizer_name || '',
+        row.connect_whatsapp ? 'Sim' : 'Não',
+      ].map(csvEscape).join(','));
+    }
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-eventos-${report.date}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setToast('Relatório CSV baixado');
+  }
+
   async function removeEvent(event) {
     const count = Number(event.attendees || 0);
     const msg = count > 0
@@ -339,6 +424,132 @@ export default function EventsPanel({ campaignSlug }) {
             Limpar filtro
           </button>
         )}
+      </div>
+
+      <div className="panel panel-pad event-daily-report" style={{ marginTop: '1.1rem', background: 'rgba(44, 62, 58, 0.03)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
+          <div>
+            <p className="eyebrow" style={{ marginBottom: 4 }}>Relatório</p>
+            <h4 style={{ margin: 0 }}>Relatório diário de cadastros</h4>
+            <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', color: 'var(--muted)' }}>
+              Mostra quem se cadastrou nos QRs de evento <strong>no dia escolhido</strong>
+              (pela data em que preencheram o formulário).
+            </p>
+          </div>
+        </div>
+
+        <form
+          className="filters"
+          style={{ marginTop: '0.85rem', alignItems: 'end' }}
+          onSubmit={generateDailyReport}
+        >
+          <label style={{ minWidth: 150 }}>
+            Dia
+            <input
+              className="input"
+              type="date"
+              required
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+            />
+          </label>
+          <label style={{ flex: '1 1 200px', minWidth: 180 }}>
+            Evento (opcional)
+            <select
+              className="select"
+              value={reportEventId}
+              onChange={(e) => setReportEventId(e.target.value)}
+            >
+              <option value="">Todos os eventos</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.name}
+                  {ev.municipality_name ? ` · ${ev.municipality_name}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-primary btn-sm" type="submit" disabled={reportBusy}>
+            {reportBusy ? 'Gerando…' : 'Gerar relatório'}
+          </button>
+          {report?.items?.length ? (
+            <button
+              className="btn btn-accent btn-sm"
+              type="button"
+              onClick={downloadDailyReportCsv}
+            >
+              Baixar CSV
+            </button>
+          ) : null}
+        </form>
+
+        {report ? (
+          <div style={{ marginTop: '0.9rem' }}>
+            <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
+              <span className="badge">
+                Dia {formatDate(report.date)}
+              </span>
+              <span className="badge badge--ok">
+                {report.total} cadastro{report.total === 1 ? '' : 's'}
+              </span>
+              <span className="badge">
+                {report.events_with_signups} evento{report.events_with_signups === 1 ? '' : 's'} com inscrição
+              </span>
+            </div>
+
+            {report.by_event?.length ? (
+              <div className="table-wrap" style={{ marginBottom: '0.75rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Evento</th>
+                      <th>Município</th>
+                      <th>Cadastros no dia</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.by_event.map((row) => (
+                      <tr key={row.event_id}>
+                        <td>{row.event_name}</td>
+                        <td>{row.municipality_name || '—'}</td>
+                        <td><strong>{row.total}</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {report.items?.length ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Quando</th>
+                      <th>Nome</th>
+                      <th>Telefone</th>
+                      <th>Evento</th>
+                      <th>WhatsApp?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.items.map((person) => (
+                      <tr key={person.id}>
+                        <td>{formatDateTime(person.created_at)}</td>
+                        <td>{person.full_name}</td>
+                        <td>{person.phone || '—'}</td>
+                        <td>{person.event_name}</td>
+                        <td>{person.connect_whatsapp ? 'Sim' : 'Não'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState>Nenhum cadastro de evento neste dia.</EmptyState>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <form className="form-grid" style={{ marginTop: '1rem' }} onSubmit={applyPublicBase}>

@@ -85,6 +85,13 @@ export const api = {
       body: JSON.stringify(body),
     }),
   getEvents: (slug) => request(`/api/campaigns/${slug}/events`),
+  getEventsDailyReport: (slug, { date, event_id } = {}) => {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (event_id) params.set('event_id', String(event_id));
+    const q = params.toString();
+    return request(`/api/campaigns/${slug}/events/daily-report${q ? `?${q}` : ''}`);
+  },
   createEvent: (slug, body) => request(`/api/campaigns/${slug}/events`, { method: 'POST', body: JSON.stringify(body) }),
   updateEvent: (slug, id, body) =>
     request(`/api/campaigns/${slug}/events/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

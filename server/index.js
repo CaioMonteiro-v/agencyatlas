@@ -890,6 +890,87 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
   res.json(events);
 });
 
+/** Relatório diário: quem se cadastrou nos QRs de evento naquele dia. */
+app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const rawDate = String(req.query.date || '').trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+    ? rawDate
+    : new Date().toISOString().slice(0, 10);
+
+  const eventId = req.query.event_id ? Number(req.query.event_id) : null;
+  if (eventId) {
+    const event = db.prepare(
+      'SELECT id FROM events WHERE id = ? AND campaign_id = ?'
+    ).get(eventId, campaign.id);
+    if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
+  }
+
+  const isPg = db.dialect === 'postgres';
+  const dayClause = isPg
+    ? `(er.created_at AT TIME ZONE 'America/Cuiaba')::date = ?::date`
+    : `substr(CAST(er.created_at AS TEXT), 1, 10) = ?`;
+
+  let sql = `
+    SELECT
+      er.id,
+      er.full_name,
+      er.email,
+      er.phone,
+      er.organizer_name,
+      er.connect_whatsapp,
+      er.created_at,
+      e.id AS event_id,
+      e.name AS event_name,
+      e.slug AS event_slug,
+      e.event_date,
+      e.organizer_name AS event_organizer_name,
+      e.organizer_role,
+      m.name AS municipality_name
+    FROM event_registrations er
+    JOIN events e ON e.id = er.event_id
+    LEFT JOIN municipalities m ON m.id = e.municipality_id
+    WHERE e.campaign_id = ?
+      AND ${dayClause}
+  `;
+  const params = [campaign.id, date];
+  if (eventId) {
+    sql += ' AND e.id = ?';
+    params.push(eventId);
+  }
+  sql += ' ORDER BY er.created_at ASC, er.id ASC';
+
+  const items = db.prepare(sql).all(...params);
+
+  const byEventMap = new Map();
+  for (const row of items) {
+    const key = row.event_id;
+    if (!byEventMap.has(key)) {
+      byEventMap.set(key, {
+        event_id: row.event_id,
+        event_name: row.event_name,
+        event_slug: row.event_slug,
+        event_date: row.event_date,
+        municipality_name: row.municipality_name || null,
+        organizer_name: row.event_organizer_name || null,
+        organizer_role: row.organizer_role || null,
+        total: 0,
+      });
+    }
+    byEventMap.get(key).total += 1;
+  }
+
+  res.json({
+    date,
+    total: items.length,
+    events_with_signups: byEventMap.size,
+    by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || a.event_name.localeCompare(b.event_name)),
+    items,
+  });
+});
+
 app.post('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
