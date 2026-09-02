@@ -75,6 +75,7 @@ export default function EventsPanel({ campaignSlug }) {
   const [filterQ, setFilterQ] = useState('');
   const [filterMuni, setFilterMuni] = useState('');
   const [filterOnlyWithPeople, setFilterOnlyWithPeople] = useState(false);
+  const [reportMode, setReportMode] = useState('day'); // day | range
   const [reportDateFrom, setReportDateFrom] = useState(todayISO);
   const [reportDateTo, setReportDateTo] = useState(todayISO);
   const [reportEventId, setReportEventId] = useState('');
@@ -240,12 +241,15 @@ export default function EventsPanel({ campaignSlug }) {
 
   async function generateDailyReport(e) {
     if (e) e.preventDefault();
-    if (!reportDateFrom || !reportDateTo) {
-      setToast('Escolha a data inicial e a final');
+    const dayOnly = reportMode === 'day';
+    const rawFrom = dayOnly ? reportDateFrom : reportDateFrom;
+    const rawTo = dayOnly ? reportDateFrom : reportDateTo;
+    if (!rawFrom || (!dayOnly && !rawTo)) {
+      setToast(dayOnly ? 'Escolha o dia do relatório' : 'Escolha a data inicial e a final');
       return;
     }
-    const from = reportDateFrom <= reportDateTo ? reportDateFrom : reportDateTo;
-    const to = reportDateFrom <= reportDateTo ? reportDateTo : reportDateFrom;
+    const from = rawFrom <= rawTo ? rawFrom : rawTo;
+    const to = rawFrom <= rawTo ? rawTo : rawFrom;
     setReportBusy(true);
     try {
       const res = await api.getEventsDailyReport(campaignSlug, {
@@ -254,11 +258,12 @@ export default function EventsPanel({ campaignSlug }) {
         event_id: reportEventId || undefined,
       });
       setReport(res);
-      setToast(
-        res.total
-          ? `Relatório: ${res.total} cadastro(s) no período`
-          : 'Nenhum cadastro nesse período',
-      );
+      const label = from === to
+        ? `Relatório do dia ${formatDate(from)} (00:00–23:59): ${res.total} cadastro(s)`
+        : `Relatório ${formatDate(from)} → ${formatDate(to)} (00:00–23:59): ${res.total} cadastro(s)`;
+      setToast(res.total ? label : (from === to
+        ? 'Nenhum cadastro nesse dia (00:00–23:59)'
+        : 'Nenhum cadastro nesse período'));
     } catch (err) {
       setToast(err.message || 'Falha ao gerar relatório');
       setReport(null);
@@ -438,12 +443,44 @@ export default function EventsPanel({ campaignSlug }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
           <div>
             <p className="eyebrow" style={{ marginBottom: 4 }}>Relatório</p>
-            <h4 style={{ margin: 0 }}>Relatório de cadastros por período</h4>
+            <h4 style={{ margin: 0 }}>Relatório de cadastros</h4>
             <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', color: 'var(--muted)' }}>
-              Escolha de <strong>qual dia até qual dia</strong>. Lista quem se cadastrou nos QRs
-              de evento nesse intervalo (pela data em que preencheram o formulário).
+              Cada dia conta de <strong>00:00 às 23:59</strong> (horário de Cuiabá).
+              Use <strong>Um dia</strong> ou um <strong>período</strong> (de/até).
             </p>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+          <button
+            type="button"
+            className={`chip ${reportMode === 'day' ? 'active' : ''}`}
+            onClick={() => {
+              setReportMode('day');
+              setReportDateTo(reportDateFrom);
+            }}
+          >
+            Um dia (00:00–23:59)
+          </button>
+          <button
+            type="button"
+            className={`chip ${reportMode === 'range' ? 'active' : ''}`}
+            onClick={() => setReportMode('range')}
+          >
+            Período (de/até)
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={() => {
+              const today = todayISO();
+              setReportDateFrom(today);
+              setReportDateTo(today);
+              setReportMode('day');
+            }}
+          >
+            Hoje
+          </button>
         </div>
 
         <form
@@ -451,26 +488,44 @@ export default function EventsPanel({ campaignSlug }) {
           style={{ marginTop: '0.85rem', alignItems: 'end' }}
           onSubmit={generateDailyReport}
         >
-          <label style={{ minWidth: 150 }}>
-            De
-            <input
-              className="input"
-              type="date"
-              required
-              value={reportDateFrom}
-              onChange={(e) => setReportDateFrom(e.target.value)}
-            />
-          </label>
-          <label style={{ minWidth: 150 }}>
-            Até
-            <input
-              className="input"
-              type="date"
-              required
-              value={reportDateTo}
-              onChange={(e) => setReportDateTo(e.target.value)}
-            />
-          </label>
+          {reportMode === 'day' ? (
+            <label style={{ minWidth: 160 }}>
+              Dia
+              <input
+                className="input"
+                type="date"
+                required
+                value={reportDateFrom}
+                onChange={(e) => {
+                  setReportDateFrom(e.target.value);
+                  setReportDateTo(e.target.value);
+                }}
+              />
+            </label>
+          ) : (
+            <>
+              <label style={{ minWidth: 150 }}>
+                De (00:00)
+                <input
+                  className="input"
+                  type="date"
+                  required
+                  value={reportDateFrom}
+                  onChange={(e) => setReportDateFrom(e.target.value)}
+                />
+              </label>
+              <label style={{ minWidth: 150 }}>
+                Até (23:59)
+                <input
+                  className="input"
+                  type="date"
+                  required
+                  value={reportDateTo}
+                  onChange={(e) => setReportDateTo(e.target.value)}
+                />
+              </label>
+            </>
+          )}
           <label style={{ flex: '1 1 200px', minWidth: 180 }}>
             Evento (opcional)
             <select
@@ -509,6 +564,9 @@ export default function EventsPanel({ campaignSlug }) {
                   ? `Dia ${formatDate(report.date_from || report.date)}`
                   : `${formatDate(report.date_from)} até ${formatDate(report.date_to)}`}
               </span>
+              <span className="badge">
+                {report.day_start || '00:00'}–{report.day_end || '23:59'} · Cuiabá
+              </span>
               <span className="badge badge--ok">
                 {report.total} cadastro{report.total === 1 ? '' : 's'}
               </span>
@@ -545,7 +603,7 @@ export default function EventsPanel({ campaignSlug }) {
                     <tr>
                       <th>Evento</th>
                       <th>Município</th>
-                      <th>Cadastros no período</th>
+                      <th>Cadastros</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -587,7 +645,10 @@ export default function EventsPanel({ campaignSlug }) {
                 </table>
               </div>
             ) : (
-              <EmptyState>Nenhum cadastro de evento neste período.</EmptyState>
+              <EmptyState>
+                Nenhum cadastro neste {report.date_from === report.date_to ? 'dia' : 'período'}
+                {' '}(00:00–23:59, Cuiabá).
+              </EmptyState>
             )}
           </div>
         ) : null}

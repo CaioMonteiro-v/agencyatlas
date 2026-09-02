@@ -890,7 +890,7 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
   res.json(events);
 });
 
-/** Dia civil em América/Cuiabá (YYYY-MM-DD), evita virar o dia seguinte em UTC. */
+/** Dia civil em América/Cuiabá (YYYY-MM-DD). */
 function toCuiabaDay(value) {
   if (value == null || value === '') return '';
   if (value instanceof Date) {
@@ -920,13 +920,35 @@ function toCuiabaDay(value) {
   }).format(parsed);
 }
 
-function addCalendarDays(isoDate, delta) {
-  const d = new Date(`${isoDate}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
+/**
+ * Mato Grosso (America/Cuiaba) = UTC-4 o ano inteiro.
+ * Dia cheio: 00:00:00.000 → 23:59:59.999 nesse fuso.
+ */
+function cuiabaDayStart(isoDate) {
+  return new Date(`${isoDate}T00:00:00.000-04:00`);
 }
 
-/** Relatório por período: quem se cadastrou nos QRs de evento entre as datas. */
+function cuiabaDayEnd(isoDate) {
+  return new Date(`${isoDate}T23:59:59.999-04:00`);
+}
+
+function createdAtMs(value) {
+  if (value == null || value === '') return NaN;
+  if (value instanceof Date) return value.getTime();
+  const raw = String(value).trim();
+  if (!raw) return NaN;
+  // SQLite local sem Z: interpreta como horário de Cuiabá
+  if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const withSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)
+      ? `${normalized}:00`
+      : normalized;
+    return new Date(`${withSeconds}-04:00`).getTime();
+  }
+  return new Date(raw).getTime();
+}
+
+/** Relatório por dia/período: cada dia = 00:00 às 23:59 em Cuiabá. */
 app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
@@ -934,7 +956,6 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const today = toCuiabaDay(new Date()) || new Date().toISOString().slice(0, 10);
   const isValidDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
 
-  // Aceita date_from/date_to, ou date (um dia só) por compatibilidade
   let dateFrom = String(req.query.date_from || req.query.from || '').trim();
   let dateTo = String(req.query.date_to || req.query.to || '').trim();
   const single = String(req.query.date || '').trim();
@@ -959,51 +980,83 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
   }
 
+  const rangeStart = cuiabaDayStart(dateFrom);
+  const rangeEnd = cuiabaDayEnd(dateTo);
   const isPg = db.dialect === 'postgres';
-  // Janela folgada no SQL (+/- 1 dia) e corte final no fuso de Cuiabá,
-  // para não puxar o dia 01 quando o usuário pediu só o dia 31.
-  const padFrom = addCalendarDays(dateFrom, -1);
-  const padTo = addCalendarDays(dateTo, 1);
-  const dayExpr = isPg
-    ? `(er.created_at AT TIME ZONE 'America/Cuiaba')::date`
-    : `substr(CAST(er.created_at AS TEXT), 1, 10)`;
-  const rangeClause = isPg
-    ? `${dayExpr} >= ?::date AND ${dayExpr} <= ?::date`
-    : `${dayExpr} >= ? AND ${dayExpr} <= ?`;
 
-  let sql = `
-    SELECT
-      er.id,
-      er.full_name,
-      er.email,
-      er.phone,
-      er.organizer_name,
-      er.connect_whatsapp,
-      er.created_at,
-      ${isPg ? `${dayExpr} AS signup_day,` : ''}
-      e.id AS event_id,
-      e.name AS event_name,
-      e.slug AS event_slug,
-      e.event_date,
-      e.organizer_name AS event_organizer_name,
-      e.organizer_role,
-      m.name AS municipality_name
-    FROM event_registrations er
-    JOIN events e ON e.id = er.event_id
-    LEFT JOIN municipalities m ON m.id = e.municipality_id
-    WHERE e.campaign_id = ?
-      AND ${rangeClause}
-  `;
-  const params = [campaign.id, padFrom, padTo];
+  let sql;
+  let params;
+  if (isPg) {
+    sql = `
+      SELECT
+        er.id,
+        er.full_name,
+        er.email,
+        er.phone,
+        er.organizer_name,
+        er.connect_whatsapp,
+        er.created_at,
+        (er.created_at AT TIME ZONE 'America/Cuiaba')::date AS signup_day,
+        e.id AS event_id,
+        e.name AS event_name,
+        e.slug AS event_slug,
+        e.event_date,
+        e.organizer_name AS event_organizer_name,
+        e.organizer_role,
+        m.name AS municipality_name
+      FROM event_registrations er
+      JOIN events e ON e.id = er.event_id
+      LEFT JOIN municipalities m ON m.id = e.municipality_id
+      WHERE e.campaign_id = ?
+        AND er.created_at >= ?::timestamptz
+        AND er.created_at <= ?::timestamptz
+    `;
+    params = [campaign.id, rangeStart.toISOString(), rangeEnd.toISOString()];
+  } else {
+    // SQLite: busca folgada e corta em JS pelo intervalo 00:00–23:59 de Cuiabá
+    sql = `
+      SELECT
+        er.id,
+        er.full_name,
+        er.email,
+        er.phone,
+        er.organizer_name,
+        er.connect_whatsapp,
+        er.created_at,
+        e.id AS event_id,
+        e.name AS event_name,
+        e.slug AS event_slug,
+        e.event_date,
+        e.organizer_name AS event_organizer_name,
+        e.organizer_role,
+        m.name AS municipality_name
+      FROM event_registrations er
+      JOIN events e ON e.id = er.event_id
+      LEFT JOIN municipalities m ON m.id = e.municipality_id
+      WHERE e.campaign_id = ?
+        AND substr(CAST(er.created_at AS TEXT), 1, 10) >= ?
+        AND substr(CAST(er.created_at AS TEXT), 1, 10) <= ?
+    `;
+    params = [
+      campaign.id,
+      addCalendarDays(dateFrom, -1),
+      addCalendarDays(dateTo, 1),
+    ];
+  }
+
   if (eventId) {
     sql += ' AND e.id = ?';
     params.push(eventId);
   }
   sql += ' ORDER BY er.created_at ASC, er.id ASC';
 
+  const startMs = rangeStart.getTime();
+  const endMs = rangeEnd.getTime();
   const rawItems = db.prepare(sql).all(...params);
   const items = [];
   for (const row of rawItems) {
+    const ms = createdAtMs(row.created_at);
+    if (!Number.isFinite(ms) || ms < startMs || ms > endMs) continue;
     const signupDay = row.signup_day
       ? String(row.signup_day).slice(0, 10)
       : toCuiabaDay(row.created_at);
@@ -1038,7 +1091,11 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     date: dateFrom === dateTo ? dateFrom : null,
     date_from: dateFrom,
     date_to: dateTo,
+    day_start: '00:00',
+    day_end: '23:59',
     timezone: 'America/Cuiaba',
+    range_start: rangeStart.toISOString(),
+    range_end: rangeEnd.toISOString(),
     total: items.length,
     events_with_signups: byEventMap.size,
     by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || a.event_name.localeCompare(b.event_name)),
@@ -1048,6 +1105,12 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     items,
   });
 });
+
+function addCalendarDays(isoDate, delta) {
+  const d = new Date(`${isoDate}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
 
 app.post('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
