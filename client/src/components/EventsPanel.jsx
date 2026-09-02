@@ -75,7 +75,8 @@ export default function EventsPanel({ campaignSlug }) {
   const [filterQ, setFilterQ] = useState('');
   const [filterMuni, setFilterMuni] = useState('');
   const [filterOnlyWithPeople, setFilterOnlyWithPeople] = useState(false);
-  const [reportDate, setReportDate] = useState(todayISO);
+  const [reportDateFrom, setReportDateFrom] = useState(todayISO);
+  const [reportDateTo, setReportDateTo] = useState(todayISO);
   const [reportEventId, setReportEventId] = useState('');
   const [report, setReport] = useState(null);
   const [reportBusy, setReportBusy] = useState(false);
@@ -239,21 +240,24 @@ export default function EventsPanel({ campaignSlug }) {
 
   async function generateDailyReport(e) {
     if (e) e.preventDefault();
-    if (!reportDate) {
-      setToast('Escolha a data do relatório');
+    if (!reportDateFrom || !reportDateTo) {
+      setToast('Escolha a data inicial e a final');
       return;
     }
+    const from = reportDateFrom <= reportDateTo ? reportDateFrom : reportDateTo;
+    const to = reportDateFrom <= reportDateTo ? reportDateTo : reportDateFrom;
     setReportBusy(true);
     try {
       const res = await api.getEventsDailyReport(campaignSlug, {
-        date: reportDate,
+        date_from: from,
+        date_to: to,
         event_id: reportEventId || undefined,
       });
       setReport(res);
       setToast(
         res.total
-          ? `Relatório do dia: ${res.total} cadastro(s)`
-          : 'Nenhum cadastro nesse dia',
+          ? `Relatório: ${res.total} cadastro(s) no período`
+          : 'Nenhum cadastro nesse período',
       );
     } catch (err) {
       setToast(err.message || 'Falha ao gerar relatório');
@@ -295,7 +299,11 @@ export default function EventsPanel({ campaignSlug }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `relatorio-eventos-${report.date}.csv`;
+    const from = report.date_from || report.date || 'inicio';
+    const to = report.date_to || report.date || 'fim';
+    a.download = from === to
+      ? `relatorio-eventos-${from}.csv`
+      : `relatorio-eventos-${from}_a_${to}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -430,10 +438,10 @@ export default function EventsPanel({ campaignSlug }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
           <div>
             <p className="eyebrow" style={{ marginBottom: 4 }}>Relatório</p>
-            <h4 style={{ margin: 0 }}>Relatório diário de cadastros</h4>
+            <h4 style={{ margin: 0 }}>Relatório de cadastros por período</h4>
             <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', color: 'var(--muted)' }}>
-              Mostra quem se cadastrou nos QRs de evento <strong>no dia escolhido</strong>
-              (pela data em que preencheram o formulário).
+              Escolha de <strong>qual dia até qual dia</strong>. Lista quem se cadastrou nos QRs
+              de evento nesse intervalo (pela data em que preencheram o formulário).
             </p>
           </div>
         </div>
@@ -444,13 +452,23 @@ export default function EventsPanel({ campaignSlug }) {
           onSubmit={generateDailyReport}
         >
           <label style={{ minWidth: 150 }}>
-            Dia
+            De
             <input
               className="input"
               type="date"
               required
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
+              value={reportDateFrom}
+              onChange={(e) => setReportDateFrom(e.target.value)}
+            />
+          </label>
+          <label style={{ minWidth: 150 }}>
+            Até
+            <input
+              className="input"
+              type="date"
+              required
+              value={reportDateTo}
+              onChange={(e) => setReportDateTo(e.target.value)}
             />
           </label>
           <label style={{ flex: '1 1 200px', minWidth: 180 }}>
@@ -487,7 +505,9 @@ export default function EventsPanel({ campaignSlug }) {
           <div style={{ marginTop: '0.9rem' }}>
             <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
               <span className="badge">
-                Dia {formatDate(report.date)}
+                {report.date_from === report.date_to
+                  ? `Dia ${formatDate(report.date_from || report.date)}`
+                  : `${formatDate(report.date_from)} até ${formatDate(report.date_to)}`}
               </span>
               <span className="badge badge--ok">
                 {report.total} cadastro{report.total === 1 ? '' : 's'}
@@ -497,6 +517,27 @@ export default function EventsPanel({ campaignSlug }) {
               </span>
             </div>
 
+            {report.by_day?.length > 1 ? (
+              <div className="table-wrap" style={{ marginBottom: '0.75rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Dia</th>
+                      <th>Cadastros</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.by_day.map((row) => (
+                      <tr key={row.day}>
+                        <td>{formatDate(row.day)}</td>
+                        <td><strong>{row.total}</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
             {report.by_event?.length ? (
               <div className="table-wrap" style={{ marginBottom: '0.75rem' }}>
                 <table>
@@ -504,7 +545,7 @@ export default function EventsPanel({ campaignSlug }) {
                     <tr>
                       <th>Evento</th>
                       <th>Município</th>
-                      <th>Cadastros no dia</th>
+                      <th>Cadastros no período</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -546,7 +587,7 @@ export default function EventsPanel({ campaignSlug }) {
                 </table>
               </div>
             ) : (
-              <EmptyState>Nenhum cadastro de evento neste dia.</EmptyState>
+              <EmptyState>Nenhum cadastro de evento neste período.</EmptyState>
             )}
           </div>
         ) : null}

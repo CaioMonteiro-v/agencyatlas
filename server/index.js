@@ -890,15 +890,30 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
   res.json(events);
 });
 
-/** Relatório diário: quem se cadastrou nos QRs de evento naquele dia. */
+/** Relatório por período: quem se cadastrou nos QRs de evento entre as datas. */
 app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const rawDate = String(req.query.date || '').trim();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-    ? rawDate
-    : new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const isValidDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+
+  // Aceita date_from/date_to, ou date (um dia só) por compatibilidade
+  let dateFrom = String(req.query.date_from || req.query.from || '').trim();
+  let dateTo = String(req.query.date_to || req.query.to || '').trim();
+  const single = String(req.query.date || '').trim();
+
+  if (!isValidDay(dateFrom) && !isValidDay(dateTo) && isValidDay(single)) {
+    dateFrom = single;
+    dateTo = single;
+  }
+  if (!isValidDay(dateFrom)) dateFrom = today;
+  if (!isValidDay(dateTo)) dateTo = dateFrom;
+  if (dateFrom > dateTo) {
+    const tmp = dateFrom;
+    dateFrom = dateTo;
+    dateTo = tmp;
+  }
 
   const eventId = req.query.event_id ? Number(req.query.event_id) : null;
   if (eventId) {
@@ -909,9 +924,12 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   }
 
   const isPg = db.dialect === 'postgres';
-  const dayClause = isPg
-    ? `(er.created_at AT TIME ZONE 'America/Cuiaba')::date = ?::date`
-    : `substr(CAST(er.created_at AS TEXT), 1, 10) = ?`;
+  const dayExpr = isPg
+    ? `(er.created_at AT TIME ZONE 'America/Cuiaba')::date`
+    : `substr(CAST(er.created_at AS TEXT), 1, 10)`;
+  const rangeClause = isPg
+    ? `${dayExpr} >= ?::date AND ${dayExpr} <= ?::date`
+    : `${dayExpr} >= ? AND ${dayExpr} <= ?`;
 
   let sql = `
     SELECT
@@ -933,9 +951,9 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     JOIN events e ON e.id = er.event_id
     LEFT JOIN municipalities m ON m.id = e.municipality_id
     WHERE e.campaign_id = ?
-      AND ${dayClause}
+      AND ${rangeClause}
   `;
-  const params = [campaign.id, date];
+  const params = [campaign.id, dateFrom, dateTo];
   if (eventId) {
     sql += ' AND e.id = ?';
     params.push(eventId);
@@ -945,6 +963,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const items = db.prepare(sql).all(...params);
 
   const byEventMap = new Map();
+  const byDayMap = new Map();
   for (const row of items) {
     const key = row.event_id;
     if (!byEventMap.has(key)) {
@@ -960,13 +979,22 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
       });
     }
     byEventMap.get(key).total += 1;
+
+    const created = String(row.created_at || '');
+    const dayKey = created.length >= 10 ? created.slice(0, 10) : created;
+    byDayMap.set(dayKey, (byDayMap.get(dayKey) || 0) + 1);
   }
 
   res.json({
-    date,
+    date: dateFrom === dateTo ? dateFrom : null,
+    date_from: dateFrom,
+    date_to: dateTo,
     total: items.length,
     events_with_signups: byEventMap.size,
     by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || a.event_name.localeCompare(b.event_name)),
+    by_day: [...byDayMap.entries()]
+      .map(([day, total]) => ({ day, total }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
     items,
   });
 });
