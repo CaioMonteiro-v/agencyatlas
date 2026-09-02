@@ -890,12 +890,48 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
   res.json(events);
 });
 
+/** Dia civil em América/Cuiabá (YYYY-MM-DD), evita virar o dia seguinte em UTC. */
+function toCuiabaDay(value) {
+  if (value == null || value === '') return '';
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Cuiaba',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(value);
+  }
+  const raw = String(value).trim();
+  if (!raw) return '';
+  // Timestamp local SQLite sem fuso: 'YYYY-MM-DD HH:MM:SS'
+  if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+    return raw.slice(0, 10);
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  }
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Cuiaba',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(parsed);
+}
+
+function addCalendarDays(isoDate, delta) {
+  const d = new Date(`${isoDate}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Relatório por período: quem se cadastrou nos QRs de evento entre as datas. */
 app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toCuiabaDay(new Date()) || new Date().toISOString().slice(0, 10);
   const isValidDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
 
   // Aceita date_from/date_to, ou date (um dia só) por compatibilidade
@@ -924,6 +960,10 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   }
 
   const isPg = db.dialect === 'postgres';
+  // Janela folgada no SQL (+/- 1 dia) e corte final no fuso de Cuiabá,
+  // para não puxar o dia 01 quando o usuário pediu só o dia 31.
+  const padFrom = addCalendarDays(dateFrom, -1);
+  const padTo = addCalendarDays(dateTo, 1);
   const dayExpr = isPg
     ? `(er.created_at AT TIME ZONE 'America/Cuiaba')::date`
     : `substr(CAST(er.created_at AS TEXT), 1, 10)`;
@@ -940,6 +980,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
       er.organizer_name,
       er.connect_whatsapp,
       er.created_at,
+      ${isPg ? `${dayExpr} AS signup_day,` : ''}
       e.id AS event_id,
       e.name AS event_name,
       e.slug AS event_slug,
@@ -953,14 +994,25 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     WHERE e.campaign_id = ?
       AND ${rangeClause}
   `;
-  const params = [campaign.id, dateFrom, dateTo];
+  const params = [campaign.id, padFrom, padTo];
   if (eventId) {
     sql += ' AND e.id = ?';
     params.push(eventId);
   }
   sql += ' ORDER BY er.created_at ASC, er.id ASC';
 
-  const items = db.prepare(sql).all(...params);
+  const rawItems = db.prepare(sql).all(...params);
+  const items = [];
+  for (const row of rawItems) {
+    const signupDay = row.signup_day
+      ? String(row.signup_day).slice(0, 10)
+      : toCuiabaDay(row.created_at);
+    if (!signupDay || signupDay < dateFrom || signupDay > dateTo) continue;
+    items.push({
+      ...row,
+      signup_day: signupDay,
+    });
+  }
 
   const byEventMap = new Map();
   const byDayMap = new Map();
@@ -979,16 +1031,14 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
       });
     }
     byEventMap.get(key).total += 1;
-
-    const created = String(row.created_at || '');
-    const dayKey = created.length >= 10 ? created.slice(0, 10) : created;
-    byDayMap.set(dayKey, (byDayMap.get(dayKey) || 0) + 1);
+    byDayMap.set(row.signup_day, (byDayMap.get(row.signup_day) || 0) + 1);
   }
 
   res.json({
     date: dateFrom === dateTo ? dateFrom : null,
     date_from: dateFrom,
     date_to: dateTo,
+    timezone: 'America/Cuiaba',
     total: items.length,
     events_with_signups: byEventMap.size,
     by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || a.event_name.localeCompare(b.event_name)),
