@@ -94,6 +94,15 @@ export const api = {
     const q = params.toString();
     return request(`/api/campaigns/${slug}/events/daily-report${q ? `?${q}` : ''}`);
   },
+  getPerformanceDaily: (slug, { date, date_from, date_to, event_id } = {}) => {
+    const params = new URLSearchParams();
+    if (date_from) params.set('date_from', date_from);
+    if (date_to) params.set('date_to', date_to);
+    if (date && !date_from && !date_to) params.set('date', date);
+    if (event_id) params.set('event_id', String(event_id));
+    const q = params.toString();
+    return request(`/api/campaigns/${slug}/performance-daily${q ? `?${q}` : ''}`);
+  },
   createEvent: (slug, body) => request(`/api/campaigns/${slug}/events`, { method: 'POST', body: JSON.stringify(body) }),
   updateEvent: (slug, id, body) =>
     request(`/api/campaigns/${slug}/events/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

@@ -926,6 +926,34 @@ function addCalendarDays(isoDate, delta) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Interpreta ?date= ou ?date_from=&date_to= no fuso Cuiabá. */
+function parseCuiabaDayRange(query) {
+  const today = toCuiabaDay(new Date()) || new Date().toISOString().slice(0, 10);
+  const isValidDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+  let dateFrom = String(query.date_from || query.from || '').trim();
+  let dateTo = String(query.date_to || query.to || '').trim();
+  const single = String(query.date || '').trim();
+  if (!isValidDay(dateFrom) && !isValidDay(dateTo) && isValidDay(single)) {
+    dateFrom = single;
+    dateTo = single;
+  }
+  if (!isValidDay(dateFrom)) dateFrom = today;
+  if (!isValidDay(dateTo)) dateTo = dateFrom;
+  if (dateFrom > dateTo) {
+    const tmp = dateFrom;
+    dateFrom = dateTo;
+    dateTo = tmp;
+  }
+  return { dateFrom, dateTo, today };
+}
+
+function rankByCount(map, extra = () => ({})) {
+  return [...map.entries()]
+    .map(([key, row]) => ({ ...extra(key, row), ...row }))
+    .sort((a, b) => b.total - a.total || String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
+    .map((row, i) => ({ ...row, position: i + 1 }));
+}
+
 /**
  * Relatório diário/período dos cadastros de evento.
  * Usa a tabela registrations (mesma da Base / Registro de cadastros),
@@ -939,24 +967,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
 
-  const today = toCuiabaDay(new Date()) || new Date().toISOString().slice(0, 10);
-  const isValidDay = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
-
-  let dateFrom = String(req.query.date_from || req.query.from || '').trim();
-  let dateTo = String(req.query.date_to || req.query.to || '').trim();
-  const single = String(req.query.date || '').trim();
-
-  if (!isValidDay(dateFrom) && !isValidDay(dateTo) && isValidDay(single)) {
-    dateFrom = single;
-    dateTo = single;
-  }
-  if (!isValidDay(dateFrom)) dateFrom = today;
-  if (!isValidDay(dateTo)) dateTo = dateFrom;
-  if (dateFrom > dateTo) {
-    const tmp = dateFrom;
-    dateFrom = dateTo;
-    dateTo = tmp;
-  }
+  const { dateFrom, dateTo } = parseCuiabaDayRange(req.query);
 
   let eventFilter = null;
   const eventId = req.query.event_id ? Number(req.query.event_id) : null;
@@ -1069,6 +1080,8 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
 
   const byEventMap = new Map();
   const byDayMap = new Map();
+  const byOrganizerMap = new Map();
+  const byMobilizerMap = new Map();
   for (const row of items) {
     const key = row.event_id || row.source || row.event_name;
     if (!byEventMap.has(key)) {
@@ -1085,6 +1098,17 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     }
     byEventMap.get(key).total += 1;
     byDayMap.set(row.signup_day, (byDayMap.get(row.signup_day) || 0) + 1);
+
+    const orgName = row.organizer_name ? String(row.organizer_name).trim() : '';
+    if (orgName) {
+      if (!byOrganizerMap.has(orgName)) byOrganizerMap.set(orgName, { name: orgName, total: 0 });
+      byOrganizerMap.get(orgName).total += 1;
+    }
+    const mobName = row.mobilizer_name ? String(row.mobilizer_name).trim() : '';
+    if (mobName) {
+      if (!byMobilizerMap.has(mobName)) byMobilizerMap.set(mobName, { name: mobName, total: 0 });
+      byMobilizerMap.get(mobName).total += 1;
+    }
   }
 
   res.json({
@@ -1097,10 +1121,149 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     total: items.length,
     events_with_signups: byEventMap.size,
     by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || String(a.event_name).localeCompare(String(b.event_name))),
+    by_organizer: rankByCount(byOrganizerMap),
+    by_mobilizer: rankByCount(byMobilizerMap),
     by_day: [...byDayMap.entries()]
       .map(([day, total]) => ({ day, total }))
       .sort((a, b) => a.day.localeCompare(b.day)),
     items,
+  });
+});
+
+/**
+ * Relatório de desempenho diário (prêmio):
+ * ranking de quem mais cadastrou no dia/período (00:00–23:59 Cuiabá).
+ * Critérios: Organiz./Coord., Mobilizador e Liderança — mesma Base do Registro.
+ */
+app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const { dateFrom, dateTo } = parseCuiabaDayRange(req.query);
+  const isPg = db.dialect === 'postgres';
+  const padFrom = addCalendarDays(dateFrom, -1);
+  const padToExclusive = addCalendarDays(dateTo, 2);
+
+  let eventFilter = null;
+  const eventId = req.query.event_id ? Number(req.query.event_id) : null;
+  if (eventId) {
+    eventFilter = db.prepare(
+      'SELECT id, name, slug FROM events WHERE id = ? AND campaign_id = ?'
+    ).get(eventId, campaign.id);
+    if (!eventFilter) return res.status(404).json({ error: 'Evento não encontrado' });
+  }
+
+  let sql;
+  const params = [campaign.id];
+  if (isPg) {
+    sql = `
+      SELECT
+        r.id,
+        r.created_at,
+        r.source,
+        r.organizer_name,
+        r.mobilizer_name,
+        r.leader_id,
+        l.name AS leader_name,
+        l.type AS leader_type,
+        m.name AS municipality_name,
+        mob.name AS mobilizer_table_name
+      FROM registrations r
+      LEFT JOIN leaders l ON l.id = r.leader_id
+      LEFT JOIN municipalities m ON m.id = COALESCE(l.municipality_id, r.municipality_id)
+      LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
+      WHERE r.campaign_id = ?
+        AND r.created_at >= (?::timestamp AT TIME ZONE 'America/Cuiaba')
+        AND r.created_at < (?::timestamp AT TIME ZONE 'America/Cuiaba')
+    `;
+    params.push(`${padFrom} 00:00:00`, `${padToExclusive} 00:00:00`);
+  } else {
+    sql = `
+      SELECT
+        r.id,
+        r.created_at,
+        r.source,
+        r.organizer_name,
+        r.mobilizer_name,
+        r.leader_id,
+        l.name AS leader_name,
+        l.type AS leader_type,
+        m.name AS municipality_name,
+        mob.name AS mobilizer_table_name
+      FROM registrations r
+      LEFT JOIN leaders l ON l.id = r.leader_id
+      LEFT JOIN municipalities m ON m.id = COALESCE(l.municipality_id, r.municipality_id)
+      LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
+      WHERE r.campaign_id = ?
+        AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
+        AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
+    `;
+    params.push(padFrom, addCalendarDays(dateTo, 1));
+  }
+
+  if (eventFilter) {
+    sql += ' AND r.source = ?';
+    params.push(`evento/${eventFilter.slug}`);
+  }
+
+  const raw = db.prepare(sql).all(...params);
+  const byOrganizer = new Map();
+  const byMobilizer = new Map();
+  const byLeader = new Map();
+  const byDay = new Map();
+  let total = 0;
+
+  for (const row of raw) {
+    const day = toCuiabaDay(row.created_at);
+    if (!day || day < dateFrom || day > dateTo) continue;
+    total += 1;
+    byDay.set(day, (byDay.get(day) || 0) + 1);
+
+    const org = row.organizer_name ? String(row.organizer_name).trim() : '';
+    if (org) {
+      if (!byOrganizer.has(org)) byOrganizer.set(org, { name: org, total: 0 });
+      byOrganizer.get(org).total += 1;
+    }
+
+    const mob = (row.mobilizer_name || row.mobilizer_table_name || row.leader_name || '')
+      .toString()
+      .trim();
+    if (mob) {
+      if (!byMobilizer.has(mob)) byMobilizer.set(mob, { name: mob, total: 0 });
+      byMobilizer.get(mob).total += 1;
+    }
+
+    if (row.leader_id != null) {
+      const lid = String(row.leader_id);
+      if (!byLeader.has(lid)) {
+        byLeader.set(lid, {
+          leader_id: row.leader_id,
+          name: row.leader_name || `Liderança #${row.leader_id}`,
+          type: row.leader_type || null,
+          municipality_name: row.municipality_name || null,
+          total: 0,
+        });
+      }
+      byLeader.get(lid).total += 1;
+    }
+  }
+
+  res.json({
+    date: dateFrom === dateTo ? dateFrom : null,
+    date_from: dateFrom,
+    date_to: dateTo,
+    day_start: '00:00',
+    day_end: '23:59',
+    timezone: 'America/Cuiaba',
+    event_id: eventFilter?.id || null,
+    event_name: eventFilter?.name || null,
+    total,
+    by_organizer: rankByCount(byOrganizer),
+    by_mobilizer: rankByCount(byMobilizer),
+    by_leader: rankByCount(byLeader),
+    by_day: [...byDay.entries()]
+      .map(([day, count]) => ({ day, total: count }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
   });
 });
 

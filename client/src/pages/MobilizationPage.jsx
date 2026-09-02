@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import HeatMapMT from '../components/HeatMapMT';
 import RankingPanel from '../components/RankingPanel';
+import PerformanceDailyPanel from '../components/PerformanceDailyPanel';
 import LinksPanel from '../components/LinksPanel';
 import RegistrationsTable from '../components/RegistrationsTable';
 import EventsPanel from '../components/EventsPanel';
@@ -91,6 +92,8 @@ export default function MobilizationPage() {
           <RankingPanel campaignSlug={campaign.slug} />
           <LinksPanel campaignSlug={campaign.slug} />
         </div>
+
+        <PerformanceDailyPanel campaignSlug={campaign.slug} />
 
         <RegistrationsTable campaignSlug={campaign.slug} />
         <MobilizersPanel campaignSlug={campaign.slug} />
