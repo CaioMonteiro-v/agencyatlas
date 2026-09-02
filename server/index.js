@@ -890,7 +890,7 @@ app.get('/api/campaigns/:slug/events', (req, res) => {
   res.json(events);
 });
 
-/** Dia civil em América/Cuiabá (YYYY-MM-DD). */
+/** Dia civil em América/Cuiabá (YYYY-MM-DD) a partir do timestamp real. */
 function toCuiabaDay(value) {
   if (value == null || value === '') return '';
   if (value instanceof Date) {
@@ -930,6 +930,10 @@ function addCalendarDays(isoDate, delta) {
  * Relatório diário/período dos cadastros de evento.
  * Usa a tabela registrations (mesma da Base / Registro de cadastros),
  * origem source = evento/..., dia civil 00:00–23:59 em Cuiabá.
+ *
+ * IMPORTANTE: o dia é sempre calculado em JS com toCuiabaDay(created_at).
+ * Nunca use String(pgDate).slice(0,10) — DATE do Postgres vira Date no node-pg
+ * e vira "Mon Aug 31", zerando o relatório.
  */
 app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
@@ -964,13 +968,14 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   }
 
   const isPg = db.dialect === 'postgres';
-  // Janela folgada no SQL; corte final pelo dia civil em Cuiabá (evita zerar por fuso).
+  // Janela folgada no SQL; corte final pelo dia civil em Cuiabá (mesmo critério do Registro).
   const padFrom = addCalendarDays(dateFrom, -1);
-  const padTo = addCalendarDays(dateTo, 1);
+  const padToExclusive = addCalendarDays(dateTo, 2);
 
   let sql;
   const params = [campaign.id];
   if (isPg) {
+    // Timestamptz: compara instante, não DATE (DATE vira Date no JS e quebra o filtro).
     sql = `
       SELECT
         r.id,
@@ -981,7 +986,6 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
         r.mobilizer_name,
         r.created_at,
         r.source,
-        (r.created_at AT TIME ZONE 'America/Cuiaba')::date AS signup_day,
         e.id AS event_id,
         COALESCE(e.name, REPLACE(r.source, 'evento/', '')) AS event_name,
         e.slug AS event_slug,
@@ -996,10 +1000,10 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
       LEFT JOIN municipalities m ON m.id = COALESCE(r.municipality_id, e.municipality_id)
       WHERE r.campaign_id = ?
         AND r.source LIKE 'evento/%'
-        AND (r.created_at AT TIME ZONE 'America/Cuiaba')::date >= ?::date
-        AND (r.created_at AT TIME ZONE 'America/Cuiaba')::date <= ?::date
+        AND r.created_at >= (?::timestamp AT TIME ZONE 'America/Cuiaba')
+        AND r.created_at < (?::timestamp AT TIME ZONE 'America/Cuiaba')
     `;
-    params.push(padFrom, padTo);
+    params.push(`${padFrom} 00:00:00`, `${padToExclusive} 00:00:00`);
   } else {
     sql = `
       SELECT
@@ -1028,7 +1032,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
         AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
         AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
     `;
-    params.push(padFrom, padTo);
+    params.push(padFrom, addCalendarDays(dateTo, 1));
   }
 
   if (eventFilter) {
@@ -1040,9 +1044,8 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const rawItems = db.prepare(sql).all(...params);
   const items = [];
   for (const row of rawItems) {
-    const signupDay = row.signup_day
-      ? String(row.signup_day).slice(0, 10)
-      : toCuiabaDay(row.created_at);
+    // Sempre a partir de created_at — igual ao horário que aparece no Registro.
+    const signupDay = toCuiabaDay(row.created_at);
     if (!signupDay || signupDay < dateFrom || signupDay > dateTo) continue;
     items.push({
       id: row.id,

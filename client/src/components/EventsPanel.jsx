@@ -7,12 +7,14 @@ import { EmptyState, Toast } from './Ui';
 
 const PUBLIC_URL_KEY = 'atlas_public_base_url';
 
+/** Dia civil de hoje em Cuiabá (YYYY-MM-DD), alinhado ao relatório. */
 function todayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Cuiaba',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function csvEscape(value) {
@@ -445,8 +447,8 @@ export default function EventsPanel({ campaignSlug }) {
             <p className="eyebrow" style={{ marginBottom: 4 }}>Relatório</p>
             <h4 style={{ margin: 0 }}>Relatório de cadastros</h4>
             <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', color: 'var(--muted)' }}>
-              Conta os cadastros da <strong>Base</strong> com origem em QR de evento.
-              Cada dia: <strong>00:00 às 23:59</strong> (Cuiabá). Use <strong>Um dia</strong> ou <strong>período</strong>.
+              Conta na <strong>Base</strong> (mesmo horário do Registro de cadastros) quem entrou por QR/link de evento.
+              Dia civil: <strong>00:00–23:59</strong> em Cuiabá. Escolha <strong>Um dia</strong>, <strong>período</strong> ou <strong>Hoje</strong>.
             </p>
           </div>
         </div>
@@ -558,6 +560,12 @@ export default function EventsPanel({ campaignSlug }) {
 
         {report ? (
           <div style={{ marginTop: '0.9rem' }}>
+            <p style={{ margin: '0 0 0.65rem', fontSize: '1.35rem', fontWeight: 700, color: 'var(--ink)' }}>
+              {report.total} pessoa{report.total === 1 ? '' : 's'} cadastrada{report.total === 1 ? '' : 's'}
+              {report.date_from === report.date_to
+                ? ` em ${formatDate(report.date_from || report.date)}`
+                : ` de ${formatDate(report.date_from)} a ${formatDate(report.date_to)}`}
+            </p>
             <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
               <span className="badge">
                 {report.date_from === report.date_to
