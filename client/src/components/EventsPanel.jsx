@@ -445,8 +445,8 @@ export default function EventsPanel({ campaignSlug }) {
             <p className="eyebrow" style={{ marginBottom: 4 }}>Relatório</p>
             <h4 style={{ margin: 0 }}>Relatório de cadastros</h4>
             <p style={{ margin: '0.35rem 0 0', fontSize: '0.9rem', color: 'var(--muted)' }}>
-              Cada dia conta de <strong>00:00 às 23:59</strong> (horário de Cuiabá).
-              Use <strong>Um dia</strong> ou um <strong>período</strong> (de/até).
+              Conta os cadastros da <strong>Base</strong> com origem em QR de evento.
+              Cada dia: <strong>00:00 às 23:59</strong> (Cuiabá). Use <strong>Um dia</strong> ou <strong>período</strong>.
             </p>
           </div>
         </div>
