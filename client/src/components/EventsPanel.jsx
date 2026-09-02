@@ -604,21 +604,21 @@ export default function EventsPanel({ campaignSlug }) {
               </div>
             ) : null}
 
-            {report.by_organizer?.length ? (
+            {report.by_mobilizer?.length ? (
               <div className="table-wrap" style={{ marginBottom: '0.75rem' }}>
                 <h4 style={{ margin: '0 0 0.4rem', fontSize: '1rem' }}>
-                  Desempenho do dia — Organiz./Coord. (prêmio)
+                  Desempenho do dia — mobilizadores (prêmio)
                 </h4>
                 <table>
                   <thead>
                     <tr>
                       <th>Pos.</th>
-                      <th>Organiz./Coord.</th>
+                      <th>Mobilizador</th>
                       <th>Cadastros</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {report.by_organizer.map((row) => (
+                    {report.by_mobilizer.map((row) => (
                       <tr key={`${row.position}-${row.name}`}>
                         <td><strong>{row.position <= 3 ? `${row.position}º ★` : `${row.position}º`}</strong></td>
                         <td>{row.name}</td>

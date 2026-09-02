@@ -1130,10 +1130,9 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   });
 });
 
-/**
  * Relatório de desempenho diário (prêmio):
- * ranking de quem mais cadastrou no dia/período (00:00–23:59 Cuiabá).
- * Critérios: Organiz./Coord., Mobilizador e Liderança — mesma Base do Registro.
+ * ranking de mobilizadores no dia/período (00:00–23:59 Cuiabá).
+ * Critério: coluna Mobilizador da Base (mesmo do Registro).
  */
 app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
@@ -1225,7 +1224,7 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
       byOrganizer.get(org).total += 1;
     }
 
-    const mob = (row.mobilizer_name || row.mobilizer_table_name || row.leader_name || '')
+    const mob = (row.mobilizer_name || row.mobilizer_table_name || '')
       .toString()
       .trim();
     if (mob) {
