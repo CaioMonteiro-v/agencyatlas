@@ -46,8 +46,8 @@ export default function MobilizationPage() {
         <p className="eyebrow">Mobilização Digital</p>
         <h2>{campaign.candidate} — Mobilização Digital</h2>
         <p>
-          Mapa de calor de Mato Grosso, ranking ao vivo, links rastreáveis, cadastros,
-          eventos com QR Code e missões com impacto no ranking.
+          Mapa de calor de Mato Grosso, ranking ao vivo, desempenho diário (prêmio),
+          links rastreáveis, cadastros, eventos com QR Code e missões.
         </p>
         <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap', marginTop: '0.45rem' }}>
           <a
