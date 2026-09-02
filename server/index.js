@@ -905,7 +905,7 @@ function toCuiabaDay(value) {
   const raw = String(value).trim();
   if (!raw) return '';
   // Timestamp local SQLite sem fuso: 'YYYY-MM-DD HH:MM:SS'
-  if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+  if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
     return raw.slice(0, 10);
   }
   const parsed = new Date(raw);
@@ -920,35 +920,17 @@ function toCuiabaDay(value) {
   }).format(parsed);
 }
 
+function addCalendarDays(isoDate, delta) {
+  const d = new Date(`${isoDate}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
- * Mato Grosso (America/Cuiaba) = UTC-4 o ano inteiro.
- * Dia cheio: 00:00:00.000 → 23:59:59.999 nesse fuso.
+ * Relatório diário/período dos cadastros de evento.
+ * Usa a tabela registrations (mesma da Base / Registro de cadastros),
+ * origem source = evento/..., dia civil 00:00–23:59 em Cuiabá.
  */
-function cuiabaDayStart(isoDate) {
-  return new Date(`${isoDate}T00:00:00.000-04:00`);
-}
-
-function cuiabaDayEnd(isoDate) {
-  return new Date(`${isoDate}T23:59:59.999-04:00`);
-}
-
-function createdAtMs(value) {
-  if (value == null || value === '') return NaN;
-  if (value instanceof Date) return value.getTime();
-  const raw = String(value).trim();
-  if (!raw) return NaN;
-  // SQLite local sem Z: interpreta como horário de Cuiabá
-  if (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
-    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
-    const withSeconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)
-      ? `${normalized}:00`
-      : normalized;
-    return new Date(`${withSeconds}-04:00`).getTime();
-  }
-  return new Date(raw).getTime();
-}
-
-/** Relatório por dia/período: cada dia = 00:00 às 23:59 em Cuiabá. */
 app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
@@ -972,105 +954,120 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     dateTo = tmp;
   }
 
+  let eventFilter = null;
   const eventId = req.query.event_id ? Number(req.query.event_id) : null;
   if (eventId) {
-    const event = db.prepare(
-      'SELECT id FROM events WHERE id = ? AND campaign_id = ?'
+    eventFilter = db.prepare(
+      'SELECT id, name, slug FROM events WHERE id = ? AND campaign_id = ?'
     ).get(eventId, campaign.id);
-    if (!event) return res.status(404).json({ error: 'Evento não encontrado' });
+    if (!eventFilter) return res.status(404).json({ error: 'Evento não encontrado' });
   }
 
-  const rangeStart = cuiabaDayStart(dateFrom);
-  const rangeEnd = cuiabaDayEnd(dateTo);
   const isPg = db.dialect === 'postgres';
+  // Janela folgada no SQL; corte final pelo dia civil em Cuiabá (evita zerar por fuso).
+  const padFrom = addCalendarDays(dateFrom, -1);
+  const padTo = addCalendarDays(dateTo, 1);
 
   let sql;
-  let params;
+  const params = [campaign.id];
   if (isPg) {
     sql = `
       SELECT
-        er.id,
-        er.full_name,
-        er.email,
-        er.phone,
-        er.organizer_name,
-        er.connect_whatsapp,
-        er.created_at,
-        (er.created_at AT TIME ZONE 'America/Cuiaba')::date AS signup_day,
+        r.id,
+        r.full_name,
+        r.email,
+        r.phone,
+        r.organizer_name,
+        r.mobilizer_name,
+        r.created_at,
+        r.source,
+        (r.created_at AT TIME ZONE 'America/Cuiaba')::date AS signup_day,
         e.id AS event_id,
-        e.name AS event_name,
+        COALESCE(e.name, REPLACE(r.source, 'evento/', '')) AS event_name,
         e.slug AS event_slug,
         e.event_date,
         e.organizer_name AS event_organizer_name,
         e.organizer_role,
         m.name AS municipality_name
-      FROM event_registrations er
-      JOIN events e ON e.id = er.event_id
-      LEFT JOIN municipalities m ON m.id = e.municipality_id
-      WHERE e.campaign_id = ?
-        AND er.created_at >= ?::timestamptz
-        AND er.created_at <= ?::timestamptz
+      FROM registrations r
+      LEFT JOIN events e
+        ON e.campaign_id = r.campaign_id
+        AND r.source = ('evento/' || e.slug)
+      LEFT JOIN municipalities m ON m.id = COALESCE(r.municipality_id, e.municipality_id)
+      WHERE r.campaign_id = ?
+        AND r.source LIKE 'evento/%'
+        AND (r.created_at AT TIME ZONE 'America/Cuiaba')::date >= ?::date
+        AND (r.created_at AT TIME ZONE 'America/Cuiaba')::date <= ?::date
     `;
-    params = [campaign.id, rangeStart.toISOString(), rangeEnd.toISOString()];
+    params.push(padFrom, padTo);
   } else {
-    // SQLite: busca folgada e corta em JS pelo intervalo 00:00–23:59 de Cuiabá
     sql = `
       SELECT
-        er.id,
-        er.full_name,
-        er.email,
-        er.phone,
-        er.organizer_name,
-        er.connect_whatsapp,
-        er.created_at,
+        r.id,
+        r.full_name,
+        r.email,
+        r.phone,
+        r.organizer_name,
+        r.mobilizer_name,
+        r.created_at,
+        r.source,
         e.id AS event_id,
-        e.name AS event_name,
+        COALESCE(e.name, REPLACE(r.source, 'evento/', '')) AS event_name,
         e.slug AS event_slug,
         e.event_date,
         e.organizer_name AS event_organizer_name,
         e.organizer_role,
         m.name AS municipality_name
-      FROM event_registrations er
-      JOIN events e ON e.id = er.event_id
-      LEFT JOIN municipalities m ON m.id = e.municipality_id
-      WHERE e.campaign_id = ?
-        AND substr(CAST(er.created_at AS TEXT), 1, 10) >= ?
-        AND substr(CAST(er.created_at AS TEXT), 1, 10) <= ?
+      FROM registrations r
+      LEFT JOIN events e
+        ON e.campaign_id = r.campaign_id
+        AND r.source = ('evento/' || e.slug)
+      LEFT JOIN municipalities m ON m.id = COALESCE(r.municipality_id, e.municipality_id)
+      WHERE r.campaign_id = ?
+        AND r.source LIKE 'evento/%'
+        AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
+        AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
     `;
-    params = [
-      campaign.id,
-      addCalendarDays(dateFrom, -1),
-      addCalendarDays(dateTo, 1),
-    ];
+    params.push(padFrom, padTo);
   }
 
-  if (eventId) {
-    sql += ' AND e.id = ?';
-    params.push(eventId);
+  if (eventFilter) {
+    sql += ' AND (e.id = ? OR r.source = ?)';
+    params.push(eventFilter.id, `evento/${eventFilter.slug}`);
   }
-  sql += ' ORDER BY er.created_at ASC, er.id ASC';
+  sql += ' ORDER BY r.created_at ASC, r.id ASC';
 
-  const startMs = rangeStart.getTime();
-  const endMs = rangeEnd.getTime();
   const rawItems = db.prepare(sql).all(...params);
   const items = [];
   for (const row of rawItems) {
-    const ms = createdAtMs(row.created_at);
-    if (!Number.isFinite(ms) || ms < startMs || ms > endMs) continue;
     const signupDay = row.signup_day
       ? String(row.signup_day).slice(0, 10)
       : toCuiabaDay(row.created_at);
     if (!signupDay || signupDay < dateFrom || signupDay > dateTo) continue;
     items.push({
-      ...row,
+      id: row.id,
+      full_name: row.full_name,
+      email: row.email,
+      phone: row.phone,
+      organizer_name: row.organizer_name || row.event_organizer_name || null,
+      connect_whatsapp: 1,
+      created_at: row.created_at,
+      source: row.source,
       signup_day: signupDay,
+      event_id: row.event_id || null,
+      event_name: row.event_name || 'Evento',
+      event_slug: row.event_slug || null,
+      event_date: row.event_date || null,
+      event_organizer_name: row.event_organizer_name || null,
+      organizer_role: row.organizer_role || null,
+      municipality_name: row.municipality_name || null,
     });
   }
 
   const byEventMap = new Map();
   const byDayMap = new Map();
   for (const row of items) {
-    const key = row.event_id;
+    const key = row.event_id || row.source || row.event_name;
     if (!byEventMap.has(key)) {
       byEventMap.set(key, {
         event_id: row.event_id,
@@ -1078,7 +1075,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
         event_slug: row.event_slug,
         event_date: row.event_date,
         municipality_name: row.municipality_name || null,
-        organizer_name: row.event_organizer_name || null,
+        organizer_name: row.event_organizer_name || row.organizer_name || null,
         organizer_role: row.organizer_role || null,
         total: 0,
       });
@@ -1094,23 +1091,15 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
     day_start: '00:00',
     day_end: '23:59',
     timezone: 'America/Cuiaba',
-    range_start: rangeStart.toISOString(),
-    range_end: rangeEnd.toISOString(),
     total: items.length,
     events_with_signups: byEventMap.size,
-    by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || a.event_name.localeCompare(b.event_name)),
+    by_event: [...byEventMap.values()].sort((a, b) => b.total - a.total || String(a.event_name).localeCompare(String(b.event_name))),
     by_day: [...byDayMap.entries()]
       .map(([day, total]) => ({ day, total }))
       .sort((a, b) => a.day.localeCompare(b.day)),
     items,
   });
 });
-
-function addCalendarDays(isoDate, delta) {
-  const d = new Date(`${isoDate}T12:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
 
 app.post('/api/campaigns/:slug/events', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
