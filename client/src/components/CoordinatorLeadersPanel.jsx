@@ -385,16 +385,14 @@ export default function CoordinatorLeadersPanel({
                         Ver cadastros
                       </Link>
                     ) : null}
-                    {!compact ? (
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        onClick={() => removeLeader(leader)}
-                        disabled={deletingId === leader.id}
-                      >
-                        {deletingId === leader.id ? 'Excluindo…' : 'Excluir link/QR'}
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => removeLeader(leader)}
+                      disabled={deletingId === leader.id}
+                    >
+                      {deletingId === leader.id ? 'Excluindo…' : 'Excluir link/QR'}
+                    </button>
                   </div>
                 </li>
               );
