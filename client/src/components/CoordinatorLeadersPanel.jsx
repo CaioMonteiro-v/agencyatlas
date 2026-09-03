@@ -391,7 +391,7 @@ export default function CoordinatorLeadersPanel({
                       onClick={() => removeLeader(leader)}
                       disabled={deletingId === leader.id}
                     >
-                      {deletingId === leader.id ? 'Excluindo…' : 'Excluir link/QR'}
+                      {deletingId === leader.id ? 'Excluindo…' : 'Excluir'}
                     </button>
                   </div>
                 </li>
