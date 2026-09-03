@@ -45,6 +45,7 @@ export default function CoordinatorLeadersPanel({
 }) {
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
   const [qrMap, setQrMap] = useState({});
@@ -181,6 +182,29 @@ export default function CoordinatorLeadersPanel({
       setError(err.message || 'Falha ao cadastrar liderança');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function removeLeader(leader) {
+    const count = Number(leader.registrations_count || 0);
+    const msg = count > 0
+      ? `Excluir a liderança "${leader.name}"?\n\nO link e o QR ficam inativos.\nOs ${count} cadastro(s) continuam no Registro de cadastros.`
+      : `Excluir a liderança "${leader.name}"?\n\nO link e o QR ficam inativos.`;
+    if (!window.confirm(msg)) return;
+    setDeletingId(leader.id);
+    setError('');
+    try {
+      await api.deleteLeader(campaignSlug, leader.id);
+      setQrMap((prev) => {
+        const next = { ...prev };
+        delete next[leader.id];
+        return next;
+      });
+      if (typeof onChanged === 'function') await onChanged();
+    } catch (err) {
+      setError(err.message || 'Falha ao excluir liderança');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -360,6 +384,16 @@ export default function CoordinatorLeadersPanel({
                       >
                         Ver cadastros
                       </Link>
+                    ) : null}
+                    {!compact ? (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => removeLeader(leader)}
+                        disabled={deletingId === leader.id}
+                      >
+                        {deletingId === leader.id ? 'Excluindo…' : 'Excluir link/QR'}
+                      </button>
                     ) : null}
                   </div>
                 </li>

@@ -600,6 +600,32 @@ app.post('/api/campaigns/:slug/leaders', (req, res) => {
   res.status(201).json(created);
 });
 
+app.delete('/api/campaigns/:slug/leaders/:id', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const leader = db.prepare(
+    'SELECT * FROM leaders WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!leader) return res.status(404).json({ error: 'Liderança não encontrada' });
+
+  const keptRegs = db.prepare(
+    'SELECT COUNT(*) AS c FROM registrations WHERE leader_id = ?'
+  ).get(leader.id).c;
+
+  // Desativa link/QR. Mantém histórico na Base (Registro de cadastros).
+  db.prepare('UPDATE registrations SET leader_id = NULL WHERE leader_id = ?').run(leader.id);
+  db.prepare('DELETE FROM mission_assignments WHERE leader_id = ?').run(leader.id);
+  db.prepare('DELETE FROM leaders WHERE id = ? AND campaign_id = ?').run(leader.id, campaign.id);
+
+  res.json({
+    ok: true,
+    deleted_leader_id: leader.id,
+    deleted_name: leader.name,
+    kept_registrations: keptRegs,
+  });
+});
+
 /* ---------- Parameterized links ---------- */
 app.get('/api/campaigns/:slug/links', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
@@ -1130,6 +1156,7 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
   });
 });
 
+/**
  * Relatório de desempenho diário (prêmio):
  * ranking de mobilizadores no dia/período (00:00–23:59 Cuiabá).
  * Critério: coluna Mobilizador da Base (mesmo do Registro).
