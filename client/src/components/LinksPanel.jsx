@@ -7,11 +7,16 @@ export default function LinksPanel({ campaignSlug }) {
   const [filter, setFilter] = useState('');
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  async function load() {
+    const origin = window.location.origin;
+    const list = await api.getLinks(campaignSlug, origin);
+    setLinks(list);
+  }
 
   useEffect(() => {
-    const origin = window.location.origin;
-    api.getLinks(campaignSlug, origin)
-      .then(setLinks)
+    load()
       .catch((err) => setError(err.message));
   }, [campaignSlug]);
 
@@ -22,6 +27,24 @@ export default function LinksPanel({ campaignSlug }) {
       setTimeout(() => setToast(''), 2000);
     } catch {
       setToast('Não foi possível copiar');
+    }
+  }
+
+  async function removeLink(link) {
+    const count = Number(link.registrations_count || 0);
+    const msg = count > 0
+      ? `Excluir o link/QR de "${link.name}"?\n\nO link fica inativo.\nOs ${count} cadastro(s) continuam no Registro de cadastros.`
+      : `Excluir o link/QR de "${link.name}"?\n\nO link fica inativo.`;
+    if (!window.confirm(msg)) return;
+    setDeletingId(link.leader_id);
+    try {
+      await api.deleteLeader(campaignSlug, link.leader_id);
+      setToast('Link/QR excluído — cadastros mantidos');
+      await load();
+    } catch (err) {
+      setToast(err.message || 'Falha ao excluir');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -36,7 +59,7 @@ export default function LinksPanel({ campaignSlug }) {
         <div>
           <p className="eyebrow">Rastreabilidade</p>
           <h3>Links parametrizados</h3>
-          <p>Cada mobilizador possui um link único para identificar a origem dos cadastros.</p>
+          <p>Cada liderança possui um link único. Dá para copiar ou excluir o link/QR (cadastros ficam na Base).</p>
         </div>
         <div className="chip-group">
           {[
@@ -83,6 +106,14 @@ export default function LinksPanel({ campaignSlug }) {
               >
                 WhatsApp
               </a>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => removeLink(link)}
+                disabled={deletingId === link.leader_id}
+              >
+                {deletingId === link.leader_id ? 'Excluindo…' : 'Excluir'}
+              </button>
             </div>
           </div>
         ))}
