@@ -1174,9 +1174,14 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
   const eventId = req.query.event_id ? Number(req.query.event_id) : null;
   if (eventId) {
     eventFilter = db.prepare(
-      'SELECT id, name, slug FROM events WHERE id = ? AND campaign_id = ?'
+      'SELECT id, name, slug, organizer_role FROM events WHERE id = ? AND campaign_id = ?'
     ).get(eventId, campaign.id);
     if (!eventFilter) return res.status(404).json({ error: 'Evento não encontrado' });
+    if (eventFilter.organizer_role === 'coordinator') {
+      return res.status(400).json({
+        error: 'Este relatório é só de eventos de rua (mobilizador). Evento de coordenador fica separado.',
+      });
+    }
   }
 
   let sql;
@@ -1199,6 +1204,7 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
       LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
       WHERE r.campaign_id = ?
         AND r.source LIKE 'evento/%'
+        AND (e.id IS NULL OR COALESCE(e.organizer_role, 'mobilizer') <> 'coordinator')
         AND r.created_at >= (?::timestamp AT TIME ZONE 'America/Cuiaba')
         AND r.created_at < (?::timestamp AT TIME ZONE 'America/Cuiaba')
     `;
@@ -1221,6 +1227,7 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
       LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
       WHERE r.campaign_id = ?
         AND r.source LIKE 'evento/%'
+        AND (e.id IS NULL OR COALESCE(e.organizer_role, 'mobilizer') <> 'coordinator')
         AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
         AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
     `;
