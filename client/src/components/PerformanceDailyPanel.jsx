@@ -18,13 +18,6 @@ function csvEscape(value) {
   return text;
 }
 
-/** DD/MM a partir de YYYY-MM-DD (sem fuso). */
-function dayLabel(isoDay) {
-  if (!isoDay || isoDay.length < 10) return isoDay || '';
-  const [y, m, d] = isoDay.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
-
 export default function PerformanceDailyPanel({ campaignSlug }) {
   const [mode, setMode] = useState('day');
   const [dateFrom, setDateFrom] = useState(todayISO);
@@ -63,7 +56,7 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
       const top = res.by_mobilizer?.[0];
       setToast(
         top
-          ? `1º mobilizador: ${top.name} (${top.total} cad.)`
+          ? `Ranking: 1º ${top.name} (${top.total} cad.)`
           : (res.total
             ? 'Há cadastros, mas nenhum com mobilizador creditado'
             : 'Nenhum cadastro nesse dia/período'),
@@ -76,16 +69,15 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
     }
   }
 
-  /** Planilha simples: Mobilizador | Total */
-  function downloadTotalsCsv() {
+  function downloadRankingCsv() {
     const rows = report?.by_mobilizer || [];
     if (!rows.length) {
-      setToast('Gere o relatório com mobilizadores antes');
+      setToast('Gere o ranking antes');
       return;
     }
-    const lines = [['Mobilizador', 'Total'].map(csvEscape).join(',')];
+    const lines = [['Posição', 'Mobilizador', 'Total'].map(csvEscape).join(',')];
     for (const row of rows) {
-      lines.push([row.name, row.total].map(csvEscape).join(','));
+      lines.push([row.position, row.name, row.total].map(csvEscape).join(','));
     }
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -94,67 +86,27 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
     const from = report.date_from || 'inicio';
     const to = report.date_to || 'fim';
     a.download = from === to
-      ? `totais-mobilizadores-${from}.csv`
-      : `totais-mobilizadores-${from}_a_${to}.csv`;
+      ? `ranking-mobilizadores-${from}.csv`
+      : `ranking-mobilizadores-${from}_a_${to}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setToast('Planilha de totais baixada (abre no Excel)');
-  }
-
-  /** Planilha dia a dia: Dia | Total do dia | Mobilizador | Total */
-  function downloadDailyCsv() {
-    const days = report?.by_day_mobilizer || [];
-    const hasRows = days.some((d) => (d.mobilizers || []).length > 0);
-    if (!hasRows) {
-      setToast('Gere o relatório com mobilizadores antes');
-      return;
-    }
-    const lines = [['Dia', 'Total do dia', 'Mobilizador', 'Total do mobilizador'].map(csvEscape).join(',')];
-    for (const dayRow of days) {
-      const label = dayLabel(dayRow.day);
-      const mobs = dayRow.mobilizers || [];
-      if (!mobs.length) {
-        lines.push([label, dayRow.total, '', 0].map(csvEscape).join(','));
-        continue;
-      }
-      for (const mob of mobs) {
-        lines.push([label, dayRow.total, mob.name, mob.total].map(csvEscape).join(','));
-      }
-    }
-    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const from = report.date_from || 'inicio';
-    const to = report.date_to || 'fim';
-    a.download = from === to
-      ? `planilha-diaria-mobilizadores-${from}.csv`
-      : `planilha-diaria-mobilizadores-${from}_a_${to}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setToast('Planilha diária baixada (abre no Excel)');
+    setToast('Ranking baixado (abre no Excel)');
   }
 
   const ranking = report?.by_mobilizer || [];
-  const daySheets = report?.by_day_mobilizer || [];
   const topMobilizer = ranking[0];
-  const canDownload = ranking.length > 0;
 
   return (
     <section className="panel panel-pad" style={{ background: 'rgba(44, 62, 58, 0.03)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
-        <div>
-          <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio · Eventos de rua</p>
-          <h3 style={{ margin: 0 }}>Desempenho — mobilizadores de evento</h3>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)' }}>
-            Só QR de <strong>eventos de rua</strong>. Mostra o <strong>total de cada mobilizador</strong>
-            no dia ou período (00:00–23:59 Cuiabá). Não mistura coordenador/liderança.
-          </p>
-        </div>
+      <div>
+        <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio · Eventos de rua</p>
+        <h3 style={{ margin: 0 }}>Ranking de mobilizadores</h3>
+        <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)' }}>
+          Quem fez mais cadastros nos <strong>QR de eventos de rua</strong>.
+          Escolha o dia ou o período — o ranking mostra o total de cada um (00:00–23:59 Cuiabá).
+        </p>
       </div>
 
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
@@ -239,25 +191,20 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
             {events
               .filter((ev) => ev.organizer_role !== 'coordinator')
               .map((ev) => (
-              <option key={ev.id} value={ev.id}>
-                {ev.name}
-                {ev.municipality_name ? ` · ${ev.municipality_name}` : ''}
-              </option>
-            ))}
+                <option key={ev.id} value={ev.id}>
+                  {ev.name}
+                  {ev.municipality_name ? ` · ${ev.municipality_name}` : ''}
+                </option>
+              ))}
           </select>
         </label>
         <button className="btn btn-primary btn-sm" type="submit" disabled={busy}>
-          {busy ? 'Gerando…' : 'Gerar desempenho'}
+          {busy ? 'Gerando…' : 'Gerar ranking'}
         </button>
-        {canDownload ? (
-          <>
-            <button className="btn btn-accent btn-sm" type="button" onClick={downloadTotalsCsv}>
-              Baixar totais (cada um)
-            </button>
-            <button className="btn btn-soft btn-sm" type="button" onClick={downloadDailyCsv}>
-              Baixar planilha diária
-            </button>
-          </>
+        {ranking.length ? (
+          <button className="btn btn-accent btn-sm" type="button" onClick={downloadRankingCsv}>
+            Baixar ranking
+          </button>
         ) : null}
       </form>
 
@@ -271,27 +218,23 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
           </p>
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
             <span className="badge">00:00–23:59 · Cuiabá</span>
-            <span className="badge badge--ok">
-              {report.scope_label || 'Somente eventos (galera de rua)'}
-            </span>
-            {report.event_name ? <span className="badge">{report.event_name}</span> : (
-              <span className="badge">Todos os eventos de rua</span>
-            )}
+            <span className="badge">Só eventos de rua</span>
+            {report.event_name ? <span className="badge">{report.event_name}</span> : null}
             {topMobilizer ? (
               <span className="badge badge--ok">
-                1º: {topMobilizer.name} ({topMobilizer.total})
+                1º lugar: {topMobilizer.name} — {topMobilizer.total}
               </span>
             ) : null}
           </div>
 
           {!ranking.length ? (
             <EmptyState>
-              Nenhum mobilizador creditado neste período (só eventos de rua).
+              Nenhum mobilizador creditado neste período.
             </EmptyState>
           ) : (
-            <div className="table-wrap" style={{ marginBottom: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.45rem', fontSize: '1.05rem' }}>
-                Total de cada mobilizador
+            <div className="table-wrap">
+              <h4 style={{ margin: '0 0 0.45rem', fontSize: '1.1rem' }}>
+                Ranking — quem fez mais
               </h4>
               <table>
                 <thead>
@@ -317,41 +260,6 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
               </table>
             </div>
           )}
-
-          {daySheets.length > 1 ? (
-            <div className="stack" style={{ gap: '0.85rem' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem' }}>Por dia</h4>
-              {daySheets.map((dayRow) => (
-                <div key={dayRow.day} className="table-wrap">
-                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem' }}>
-                    {dayLabel(dayRow.day)} — total {dayRow.total}
-                  </h4>
-                  {!(dayRow.mobilizers || []).length ? (
-                    <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                      Sem mobilizador creditado neste dia.
-                    </p>
-                  ) : (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Mobilizador</th>
-                          <th>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dayRow.mobilizers.map((mob) => (
-                          <tr key={`${dayRow.day}-${mob.name}`}>
-                            <td>{mob.name}</td>
-                            <td><strong>{mob.total}</strong></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
