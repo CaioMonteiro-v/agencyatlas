@@ -121,11 +121,11 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
     <section className="panel panel-pad" style={{ background: 'rgba(44, 62, 58, 0.03)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap' }}>
         <div>
-          <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio</p>
-          <h3 style={{ margin: 0 }}>Desempenho diário — mobilizadores</h3>
+          <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio · Eventos de rua</p>
+          <h3 style={{ margin: 0 }}>Desempenho — mobilizadores de evento</h3>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)' }}>
-            No <strong>período</strong>, gera planilha dia a dia: data, total do dia e cada mobilizador com o total.
-            Horário 00:00–23:59 Cuiabá.
+            Só cadastros dos <strong>QR de eventos</strong> (galera de rua). Não mistura link de
+            coordenador/liderança. No período: planilha dia a dia (00:00–23:59 Cuiabá).
           </p>
         </div>
       </div>
@@ -208,8 +208,10 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
             value={eventId}
             onChange={(e) => setEventId(e.target.value)}
           >
-            <option value="">Toda a Base</option>
-            {events.map((ev) => (
+            <option value="">Todos os eventos de rua</option>
+            {events
+              .filter((ev) => ev.organizer_role !== 'coordinator')
+              .map((ev) => (
               <option key={ev.id} value={ev.id}>
                 {ev.name}
                 {ev.municipality_name ? ` · ${ev.municipality_name}` : ''}
@@ -237,8 +239,11 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
           </p>
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
             <span className="badge">00:00–23:59 · Cuiabá</span>
+            <span className="badge badge--ok">
+              {report.scope_label || 'Somente eventos (galera de rua)'}
+            </span>
             {report.event_name ? <span className="badge">{report.event_name}</span> : (
-              <span className="badge">Toda a Base</span>
+              <span className="badge">Todos os eventos de rua</span>
             )}
             {topMobilizer ? (
               <span className="badge badge--ok">

@@ -1157,9 +1157,9 @@ app.get('/api/campaigns/:slug/events/daily-report', (req, res) => {
 });
 
 /**
- * Relatório de desempenho diário (prêmio):
- * ranking de mobilizadores no dia/período (00:00–23:59 Cuiabá).
- * Critério: coluna Mobilizador da Base (mesmo do Registro).
+ * Relatório de desempenho diário (prêmio) — só galera de rua (QR de eventos).
+ * Não mistura link de coordenador/liderança. Dia civil 00:00–23:59 Cuiabá.
+ * Critério: coluna Mobilizador nos cadastros com origem evento/...
  */
 app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
@@ -1189,16 +1189,16 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
         r.source,
         r.organizer_name,
         r.mobilizer_name,
-        r.leader_id,
-        l.name AS leader_name,
-        l.type AS leader_type,
-        m.name AS municipality_name,
+        e.name AS event_name,
+        e.slug AS event_slug,
         mob.name AS mobilizer_table_name
       FROM registrations r
-      LEFT JOIN leaders l ON l.id = r.leader_id
-      LEFT JOIN municipalities m ON m.id = COALESCE(l.municipality_id, r.municipality_id)
+      LEFT JOIN events e
+        ON e.campaign_id = r.campaign_id
+        AND r.source = ('evento/' || e.slug)
       LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
       WHERE r.campaign_id = ?
+        AND r.source LIKE 'evento/%'
         AND r.created_at >= (?::timestamp AT TIME ZONE 'America/Cuiaba')
         AND r.created_at < (?::timestamp AT TIME ZONE 'America/Cuiaba')
     `;
@@ -1211,16 +1211,16 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
         r.source,
         r.organizer_name,
         r.mobilizer_name,
-        r.leader_id,
-        l.name AS leader_name,
-        l.type AS leader_type,
-        m.name AS municipality_name,
+        e.name AS event_name,
+        e.slug AS event_slug,
         mob.name AS mobilizer_table_name
       FROM registrations r
-      LEFT JOIN leaders l ON l.id = r.leader_id
-      LEFT JOIN municipalities m ON m.id = COALESCE(l.municipality_id, r.municipality_id)
+      LEFT JOIN events e
+        ON e.campaign_id = r.campaign_id
+        AND r.source = ('evento/' || e.slug)
       LEFT JOIN mobilizers mob ON mob.id = r.mobilizer_id
       WHERE r.campaign_id = ?
+        AND r.source LIKE 'evento/%'
         AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
         AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
     `;
@@ -1233,9 +1233,7 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
   }
 
   const raw = db.prepare(sql).all(...params);
-  const byOrganizer = new Map();
   const byMobilizer = new Map();
-  const byLeader = new Map();
   const byDay = new Map();
   /** day -> Map(mobilizerName -> count) */
   const byDayMobilizer = new Map();
@@ -1247,12 +1245,6 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
     total += 1;
     byDay.set(day, (byDay.get(day) || 0) + 1);
 
-    const org = row.organizer_name ? String(row.organizer_name).trim() : '';
-    if (org) {
-      if (!byOrganizer.has(org)) byOrganizer.set(org, { name: org, total: 0 });
-      byOrganizer.get(org).total += 1;
-    }
-
     const mob = (row.mobilizer_name || row.mobilizer_table_name || '')
       .toString()
       .trim();
@@ -1262,20 +1254,6 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
       if (!byDayMobilizer.has(day)) byDayMobilizer.set(day, new Map());
       const dayMap = byDayMobilizer.get(day);
       dayMap.set(mob, (dayMap.get(mob) || 0) + 1);
-    }
-
-    if (row.leader_id != null) {
-      const lid = String(row.leader_id);
-      if (!byLeader.has(lid)) {
-        byLeader.set(lid, {
-          leader_id: row.leader_id,
-          name: row.leader_name || `Liderança #${row.leader_id}`,
-          type: row.leader_type || null,
-          municipality_name: row.municipality_name || null,
-          total: 0,
-        });
-      }
-      byLeader.get(lid).total += 1;
     }
   }
 
@@ -1300,12 +1278,12 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
     day_start: '00:00',
     day_end: '23:59',
     timezone: 'America/Cuiaba',
+    scope: 'events',
+    scope_label: 'Somente eventos (galera de rua)',
     event_id: eventFilter?.id || null,
     event_name: eventFilter?.name || null,
     total,
-    by_organizer: rankByCount(byOrganizer),
     by_mobilizer: rankByCount(byMobilizer),
-    by_leader: rankByCount(byLeader),
     by_day: [...byDay.entries()]
       .map(([day, count]) => ({ day, total: count }))
       .sort((a, b) => a.day.localeCompare(b.day)),
