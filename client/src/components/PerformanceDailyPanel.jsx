@@ -76,8 +76,34 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
     }
   }
 
-  /** Planilha: Dia | Total do dia | Mobilizador | Total do mobilizador */
-  function downloadCsv() {
+  /** Planilha simples: Mobilizador | Total */
+  function downloadTotalsCsv() {
+    if (!ranking.length) {
+      setToast('Gere o relatório com mobilizadores antes');
+      return;
+    }
+    const lines = [['Mobilizador', 'Total'].map(csvEscape).join(',')];
+    for (const row of ranking) {
+      lines.push([row.name, row.total].map(csvEscape).join(','));
+    }
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const from = report.date_from || 'inicio';
+    const to = report.date_to || 'fim';
+    a.download = from === to
+      ? `totais-mobilizadores-${from}.csv`
+      : `totais-mobilizadores-${from}_a_${to}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setToast('Planilha de totais baixada (abre no Excel)');
+  }
+
+  /** Planilha dia a dia: Dia | Total do dia | Mobilizador | Total */
+  function downloadDailyCsv() {
     const days = report?.by_day_mobilizer || [];
     const hasRows = days.some((d) => (d.mobilizers || []).length > 0);
     if (!hasRows) {
@@ -115,7 +141,7 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
   const ranking = report?.by_mobilizer || [];
   const daySheets = report?.by_day_mobilizer || [];
   const topMobilizer = ranking[0];
-  const canDownload = daySheets.some((d) => (d.mobilizers || []).length > 0);
+  const canDownload = ranking.length > 0;
 
   return (
     <section className="panel panel-pad" style={{ background: 'rgba(44, 62, 58, 0.03)' }}>
@@ -124,8 +150,8 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
           <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio · Eventos de rua</p>
           <h3 style={{ margin: 0 }}>Desempenho — mobilizadores de evento</h3>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)' }}>
-            Só cadastros dos <strong>QR de eventos</strong> (galera de rua). Não mistura link de
-            coordenador/liderança. No período: planilha dia a dia (00:00–23:59 Cuiabá).
+            Só QR de <strong>eventos de rua</strong>. Mostra o <strong>total de cada mobilizador</strong>
+            no dia ou período (00:00–23:59 Cuiabá). Não mistura coordenador/liderança.
           </p>
         </div>
       </div>
@@ -223,9 +249,14 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
           {busy ? 'Gerando…' : 'Gerar desempenho'}
         </button>
         {canDownload ? (
-          <button className="btn btn-accent btn-sm" type="button" onClick={downloadCsv}>
-            Baixar planilha diária
-          </button>
+          <>
+            <button className="btn btn-accent btn-sm" type="button" onClick={downloadTotalsCsv}>
+              Baixar totais (cada um)
+            </button>
+            <button className="btn btn-soft btn-sm" type="button" onClick={downloadDailyCsv}>
+              Baixar planilha diária
+            </button>
+          </>
         ) : null}
       </form>
 
@@ -247,20 +278,51 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
             )}
             {topMobilizer ? (
               <span className="badge badge--ok">
-                1º no período: {topMobilizer.name} ({topMobilizer.total})
+                1º: {topMobilizer.name} ({topMobilizer.total})
               </span>
             ) : null}
           </div>
 
-          {!daySheets.length ? (
+          {!ranking.length ? (
             <EmptyState>
-              Nenhum cadastro neste período.
+              Nenhum mobilizador creditado neste período (só eventos de rua).
             </EmptyState>
           ) : (
+            <div className="table-wrap" style={{ marginBottom: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.45rem', fontSize: '1.05rem' }}>
+                Total de cada mobilizador
+              </h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pos.</th>
+                    <th>Mobilizador</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranking.map((row) => (
+                    <tr key={`${row.position}-${row.name}`}>
+                      <td>
+                        <strong>
+                          {row.position <= 3 ? `${row.position}º ★` : `${row.position}º`}
+                        </strong>
+                      </td>
+                      <td>{row.name}</td>
+                      <td><strong>{row.total}</strong></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {daySheets.length > 1 ? (
             <div className="stack" style={{ gap: '0.85rem' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem' }}>Por dia</h4>
               {daySheets.map((dayRow) => (
                 <div key={dayRow.day} className="table-wrap">
-                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '1rem' }}>
+                  <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem' }}>
                     {dayLabel(dayRow.day)} — total {dayRow.total}
                   </h4>
                   {!(dayRow.mobilizers || []).length ? (
@@ -288,7 +350,7 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       ) : null}
 
