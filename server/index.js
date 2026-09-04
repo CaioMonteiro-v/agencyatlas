@@ -1237,6 +1237,8 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
   const byMobilizer = new Map();
   const byLeader = new Map();
   const byDay = new Map();
+  /** day -> Map(mobilizerName -> count) */
+  const byDayMobilizer = new Map();
   let total = 0;
 
   for (const row of raw) {
@@ -1257,6 +1259,9 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
     if (mob) {
       if (!byMobilizer.has(mob)) byMobilizer.set(mob, { name: mob, total: 0 });
       byMobilizer.get(mob).total += 1;
+      if (!byDayMobilizer.has(day)) byDayMobilizer.set(day, new Map());
+      const dayMap = byDayMobilizer.get(day);
+      dayMap.set(mob, (dayMap.get(mob) || 0) + 1);
     }
 
     if (row.leader_id != null) {
@@ -1274,6 +1279,20 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
     }
   }
 
+  const by_day_mobilizer = [...byDay.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, dayTotal]) => {
+      const mobMap = byDayMobilizer.get(day) || new Map();
+      const mobilizers = [...mobMap.entries()]
+        .map(([name, count]) => ({ name, total: count }))
+        .sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+      return {
+        day,
+        total: dayTotal,
+        mobilizers,
+      };
+    });
+
   res.json({
     date: dateFrom === dateTo ? dateFrom : null,
     date_from: dateFrom,
@@ -1290,6 +1309,7 @@ app.get('/api/campaigns/:slug/performance-daily', (req, res) => {
     by_day: [...byDay.entries()]
       .map(([day, count]) => ({ day, total: count }))
       .sort((a, b) => a.day.localeCompare(b.day)),
+    by_day_mobilizer,
   });
 });
 
