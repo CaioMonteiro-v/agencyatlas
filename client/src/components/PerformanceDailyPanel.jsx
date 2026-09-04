@@ -78,12 +78,13 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
 
   /** Planilha simples: Mobilizador | Total */
   function downloadTotalsCsv() {
-    if (!ranking.length) {
+    const rows = report?.by_mobilizer || [];
+    if (!rows.length) {
       setToast('Gere o relatório com mobilizadores antes');
       return;
     }
     const lines = [['Mobilizador', 'Total'].map(csvEscape).join(',')];
-    for (const row of ranking) {
+    for (const row of rows) {
       lines.push([row.name, row.total].map(csvEscape).join(','));
     }
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
