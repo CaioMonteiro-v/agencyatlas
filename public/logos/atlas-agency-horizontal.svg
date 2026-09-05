@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" role="img" aria-label="Atlas Agency">
+  <defs>
+    <linearGradient id="a" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7BA3B8"/>
+      <stop offset="50%" stop-color="#8FB5A5"/>
+      <stop offset="100%" stop-color="#C99BA6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="28" cy="40" r="22" fill="url(#a)" opacity="0.2"/>
+  <path d="M28 22c-8 6-14 14-14 22a14 14 0 0 0 28 0c0-8-6-16-14-22z" fill="url(#a)"/>
+  <circle cx="28" cy="42" r="5.5" fill="#F8F4F2"/>
+  <text x="58" y="36" font-family="Georgia, 'Times New Roman', serif" font-size="22" fill="#3D524C" font-weight="600" letter-spacing="1">Atlas</text>
+  <text x="58" y="56" font-family="system-ui, sans-serif" font-size="12" fill="#7A9590" letter-spacing="3.5">AGENCY</text>
+</svg>
