@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { formatDate } from '../utils/date';
 import { EmptyState, Toast } from './Ui';
@@ -53,29 +53,30 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
         event_id: eventId || undefined,
       });
       setReport(res);
-      const top = res.by_mobilizer?.[0];
       setToast(
-        top
-          ? `Ranking: 1º ${top.name} (${top.total} cad.)`
-          : (res.total
-            ? 'Há cadastros, mas nenhum com mobilizador creditado'
-            : 'Nenhum cadastro nesse dia/período'),
+        res.total
+          ? `Análise pronta: ${res.total} cadastrado(s) · ${res.by_mobilizer?.length || 0} mobilizador(es)`
+          : 'Nenhum cadastro nesse dia/período (eventos de rua)',
       );
     } catch (err) {
-      setToast(err.message || 'Falha ao gerar desempenho');
+      setToast(err.message || 'Falha ao gerar análise');
       setReport(null);
     } finally {
       setBusy(false);
     }
   }
 
-  function downloadRankingCsv() {
+  function downloadCsv() {
     const rows = report?.by_mobilizer || [];
-    if (!rows.length) {
-      setToast('Gere o ranking antes');
+    if (!report) {
+      setToast('Gere a análise antes');
       return;
     }
-    const lines = [['Posição', 'Mobilizador', 'Total'].map(csvEscape).join(',')];
+    const lines = [
+      ['Total cadastrados', report.total].map(csvEscape).join(','),
+      ['', ''].map(csvEscape).join(','),
+      ['Posição', 'Mobilizador', 'Quantos fez'].map(csvEscape).join(','),
+    ];
     for (const row of rows) {
       lines.push([row.position, row.name, row.total].map(csvEscape).join(','));
     }
@@ -86,26 +87,37 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
     const from = report.date_from || 'inicio';
     const to = report.date_to || 'fim';
     a.download = from === to
-      ? `ranking-mobilizadores-${from}.csv`
-      : `ranking-mobilizadores-${from}_a_${to}.csv`;
+      ? `analise-desempenho-${from}.csv`
+      : `analise-desempenho-${from}_a_${to}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setToast('Ranking baixado (abre no Excel)');
+    setToast('Análise baixada (abre no Excel)');
   }
 
   const ranking = report?.by_mobilizer || [];
   const topMobilizer = ranking[0];
+  const credited = useMemo(
+    () => ranking.reduce((sum, row) => sum + Number(row.total || 0), 0),
+    [ranking],
+  );
+  const withoutMobilizer = report ? Math.max(0, Number(report.total || 0) - credited) : 0;
+  const isSingleDay = report && report.date_from === report.date_to;
+  const periodLabel = report
+    ? (isSingleDay
+      ? formatDate(report.date_from || report.date)
+      : `${formatDate(report.date_from)} a ${formatDate(report.date_to)}`)
+    : '';
 
   return (
     <section className="panel panel-pad" style={{ background: 'rgba(44, 62, 58, 0.03)' }}>
       <div>
         <p className="eyebrow" style={{ marginBottom: 4 }}>Prêmio · Eventos de rua</p>
-        <h3 style={{ margin: 0 }}>Ranking de mobilizadores</h3>
+        <h3 style={{ margin: 0 }}>Análise e desempenho</h3>
         <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)' }}>
-          Quem fez mais cadastros nos <strong>QR de eventos de rua</strong>.
-          Escolha o dia ou o período — o ranking mostra o total de cada um (00:00–23:59 Cuiabá).
+          Total cadastrado no dia/período + quanto cada mobilizador fez nos{' '}
+          <strong>QR de eventos de rua</strong> (00:00–23:59 Cuiabá). Não mistura coordenador/liderança.
         </p>
       </div>
 
@@ -199,49 +211,71 @@ export default function PerformanceDailyPanel({ campaignSlug }) {
           </select>
         </label>
         <button className="btn btn-primary btn-sm" type="submit" disabled={busy}>
-          {busy ? 'Gerando…' : 'Gerar ranking'}
+          {busy ? 'Gerando…' : 'Gerar análise'}
         </button>
-        {ranking.length ? (
-          <button className="btn btn-accent btn-sm" type="button" onClick={downloadRankingCsv}>
-            Baixar ranking
+        {report ? (
+          <button className="btn btn-accent btn-sm" type="button" onClick={downloadCsv}>
+            Baixar planilha
           </button>
         ) : null}
       </form>
 
       {report ? (
         <div style={{ marginTop: '0.95rem' }}>
-          <p style={{ margin: '0 0 0.55rem', fontSize: '1.25rem', fontWeight: 700 }}>
-            {report.total} cadastro{report.total === 1 ? '' : 's'}
-            {report.date_from === report.date_to
-              ? ` · ${formatDate(report.date_from || report.date)}`
-              : ` · ${formatDate(report.date_from)} a ${formatDate(report.date_to)}`}
-          </p>
+          <div className="coord-mini-stats" style={{ marginBottom: '0.9rem' }}>
+            <div>
+              <strong style={{ fontSize: '1.45rem' }}>{report.total}</strong>
+              <span>
+                {isSingleDay ? 'Total cadastrados no dia' : 'Total cadastrados no período'}
+              </span>
+            </div>
+            <div>
+              <strong style={{ fontSize: '1.45rem' }}>{ranking.length}</strong>
+              <span>Mobilizadores com cadastro</span>
+            </div>
+            <div>
+              <strong style={{ fontSize: '1.15rem' }}>
+                {topMobilizer ? `${topMobilizer.total}` : '—'}
+              </strong>
+              <span>
+                {topMobilizer ? `1º: ${topMobilizer.name}` : 'Ainda sem 1º lugar'}
+              </span>
+            </div>
+            {withoutMobilizer > 0 ? (
+              <div>
+                <strong style={{ fontSize: '1.15rem' }}>{withoutMobilizer}</strong>
+                <span>Sem mobilizador no cadastro</span>
+              </div>
+            ) : null}
+          </div>
+
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+            <span className="badge">{periodLabel}</span>
             <span className="badge">00:00–23:59 · Cuiabá</span>
             <span className="badge">Só eventos de rua</span>
             {report.event_name ? <span className="badge">{report.event_name}</span> : null}
-            {topMobilizer ? (
-              <span className="badge badge--ok">
-                1º lugar: {topMobilizer.name} — {topMobilizer.total}
-              </span>
-            ) : null}
           </div>
 
           {!ranking.length ? (
             <EmptyState>
-              Nenhum mobilizador creditado neste período.
+              {report.total
+                ? 'Há cadastros no dia, mas nenhum com mobilizador preenchido.'
+                : 'Nenhum cadastro neste dia/período.'}
             </EmptyState>
           ) : (
             <div className="table-wrap">
               <h4 style={{ margin: '0 0 0.45rem', fontSize: '1.1rem' }}>
-                Ranking — quem fez mais
+                Desempenho — quanto cada um fez
               </h4>
+              <p style={{ margin: '0 0 0.55rem', fontSize: '0.9rem', color: 'var(--muted)' }}>
+                Ordenado de quem fez mais para quem fez menos (ranking do prêmio).
+              </p>
               <table>
                 <thead>
                   <tr>
                     <th>Pos.</th>
                     <th>Mobilizador</th>
-                    <th>Total</th>
+                    <th>Quantos fez</th>
                   </tr>
                 </thead>
                 <tbody>
