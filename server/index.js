@@ -1469,6 +1469,20 @@ app.patch('/api/campaigns/:slug/events/:id', (req, res) => {
     event.id,
   );
 
+  // Se o mobilizador do evento mudou, atualiza a Base (desempenho / coluna Mobilizador).
+  if (
+    role === 'mobilizer'
+    && resolvedName
+    && resolvedName !== (event.organizer_name || '')
+  ) {
+    const source = `evento/${event.slug}`;
+    db.prepare(`
+      UPDATE registrations
+      SET mobilizer_name = ?
+      WHERE campaign_id = ? AND source = ?
+    `).run(resolvedName, campaign.id, source);
+  }
+
   res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(event.id));
 });
 

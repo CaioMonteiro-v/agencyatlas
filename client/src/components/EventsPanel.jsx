@@ -206,21 +206,34 @@ export default function EventsPanel({ campaignSlug }) {
         channel_name: event.channel_name || '',
         invite_bitly_url: event.invite_bitly_url || '',
         municipality_id: event.municipality_id ? String(event.municipality_id) : '',
+        organizer_name: event.organizer_name || '',
+        organizer_role: event.organizer_role || 'mobilizer',
       },
     }));
   }
 
   async function saveChannel(event) {
     const draft = channelDrafts[event.id] || {};
+    const role = draft.organizer_role || event.organizer_role || 'mobilizer';
+    const payload = {
+      channel_link: (draft.channel_link || '').trim() || null,
+      channel_name: (draft.channel_name || '').trim() || null,
+      invite_bitly_url: (draft.invite_bitly_url || '').trim() || null,
+      municipality_id: draft.municipality_id ? Number(draft.municipality_id) : null,
+    };
+    if (role !== 'coordinator') {
+      const mobName = (draft.organizer_name || '').trim();
+      if (!mobName) {
+        setToast('Informe o nome do mobilizador');
+        return;
+      }
+      payload.organizer_role = 'mobilizer';
+      payload.organizer_name = mobName;
+    }
     try {
-      await api.updateEvent(campaignSlug, event.id, {
-        channel_link: (draft.channel_link || '').trim() || null,
-        channel_name: (draft.channel_name || '').trim() || null,
-        invite_bitly_url: (draft.invite_bitly_url || '').trim() || null,
-        municipality_id: draft.municipality_id ? Number(draft.municipality_id) : null,
-      });
+      await api.updateEvent(campaignSlug, event.id, payload);
       setEditingId(null);
-      setToast('Evento atualizado (convites / município)');
+      setToast('Evento atualizado');
       await load(publicBase);
     } catch (err) {
       setToast(err.message);
@@ -1013,6 +1026,29 @@ export default function EventsPanel({ campaignSlug }) {
                       ))}
                     </select>
                   </label>
+                  {(event.organizer_role || 'mobilizer') !== 'coordinator' ? (
+                    <label>
+                      Mobilizador *
+                      <input
+                        className="input"
+                        required
+                        value={channelDrafts[event.id]?.organizer_name || ''}
+                        onChange={(e) =>
+                          setChannelDrafts((prev) => ({
+                            ...prev,
+                            [event.id]: {
+                              ...(prev[event.id] || {}),
+                              organizer_name: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Ex.: Joice Luz"
+                      />
+                      <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
+                        Nome que aparece no desempenho e na coluna Mobilizador da Base.
+                      </span>
+                    </label>
+                  ) : null}
                   <label>
                     Convite WhatsApp do canal
                     <input
@@ -1095,9 +1131,11 @@ export default function EventsPanel({ campaignSlug }) {
                   Ver inscritos ({event.attendees || 0})
                 </button>
                 <button type="button" className="btn btn-soft btn-sm" onClick={() => startEditChannel(event)}>
-                  {event.channel_link || event.invite_bitly_url || event.municipality_id
-                    ? 'Editar convites/município'
-                    : 'Vincular convites/município'}
+                  {(event.organizer_role || 'mobilizer') !== 'coordinator'
+                    ? 'Editar mobilizador / convites'
+                    : (event.channel_link || event.invite_bitly_url || event.municipality_id
+                      ? 'Editar convites/município'
+                      : 'Vincular convites/município')}
                 </button>
                 {qr && (
                   <>
