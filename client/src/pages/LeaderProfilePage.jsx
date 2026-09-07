@@ -59,7 +59,7 @@ export default function LeaderProfilePage() {
 
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <Link className="btn btn-accent" to={`/campanha/${slug}/mobilizacao`}>Voltar à mobilização</Link>
-                <a className="btn btn-whatsapp" href="https://bit.ly/FalaFabio" target="_blank" rel="noreferrer">
+                <a className="btn btn-whatsapp" href="https://wa.me/message/PV764OTMN3GEE1" target="_blank" rel="noreferrer">
                   WhatsApp
                 </a>
               </div>
