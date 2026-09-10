@@ -10,6 +10,8 @@ const {
   buildCampaignReport,
   getThresholds,
   listCoordinatorLeaders,
+  listUnclaimedOrphanLinkRegistrations,
+  claimOrphanLinkRegistrations,
 } = require('./analytics');
 const { metaStatus, probeMetaToken, fetchInstagramSnapshot, distributeIgTotals, readIgAccountSnapshot, saveIgAccountSnapshot } = require('./meta');
 const { runAssistant } = require('./assistant');
@@ -614,12 +616,13 @@ app.delete('/api/campaigns/:slug/leaders/:id', (req, res) => {
     'SELECT COUNT(*) AS c FROM registrations WHERE leader_id = ?'
   ).get(leader.id).c;
 
-  // Desativa link/QR. Mantém histórico na Base e preserva nome/código no cadastro
-  // para o relatório do coordenador continuar batendo (órfãos de QR excluído).
+  // Desativa link/QR. Mantém histórico na Base e preserva nome/código + coordenador
+  // de origem para dobra sem município continuar batendo a conta (órfãos de QR).
   db.prepare(`
     UPDATE registrations
     SET
       leader_id = NULL,
+      orphan_coordinator_id = COALESCE(orphan_coordinator_id, ?),
       mobilizer_name = COALESCE(NULLIF(TRIM(mobilizer_name), ''), ?),
       referral_code = COALESCE(NULLIF(TRIM(CAST(referral_code AS TEXT)), ''), ?),
       source = CASE
@@ -629,6 +632,7 @@ app.delete('/api/campaigns/:slug/leaders/:id', (req, res) => {
       END
     WHERE leader_id = ?
   `).run(
+    leader.coordinator_id || null,
     leader.name || null,
     leader.referral_code || null,
     leader.referral_code ? `link/${leader.referral_code}` : 'link/excluido',
@@ -2101,6 +2105,39 @@ app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
   if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
   res.json(detailFor(campaign, coordinator));
+});
+
+/** Órfãos de QR/link ainda sem coordenador (exclusões antigas, antes de gravar orphan_coordinator_id). */
+app.get('/api/campaigns/:slug/orphan-links', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+  const rows = listUnclaimedOrphanLinkRegistrations(db, campaign.id, { q: req.query.q || '' });
+  const total = rows.reduce((s, r) => s + Number(r.total || 0), 0);
+  res.json({ orphan_links: rows, total });
+});
+
+/**
+ * Recupera conta da dobra: vincula órfãos de QR excluído a este coordenador.
+ * Body: { referral_codes?: string[], mobilizer_names?: string[] }
+ */
+app.post('/api/campaigns/:slug/coordinators/:id/claim-orphan-links', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const result = claimOrphanLinkRegistrations(db, campaign.id, coordinator.id, {
+    referral_codes: req.body?.referral_codes,
+    mobilizer_names: req.body?.mobilizer_names,
+  });
+
+  res.json({
+    ok: true,
+    updated: result.updated,
+    coordinator: detailFor(campaign, coordinator),
+  });
 });
 
 /**

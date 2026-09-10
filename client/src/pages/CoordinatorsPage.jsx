@@ -565,7 +565,11 @@ export default function CoordinatorsPage() {
                     <span>
                       {coord.totals.municipalities} mun.
                       {' · '}
-                      {coord.totals.registrations} cad.
+                      {coord.coord_type === 'dobra'
+                        ? (coord.totals.display_registrations ?? coord.totals.control_total ?? coord.totals.people_by_leaders ?? 0)
+                        : coord.totals.registrations}
+                      {' '}
+                      cad.
                       {coord.totals.vote_expectation
                         ? ` · meta voto ${coord.totals.vote_progress_pct ?? 0}%`
                         : ''}
@@ -639,21 +643,36 @@ export default function CoordinatorsPage() {
                     <span>Mobilizadas (lideranças)</span>
                   </div>
                   <div>
-                    <strong>{selected.totals.registrations}</strong>
-                    <span>Cadastros no território</span>
+                    <strong>
+                      {selected.coord_type === 'dobra'
+                        ? (selected.totals.display_registrations
+                          ?? selected.totals.control_total
+                          ?? selected.totals.people_by_leaders
+                          ?? 0)
+                        : selected.totals.registrations}
+                    </strong>
+                    <span>
+                      {selected.coord_type === 'dobra'
+                        ? 'Controle (lideranças + QR excluído)'
+                        : 'Cadastros no território'}
+                    </span>
                   </div>
                   {Number(selected.totals.orphan_links || 0) > 0 ? (
                     <div>
                       <strong>{selected.totals.orphan_links}</strong>
-                      <span>QR excluído (ainda no território)</span>
+                      <span>QR excluído (ainda no controle)</span>
                     </div>
                   ) : null}
                 </div>
 
                 <CoordinatorOrphanLinksPanel
+                  campaignSlug={campaign.slug}
+                  coordinatorId={selected.id}
                   coordinatorName={selected.name}
+                  coordType={selected.coord_type === 'dobra' ? 'dobra' : 'regional'}
                   orphanLinks={selected.orphan_links || []}
                   totals={selected.totals || {}}
+                  onClaimed={() => load()}
                 />
 
                 <CoordinatorLeadersPanel

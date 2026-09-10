@@ -210,6 +210,8 @@ function migrateAnalyticsSchema(db) {
   ensureColumn(db, 'registrations', 'mobilizer_id', 'INTEGER');
   ensureColumn(db, 'registrations', 'funnel', 'TEXT');
   ensureColumn(db, 'registrations', 'phone_digits', 'TEXT');
+  // Após excluir QR/liderança: mantém de qual coordenador (dobra/regional) veio o link
+  ensureColumn(db, 'registrations', 'orphan_coordinator_id', 'INTEGER');
 
   // Backfill chave de telefone para deduplicar cadastros
   try {
@@ -237,6 +239,7 @@ function migrateAnalyticsSchema(db) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_created ON registrations(campaign_id, created_at DESC)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_source ON registrations(campaign_id, source)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_mobname ON registrations(campaign_id, mobilizer_name)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_reg_orphan_coord ON registrations(orphan_coordinator_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_reg_campaign_phone_digits ON registrations(campaign_id, phone_digits)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations(event_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_mobilizers_campaign ON mobilizers(campaign_id)');

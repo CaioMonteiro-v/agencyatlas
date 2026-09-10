@@ -134,6 +134,17 @@ export const api = {
     const q = params.toString();
     return request(`/api/campaigns/${slug}/coordinators/${id}/performance-daily${q ? `?${q}` : ''}`);
   },
+  getUnclaimedOrphanLinks: (slug, { q } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    const qs = params.toString();
+    return request(`/api/campaigns/${slug}/orphan-links${qs ? `?${qs}` : ''}`);
+  },
+  claimOrphanLinks: (slug, id, body) =>
+    request(`/api/campaigns/${slug}/coordinators/${id}/claim-orphan-links`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   createCoordinator: (slug, body) =>
     request(`/api/campaigns/${slug}/coordinators`, { method: 'POST', body: JSON.stringify(body) }),
   updateCoordinator: (slug, id, body) =>
