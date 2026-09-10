@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { formatDate } from '../utils/date';
 import { EmptyState, Toast } from './Ui';
@@ -39,6 +39,10 @@ export default function CoordinatorLeadersPerformancePanel({
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    setReport(null);
+  }, [coordinatorId]);
 
   async function generate(e) {
     if (e) e.preventDefault();
