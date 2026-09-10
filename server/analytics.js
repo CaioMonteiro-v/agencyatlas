@@ -246,15 +246,39 @@ function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
   const leaders = listCoordinatorLeaders(db, campaign.id, coordinator.id, campaign.slug);
   const peopleByLeaders = leaders.reduce((s, l) => s + Number(l.registrations_count || 0), 0);
 
+  // Cadastros do território que perderam o vínculo ao excluir o QR/link da liderança
+  // (leader_id NULL, mas source/referral_code ainda apontam para link/...).
+  const orphanLinks = listOrphanLinkRegistrations(db, campaign.id, coordinator.id);
+  const orphanLinkTotal = orphanLinks.reduce((s, row) => s + Number(row.total || 0), 0);
+  const leaderIds = leaders.map((l) => l.id).filter((id) => id != null);
+  const territoryBreakdown = getTerritoryRegistrationBreakdown(
+    db,
+    campaign.id,
+    coordinator.id,
+    leaderIds,
+  );
+
   return {
     ...coordinator,
     municipalities,
     leaders,
+    orphan_links: orphanLinks,
     totals: {
       municipalities: municipalities.length,
       registrations: totalRegs,
       leaders: leaders.length,
       people_by_leaders: peopleByLeaders,
+      orphan_links: orphanLinkTotal,
+      from_events: territoryBreakdown.from_events,
+      other_leaders: territoryBreakdown.other_leaders,
+      other_unlinked: territoryBreakdown.other_unlinked,
+      // Conta que fecha: lideranças atuais + QR excluído + eventos + outras lideranças + outros
+      math_check:
+        peopleByLeaders
+        + orphanLinkTotal
+        + territoryBreakdown.from_events
+        + territoryBreakdown.other_leaders
+        + territoryBreakdown.other_unlinked,
       critical,
       attention,
       ok,
@@ -268,6 +292,114 @@ function buildCoordinatorDetail(db, campaign, coordinator, thresholds = {}) {
       ig_reach: igReach,
     },
     health,
+  };
+}
+
+/**
+ * Cadastros órfãos de QR/link excluído no território do coordenador.
+ * Agrupa por mobilizer_name + referral_code + município para o relatório bater.
+ */
+function listOrphanLinkRegistrations(db, campaignId, coordinatorId) {
+  const muniRows = db.prepare(
+    'SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?'
+  ).all(coordinatorId);
+  const muniIds = muniRows.map((r) => r.municipality_id).filter((id) => id != null);
+  if (!muniIds.length) return [];
+
+  const placeholders = muniIds.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT
+      COALESCE(NULLIF(TRIM(r.mobilizer_name), ''), '') AS mobilizer_name,
+      r.referral_code,
+      r.source,
+      r.municipality_id,
+      m.name AS municipality_name,
+      COUNT(*) AS total,
+      MIN(r.created_at) AS first_at,
+      MAX(r.created_at) AS last_at
+    FROM registrations r
+    LEFT JOIN municipalities m ON m.id = r.municipality_id
+    WHERE r.campaign_id = ?
+      AND r.leader_id IS NULL
+      AND r.municipality_id IN (${placeholders})
+      AND (
+        r.source LIKE 'link/%'
+        OR (r.referral_code IS NOT NULL AND TRIM(CAST(r.referral_code AS TEXT)) != '')
+      )
+    GROUP BY
+      COALESCE(NULLIF(TRIM(r.mobilizer_name), ''), ''),
+      r.referral_code,
+      r.source,
+      r.municipality_id,
+      m.name
+    ORDER BY total DESC, mobilizer_name ASC
+  `).all(campaignId, ...muniIds);
+
+  return rows.map((row) => {
+    const code = row.referral_code
+      || (row.source && String(row.source).startsWith('link/')
+        ? String(row.source).slice(5)
+        : null);
+    const name = row.mobilizer_name || (code ? `QR excluído (${code})` : 'QR excluído');
+    return {
+      ...row,
+      name,
+      referral_code: code,
+      total: Number(row.total || 0),
+    };
+  });
+}
+
+/**
+ * Quebra do território para a matemática fechar:
+ * lideranças deste coord + órfãos de link + eventos + outras lideranças + outros.
+ */
+function getTerritoryRegistrationBreakdown(db, campaignId, coordinatorId, leaderIds = []) {
+  const muniRows = db.prepare(
+    'SELECT municipality_id FROM coordinator_municipalities WHERE coordinator_id = ?'
+  ).all(coordinatorId);
+  const muniIds = muniRows.map((r) => r.municipality_id).filter((id) => id != null);
+  if (!muniIds.length) {
+    return { from_events: 0, other_leaders: 0, other_unlinked: 0 };
+  }
+
+  const muniPh = muniIds.map(() => '?').join(',');
+  // Ordem dos binds = ordem dos ? no SQL (SELECT first, depois WHERE).
+  const params = [];
+
+  let otherLeadersSql = '0';
+  if (leaderIds.length) {
+    const leaderPh = leaderIds.map(() => '?').join(',');
+    otherLeadersSql = `SUM(CASE WHEN r.leader_id IS NOT NULL AND r.leader_id NOT IN (${leaderPh}) THEN 1 ELSE 0 END)`;
+    params.push(...leaderIds);
+  } else {
+    otherLeadersSql = 'SUM(CASE WHEN r.leader_id IS NOT NULL THEN 1 ELSE 0 END)';
+  }
+
+  params.push(campaignId, ...muniIds);
+
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE
+        WHEN r.leader_id IS NULL AND r.source LIKE 'evento/%' THEN 1 ELSE 0
+      END), 0) AS from_events,
+      COALESCE(${otherLeadersSql}, 0) AS other_leaders,
+      COALESCE(SUM(CASE
+        WHEN r.leader_id IS NULL
+          AND (r.source IS NULL OR r.source NOT LIKE 'link/%')
+          AND (r.source IS NULL OR r.source NOT LIKE 'evento/%')
+          AND (r.referral_code IS NULL OR TRIM(CAST(r.referral_code AS TEXT)) = '')
+        THEN 1 ELSE 0
+      END), 0) AS other_unlinked
+    FROM registrations r
+    WHERE r.campaign_id = ?
+      AND r.municipality_id IN (${muniPh})
+  `).get(...params);
+
+  return {
+    from_events: Number(row?.from_events || 0),
+    other_leaders: Number(row?.other_leaders || 0),
+    other_unlinked: Number(row?.other_unlinked || 0),
   };
 }
 
@@ -402,4 +534,6 @@ module.exports = {
   buildCampaignReport,
   getThresholds,
   listCoordinatorLeaders,
+  listOrphanLinkRegistrations,
+  getTerritoryRegistrationBreakdown,
 };

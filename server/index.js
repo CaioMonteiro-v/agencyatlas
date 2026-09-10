@@ -614,8 +614,26 @@ app.delete('/api/campaigns/:slug/leaders/:id', (req, res) => {
     'SELECT COUNT(*) AS c FROM registrations WHERE leader_id = ?'
   ).get(leader.id).c;
 
-  // Desativa link/QR. Mantém histórico na Base (Registro de cadastros).
-  db.prepare('UPDATE registrations SET leader_id = NULL WHERE leader_id = ?').run(leader.id);
+  // Desativa link/QR. Mantém histórico na Base e preserva nome/código no cadastro
+  // para o relatório do coordenador continuar batendo (órfãos de QR excluído).
+  db.prepare(`
+    UPDATE registrations
+    SET
+      leader_id = NULL,
+      mobilizer_name = COALESCE(NULLIF(TRIM(mobilizer_name), ''), ?),
+      referral_code = COALESCE(NULLIF(TRIM(CAST(referral_code AS TEXT)), ''), ?),
+      source = CASE
+        WHEN source IS NULL OR TRIM(CAST(source AS TEXT)) = '' OR source = 'direto'
+          THEN ?
+        ELSE source
+      END
+    WHERE leader_id = ?
+  `).run(
+    leader.name || null,
+    leader.referral_code || null,
+    leader.referral_code ? `link/${leader.referral_code}` : 'link/excluido',
+    leader.id,
+  );
   db.prepare('DELETE FROM mission_assignments WHERE leader_id = ?').run(leader.id);
   db.prepare('DELETE FROM leaders WHERE id = ? AND campaign_id = ?').run(leader.id, campaign.id);
 

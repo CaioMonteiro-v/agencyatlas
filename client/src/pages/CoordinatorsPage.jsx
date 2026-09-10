@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import CoordinatorLeadersPanel from '../components/CoordinatorLeadersPanel';
 import CoordinatorLeadersPerformancePanel from '../components/CoordinatorLeadersPerformancePanel';
+import CoordinatorOrphanLinksPanel from '../components/CoordinatorOrphanLinksPanel';
 import { Avatar, EmptyState, Toast } from '../components/Ui';
 
 function HealthPill({ health }) {
@@ -641,7 +642,19 @@ export default function CoordinatorsPage() {
                     <strong>{selected.totals.registrations}</strong>
                     <span>Cadastros no território</span>
                   </div>
+                  {Number(selected.totals.orphan_links || 0) > 0 ? (
+                    <div>
+                      <strong>{selected.totals.orphan_links}</strong>
+                      <span>QR excluído (ainda no território)</span>
+                    </div>
+                  ) : null}
                 </div>
+
+                <CoordinatorOrphanLinksPanel
+                  coordinatorName={selected.name}
+                  orphanLinks={selected.orphan_links || []}
+                  totals={selected.totals || {}}
+                />
 
                 <CoordinatorLeadersPanel
                   campaignSlug={campaign.slug}
