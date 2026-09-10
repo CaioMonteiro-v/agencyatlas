@@ -126,6 +126,14 @@ export const api = {
     request(`/api/municipalities/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   getCoordinators: (slug) => request(`/api/campaigns/${slug}/coordinators`),
   getCoordinator: (slug, id) => request(`/api/campaigns/${slug}/coordinators/${id}`),
+  getCoordinatorLeadersPerformance: (slug, id, { date, date_from, date_to } = {}) => {
+    const params = new URLSearchParams();
+    if (date_from) params.set('date_from', date_from);
+    if (date_to) params.set('date_to', date_to);
+    if (date && !date_from && !date_to) params.set('date', date);
+    const q = params.toString();
+    return request(`/api/campaigns/${slug}/coordinators/${id}/performance-daily${q ? `?${q}` : ''}`);
+  },
   createCoordinator: (slug, body) =>
     request(`/api/campaigns/${slug}/coordinators`, { method: 'POST', body: JSON.stringify(body) }),
   updateCoordinator: (slug, id, body) =>

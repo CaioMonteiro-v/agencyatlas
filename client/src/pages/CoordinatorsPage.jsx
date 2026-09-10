@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import CoordinatorLeadersPanel from '../components/CoordinatorLeadersPanel';
+import CoordinatorLeadersPerformancePanel from '../components/CoordinatorLeadersPerformancePanel';
 import { Avatar, EmptyState, Toast } from '../components/Ui';
 
 function HealthPill({ health }) {
@@ -650,6 +651,12 @@ export default function CoordinatorsPage() {
                   leaders={selected.leaders || []}
                   municipalities={selected.municipalities || []}
                   onChanged={load}
+                />
+
+                <CoordinatorLeadersPerformancePanel
+                  campaignSlug={campaign.slug}
+                  coordinatorId={selected.id}
+                  coordinatorName={selected.name}
                 />
 
                 <div className="coord-mini-stats" style={{ marginTop: '0.85rem' }}>

@@ -9,6 +9,7 @@ const {
   buildCoordinatorDetail,
   buildCampaignReport,
   getThresholds,
+  listCoordinatorLeaders,
 } = require('./analytics');
 const { metaStatus, probeMetaToken, fetchInstagramSnapshot, distributeIgTotals, readIgAccountSnapshot, saveIgAccountSnapshot } = require('./meta');
 const { runAssistant } = require('./assistant');
@@ -2082,6 +2083,164 @@ app.get('/api/campaigns/:slug/coordinators/:id', (req, res) => {
   if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
 
   res.json(detailFor(campaign, coordinator));
+});
+
+/**
+ * Desempenho diário dos QR/links de liderança sob um coordenador.
+ * Separado do desempenho de eventos de rua.
+ */
+app.get('/api/campaigns/:slug/coordinators/:id/performance-daily', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const coordinator = db.prepare('SELECT * FROM coordinators WHERE id = ? AND campaign_id = ?')
+    .get(req.params.id, campaign.id);
+  if (!coordinator) return res.status(404).json({ error: 'Coordenador não encontrado' });
+
+  const { dateFrom, dateTo } = parseCuiabaDayRange(req.query);
+  const leaders = listCoordinatorLeaders(db, campaign.id, coordinator.id, campaign.slug);
+  const leaderIds = leaders.map((l) => l.id).filter((id) => id != null);
+  const leaderById = new Map(leaders.map((l) => [String(l.id), l]));
+
+  // Primeiro cadastro de cada liderança (quando a turma começou a puxar).
+  const startedByLeader = new Map();
+  let teamStartedDay = '';
+  if (leaderIds.length) {
+    const placeholders = leaderIds.map(() => '?').join(',');
+    const firstRows = db.prepare(`
+      SELECT leader_id, MIN(created_at) AS first_at
+      FROM registrations
+      WHERE campaign_id = ? AND leader_id IN (${placeholders})
+      GROUP BY leader_id
+    `).all(campaign.id, ...leaderIds);
+    for (const row of firstRows) {
+      const day = toCuiabaDay(row.first_at);
+      if (!day) continue;
+      startedByLeader.set(String(row.leader_id), day);
+      if (!teamStartedDay || day < teamStartedDay) teamStartedDay = day;
+    }
+  }
+
+  const isPg = db.dialect === 'postgres';
+  const padFrom = addCalendarDays(dateFrom, -1);
+  const padToExclusive = addCalendarDays(dateTo, 2);
+
+  let rows = [];
+  if (leaderIds.length) {
+    const placeholders = leaderIds.map(() => '?').join(',');
+    const params = [campaign.id, ...leaderIds];
+    let sql;
+    if (isPg) {
+      sql = `
+        SELECT r.id, r.created_at, r.leader_id, r.source, r.referral_code
+        FROM registrations r
+        WHERE r.campaign_id = ?
+          AND r.leader_id IN (${placeholders})
+          AND r.created_at >= (?::timestamp AT TIME ZONE 'America/Cuiaba')
+          AND r.created_at < (?::timestamp AT TIME ZONE 'America/Cuiaba')
+      `;
+      params.push(`${padFrom} 00:00:00`, `${padToExclusive} 00:00:00`);
+    } else {
+      sql = `
+        SELECT r.id, r.created_at, r.leader_id, r.source, r.referral_code
+        FROM registrations r
+        WHERE r.campaign_id = ?
+          AND r.leader_id IN (${placeholders})
+          AND substr(CAST(r.created_at AS TEXT), 1, 10) >= ?
+          AND substr(CAST(r.created_at AS TEXT), 1, 10) <= ?
+      `;
+      params.push(padFrom, addCalendarDays(dateTo, 1));
+    }
+    rows = db.prepare(sql).all(...params);
+  }
+
+  const byLeader = new Map();
+  const byDay = new Map();
+  const byDayLeader = new Map(); // day -> Map(leaderId -> count)
+  let total = 0;
+
+  for (const row of rows) {
+    const day = toCuiabaDay(row.created_at);
+    if (!day || day < dateFrom || day > dateTo) continue;
+    const lid = String(row.leader_id);
+    const leader = leaderById.get(lid);
+    if (!leader) continue;
+
+    total += 1;
+    byDay.set(day, (byDay.get(day) || 0) + 1);
+
+    if (!byLeader.has(lid)) {
+      byLeader.set(lid, {
+        leader_id: leader.id,
+        name: leader.name,
+        municipality_name: leader.municipality_name || null,
+        type: leader.type || null,
+        referral_code: leader.referral_code || null,
+        started_day: startedByLeader.get(lid) || null,
+        total: 0,
+      });
+    }
+    byLeader.get(lid).total += 1;
+
+    if (!byDayLeader.has(day)) byDayLeader.set(day, new Map());
+    const dayMap = byDayLeader.get(day);
+    dayMap.set(lid, (dayMap.get(lid) || 0) + 1);
+  }
+
+  const by_leader = rankByCount(byLeader);
+  const by_day_leader = [...byDay.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, dayTotal]) => {
+      const dayMap = byDayLeader.get(day) || new Map();
+      const leadersOfDay = [...dayMap.entries()]
+        .map(([lid, count]) => {
+          const leader = leaderById.get(lid);
+          return {
+            leader_id: leader?.id || Number(lid),
+            name: leader?.name || `Liderança #${lid}`,
+            municipality_name: leader?.municipality_name || null,
+            total: count,
+          };
+        })
+        .sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+      return { day, total: dayTotal, leaders: leadersOfDay };
+    });
+
+  // Todas as lideranças do coord (mesmo zeradas no período), com dia que começaram.
+  const leaders_overview = leaders.map((l) => ({
+    leader_id: l.id,
+    name: l.name,
+    municipality_name: l.municipality_name || null,
+    type: l.type || null,
+    referral_code: l.referral_code || null,
+    link_path: l.link_path || null,
+    started_day: startedByLeader.get(String(l.id)) || null,
+    lifetime_total: Number(l.registrations_count || 0),
+    period_total: byLeader.get(String(l.id))?.total || 0,
+  })).sort((a, b) => b.period_total - a.period_total || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+
+  res.json({
+    scope: 'coordinator_leaders',
+    scope_label: 'QR/links de liderança (coordenador)',
+    coordinator_id: coordinator.id,
+    coordinator_name: coordinator.name,
+    coord_type: coordinator.coord_type || 'regional',
+    date: dateFrom === dateTo ? dateFrom : null,
+    date_from: dateFrom,
+    date_to: dateTo,
+    day_start: '00:00',
+    day_end: '23:59',
+    timezone: 'America/Cuiaba',
+    total,
+    team_started_day: teamStartedDay || null,
+    leaders_count: leaders.length,
+    by_leader,
+    by_day: [...byDay.entries()]
+      .map(([day, count]) => ({ day, total: count }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
+    by_day_leader,
+    leaders_overview,
+  });
 });
 
 app.post('/api/campaigns/:slug/coordinators', (req, res) => {
