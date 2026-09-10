@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: atlas-agency
+    runtime: node
+    plan: free
+    region: oregon
+    # Importante: use a branch do PR (cursor/atlas-agency-platform-b8e1), não main antigo
+    branch: cursor/atlas-agency-platform-b8e1
+    buildCommand: npm install && NPM_CONFIG_PRODUCTION=false npm install --prefix client && npm run build --prefix client
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20.18.1"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
