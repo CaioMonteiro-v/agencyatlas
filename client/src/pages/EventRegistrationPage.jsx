@@ -40,7 +40,6 @@ export default function EventRegistrationPage() {
   const [openedHint, setOpenedHint] = useState(false);
   const [form, setForm] = useState({
     full_name: '',
-    email: '',
     phone: '',
   });
 
@@ -87,7 +86,6 @@ export default function EventRegistrationPage() {
     try {
       const res = await api.registerEvent(eventSlug, {
         full_name: form.full_name,
-        email: form.email.trim() || null,
         phone: form.phone,
         connect_whatsapp: true,
       });
@@ -158,18 +156,6 @@ export default function EventRegistrationPage() {
                   placeholder="(65) 9xxxx-xxxx"
                   autoComplete="tel"
                   inputMode="tel"
-                />
-              </label>
-              <label>
-                E-mail{' '}
-                <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
-                <input
-                  className="input"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="Opcional"
-                  autoComplete="email"
                 />
               </label>
               <button className="btn btn-primary event-qr-form__ok" type="submit" disabled={busy}>

@@ -792,7 +792,7 @@ export default function EventsPanel({ campaignSlug }) {
             />
           </label>
           <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-            Depois do QR: a pessoa preenche nome e telefone (e-mail opcional), dá OK e na
+            Depois do QR: a pessoa preenche nome e telefone, dá OK e na
             tela seguinte clica para <strong>falar com o Fábio</strong> no WhatsApp
             (wa.me/message/…). O Bitly, se preenchido, só conta o clique em segundo plano.
           </p>

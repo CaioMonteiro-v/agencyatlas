@@ -35,7 +35,6 @@ export default function MobilizerCapturePage() {
   const [form, setForm] = useState({
     full_name: '',
     phone: '',
-    email: '',
   });
 
   useEffect(() => {
@@ -61,7 +60,6 @@ export default function MobilizerCapturePage() {
       const res = await api.registerMobilizer(slug, code, {
         full_name: form.full_name,
         phone: form.phone,
-        email: form.email.trim() || null,
       });
       if (res?.already_registered) {
         if (res.full_name) setForm((prev) => ({ ...prev, full_name: res.full_name }));
@@ -145,20 +143,6 @@ export default function MobilizerCapturePage() {
                     inputMode="tel"
                   />
                 </label>
-                <label>
-                  E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
-                  <input
-                    className="input"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="Opcional — se quiser receber novidades da campanha"
-                    autoComplete="email"
-                  />
-                </label>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-                  E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
-                </p>
                 <button className="btn btn-primary" type="submit">
                   Confirmar e falar com o Fábio
                 </button>

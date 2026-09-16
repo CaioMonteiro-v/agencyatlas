@@ -14,7 +14,7 @@ export default function ReferralCapturePage() {
   const [done, setDone] = useState(false);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ full_name: '', phone: '', email: '' });
+  const [form, setForm] = useState({ full_name: '', phone: '' });
 
   useEffect(() => {
     api.getCampaignPublic(slug)
@@ -34,7 +34,6 @@ export default function ReferralCapturePage() {
       const res = await api.createRegistration(slug, {
         full_name: form.full_name,
         phone: form.phone,
-        email: form.email,
         referral_code: code,
       });
       if (res?.already_registered) {
@@ -74,13 +73,6 @@ export default function ReferralCapturePage() {
               Telefone *
               <input className="input" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" inputMode="tel" />
             </label>
-            <label>
-              E-mail <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</span>
-              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Opcional — se quiser receber novidades da campanha" autoComplete="email" />
-            </label>
-            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-              E-mail não é obrigatório — mas se colocar, ajuda bastante na comunicação.
-            </p>
             <button className="btn btn-primary" type="submit">Confirmar cadastro</button>
           </form>
         )}
