@@ -21,7 +21,7 @@ export default function SystemSimpleGuide({ campaign }) {
         <ol className="system-guide__steps">
           <li>
             <strong>QR Code no evento</strong> — a pessoa aponta a câmera, coloca nome e telefone
-            (só nome e telefone) e já pode falar no WhatsApp.
+            e já pode falar no WhatsApp.
           </li>
           <li>
             <strong>Link de um mobilizador</strong> — alguém da equipe manda um link pessoal;
