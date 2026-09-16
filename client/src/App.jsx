@@ -17,6 +17,7 @@ import ReferralCapturePage from './pages/ReferralCapturePage';
 import MobilizerCapturePage from './pages/MobilizerCapturePage';
 import EventRadarPage from './pages/EventRadarPage';
 import AdminPage from './pages/AdminPage';
+import TestQrPage from './pages/TestQrPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -69,6 +70,7 @@ export default function App() {
         <Route path="bitly" element={<BitlyGruposPage />} />
         <Route path="midia" element={<UnderConstruction title="Mídia" />} />
         <Route path="conteudo" element={<ContentPage />} />
+        <Route path="teste-qr" element={<TestQrPage />} />
       </Route>
     </Routes>
   );
