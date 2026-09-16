@@ -123,7 +123,7 @@ export default function MobilizerCapturePage() {
             {!done ? (
               <form className="form-grid" onSubmit={onSubmit}>
                 <label>
-                  Nome completo *
+                  Nome *
                   <input
                     className="input"
                     required

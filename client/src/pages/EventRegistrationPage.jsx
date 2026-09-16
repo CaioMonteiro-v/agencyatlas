@@ -129,13 +129,9 @@ export default function EventRegistrationPage() {
             {whenLabel ? <p className="event-qr-card__meta">{whenLabel}</p> : null}
             {event.description ? <p className="event-qr-card__desc">{event.description}</p> : null}
 
-            <p className="event-qr-card__intro">
-              Preencha seus dados para confirmar presença.
-            </p>
-
             <form className="form-grid event-qr-form" onSubmit={onSubmit}>
               <label>
-                Nome completo *
+                Nome *
                 <input
                   className="input"
                   required

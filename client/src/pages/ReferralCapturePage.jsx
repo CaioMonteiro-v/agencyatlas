@@ -59,14 +59,13 @@ export default function ReferralCapturePage() {
         )}
         <p className="eyebrow">Cadastro de presença</p>
         <h1 style={{ fontSize: '1.7rem' }}>{campaign?.name || 'Campanha'}</h1>
-        {!done ? <p>Preencha seus dados para confirmar.</p> : null}
 
         {error && <EmptyState>{error}</EmptyState>}
 
         {!done && !error && (
           <form className="form-grid" onSubmit={onSubmit}>
             <label>
-              Nome completo *
+              Nome *
               <input className="input" required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
             </label>
             <label>
