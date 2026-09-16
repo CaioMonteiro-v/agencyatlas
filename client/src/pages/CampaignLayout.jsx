@@ -1,12 +1,15 @@
-import { NavLink, Outlet, Link, useParams } from 'react-router-dom';
+import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import { EmptyState } from '../components/Ui';
 
 export default function CampaignLayout() {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const [campaign, setCampaign] = useState(null);
   const [error, setError] = useState('');
 
@@ -15,6 +18,11 @@ export default function CampaignLayout() {
       .then(setCampaign)
       .catch((err) => setError(err.message));
   }, [slug]);
+
+  function onLogout() {
+    logout();
+    navigate('/login');
+  }
 
   if (error) {
     return (
@@ -37,7 +45,7 @@ export default function CampaignLayout() {
   return (
     <div className="campaign-shell" style={{ '--campaign-accent': campaign.accent_color }}>
       <Header compact />
-      <div className="container campaign-top">
+      <div className="container campaign-top no-print">
         <div className="campaign-top__row">
           <div className="campaign-brand">
             <img src={campaign.logo_url || '/logos/fabio-garcia.png'} alt={campaign.name} />
@@ -47,22 +55,29 @@ export default function CampaignLayout() {
               <p style={{ margin: 0 }}>{campaign.candidate}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div className="campaign-top__actions">
             <a
               className="btn btn-whatsapp"
-              href={campaign.whatsapp_url || 'https://bit.ly/FalaFabio'}
+              href={campaign.whatsapp_url || 'https://wa.me/message/PV764OTMN3GEE1'}
               target="_blank"
               rel="noreferrer"
             >
-              WhatsApp · bit.ly/FalaFabio
+              WhatsApp · Fábio
             </a>
-            <Link className="btn btn-soft" to="/">Voltar à Atlas</Link>
+            <button type="button" className="btn btn-soft" onClick={onLogout}>
+              Sair{user?.name ? ` (${user.name.split(' ')[0]})` : user?.username ? ` (${user.username})` : ''}
+            </button>
           </div>
         </div>
 
-        <nav className="tabs" aria-label="Abas da campanha">
+        <nav className="tabs no-print" aria-label="Abas da campanha">
           <NavLink to={`/campanha/${slug}`} end>Visão Geral</NavLink>
           <NavLink to={`/campanha/${slug}/mobilizacao`}>Mobilização</NavLink>
+          <NavLink to={`/campanha/${slug}/coordenadores`}>Coordenadores</NavLink>
+          <NavLink to={`/campanha/${slug}/relatorio`}>Relatório</NavLink>
+          <NavLink to={`/campanha/${slug}/investimento`}>Investimento</NavLink>
+          <NavLink to={`/campanha/${slug}/grupos`}>Grupos Dobra</NavLink>
+          <NavLink to={`/campanha/${slug}/bitly`}>Bitly</NavLink>
           <NavLink to={`/campanha/${slug}/midia`}>Mídia</NavLink>
           <NavLink to={`/campanha/${slug}/conteudo`}>Conteúdo</NavLink>
         </nav>
