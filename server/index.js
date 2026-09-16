@@ -1766,6 +1766,42 @@ app.post('/api/campaigns/:slug/mobilizers', (req, res) => {
   });
 });
 
+app.get('/api/campaigns/:slug/mobilizers/:id/qrcode', async (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const mobilizer = db.prepare(
+    'SELECT * FROM mobilizers WHERE id = ? AND campaign_id = ?'
+  ).get(req.params.id, campaign.id);
+  if (!mobilizer) return res.status(404).json({ error: 'Mobilizador não encontrado' });
+  if (!mobilizer.code) return res.status(400).json({ error: 'Mobilizador sem código' });
+
+  const envOrigin = (process.env.PUBLIC_APP_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const queryOrigin = (req.query.origin || '').replace(/\/$/, '');
+  const hostOrigin = `${req.protocol}://${req.get('host')}`.replace(':3001', ':5173');
+  const origin = queryOrigin || envOrigin || hostOrigin;
+  const url = `${origin}/m/${campaign.slug}/${mobilizer.code}`;
+
+  try {
+    const size = Math.min(2048, Math.max(320, parseInt(req.query.size || '1024', 10) || 1024));
+    const dataUrl = await QRCode.toDataURL(url, {
+      width: size,
+      margin: 2,
+      color: { dark: '#2C3E3A', light: '#FFFFFF' },
+    });
+    res.json({
+      url,
+      qrcode: dataUrl,
+      mobilizer,
+      warning: /localhost|127\.0\.0\.1/.test(origin)
+        ? 'URL local: QR não funciona em outro celular. Defina PUBLIC_APP_URL.'
+        : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Falha ao gerar QR Code', detail: err.message });
+  }
+});
+
 app.patch('/api/campaigns/:slug/mobilizers/:id', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });

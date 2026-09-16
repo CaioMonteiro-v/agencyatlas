@@ -80,7 +80,7 @@ export default function CampaignLayout() {
           <NavLink to={`/campanha/${slug}/bitly`}>Bitly</NavLink>
           <NavLink to={`/campanha/${slug}/midia`}>Mídia</NavLink>
           <NavLink to={`/campanha/${slug}/conteudo`}>Conteúdo</NavLink>
-          <NavLink to={`/campanha/${slug}/teste-qr`}>Teste QR</NavLink>
+          <NavLink to={`/campanha/${slug}/teste-qr`}>Teste</NavLink>
         </nav>
       </div>
 

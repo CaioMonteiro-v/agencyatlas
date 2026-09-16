@@ -168,6 +168,8 @@ export const api = {
     request(`/api/campaigns/${slug}/mobilizers/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteMobilizer: (slug, id) =>
     request(`/api/campaigns/${slug}/mobilizers/${id}`, { method: 'DELETE' }),
+  getMobilizerQrcode: (slug, id, origin, size = 1024) =>
+    request(`/api/campaigns/${slug}/mobilizers/${id}/qrcode?origin=${encodeURIComponent(origin)}&size=${size}`),
   getMobilizerPublic: (slug, code) => request(`/api/m/${slug}/${code}`),
   registerMobilizer: (slug, code, body) =>
     request(`/api/m/${slug}/${code}/registrations`, { method: 'POST', body: JSON.stringify(body) }),
