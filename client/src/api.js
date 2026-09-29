@@ -78,6 +78,26 @@ export const api = {
     if (event_id) params.set('event_id', String(event_id));
     return request(`/api/campaigns/${slug}/registrations?${params.toString()}`);
   },
+  downloadRegistrationsCsv: async (slug, { q = '', event_id = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (event_id) params.set('event_id', String(event_id));
+    const qs = params.toString();
+    const path = `/api/campaigns/${slug}/registrations/export${qs ? `?${qs}` : ''}`;
+    const headers = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Falha ao gerar planilha');
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const filename = match?.[1] || `cadastros-${slug}.csv`;
+    return { blob, filename };
+  },
   downloadBackup: (slug) => `/api/campaigns/${slug}/backup`,
   createRegistration: (slug, body) =>
     request(`/api/campaigns/${slug}/registrations`, { method: 'POST', body: JSON.stringify(body) }),

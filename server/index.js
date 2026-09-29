@@ -780,6 +780,145 @@ app.get('/api/campaigns/:slug/registrations', (req, res) => {
   res.json({ total, page, limit, items, event_filter: eventFilter });
 });
 
+function csvEscapeCell(value) {
+  const text = value == null ? '' : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function formatCsvDateTime(value) {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Cuiaba',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+/** Planilha geral do Registro de Cadastros (CSV). Respeita filtro de evento/busca se enviados. */
+app.get('/api/campaigns/:slug/registrations/export', (req, res) => {
+  const campaign = getCampaignBySlug(req.params.slug);
+  if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });
+
+  const q = (req.query.q || '').trim();
+  const eventId = req.query.event_id ? Number(req.query.event_id) : null;
+
+  let where = 'WHERE r.campaign_id = ?';
+  const params = [campaign.id];
+  let eventSlugName = null;
+
+  if (eventId) {
+    const event = db.prepare(
+      'SELECT id, slug, name FROM events WHERE id = ? AND campaign_id = ?'
+    ).get(eventId, campaign.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento não encontrado' });
+    }
+    where += ' AND r.source = ?';
+    params.push(`evento/${event.slug}`);
+    eventSlugName = event.name;
+  }
+
+  if (q) {
+    where += ` AND (
+      r.full_name LIKE ? OR r.phone LIKE ? OR r.referral_code LIKE ?
+      OR l.name LIKE ? OR r.organizer_name LIKE ? OR r.mobilizer_name LIKE ?
+      OR r.source LIKE ?
+    )`;
+    const like = `%${q}%`;
+    params.push(like, like, like, like, like, like, like);
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      r.*,
+      l.name AS leader_name,
+      m.name AS municipality_name,
+      COALESCE(NULLIF(r.mobilizer_name, ''), l.name) AS mobilizer_display
+    FROM registrations r
+    LEFT JOIN leaders l ON l.id = r.leader_id
+    LEFT JOIN municipalities m ON m.id = r.municipality_id
+    ${where}
+    ORDER BY r.created_at DESC
+  `).all(...params);
+
+  const byMobName = new Map(
+    db.prepare(`
+      SELECT mobilizer_name AS k, COUNT(*) AS c
+      FROM registrations
+      WHERE campaign_id = ?
+        AND mobilizer_name IS NOT NULL
+        AND TRIM(mobilizer_name) != ''
+      GROUP BY mobilizer_name
+    `).all(campaign.id).map((row) => [row.k, Number(row.c) || 0]),
+  );
+  const byLeader = new Map(
+    db.prepare(`
+      SELECT leader_id AS k, COUNT(*) AS c
+      FROM registrations
+      WHERE campaign_id = ?
+        AND leader_id IS NOT NULL
+      GROUP BY leader_id
+    `).all(campaign.id).map((row) => [row.k, Number(row.c) || 0]),
+  );
+
+  const header = [
+    'Nome',
+    'Telefone',
+    'E-mail',
+    'Data/Hora',
+    'Município',
+    'Mobilizador',
+    'Organiz./Coord.',
+    'Total do mobilizador',
+    'Origem',
+    'Código',
+  ];
+  const lines = [header.map(csvEscapeCell).join(',')];
+
+  for (const row of rows) {
+    const mobName = row.mobilizer_name != null ? String(row.mobilizer_name).trim() : '';
+    let mobilizerTotal = 0;
+    if (mobName) {
+      mobilizerTotal = byMobName.get(row.mobilizer_name) || byMobName.get(mobName) || 0;
+    } else if (row.leader_id != null) {
+      mobilizerTotal = byLeader.get(row.leader_id) || 0;
+    }
+    lines.push([
+      row.full_name || '',
+      row.phone || '',
+      row.email || '',
+      formatCsvDateTime(row.created_at),
+      row.municipality_name || '',
+      row.mobilizer_display || row.mobilizer_name || row.leader_name || '',
+      row.organizer_name || '',
+      mobilizerTotal,
+      row.source || row.referral_code || 'direto',
+      row.referral_code || '',
+    ].map(csvEscapeCell).join(','));
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safeSlug = String(campaign.slug || 'campanha').replace(/[^a-zA-Z0-9-_]+/g, '-');
+  const eventPart = eventSlugName
+    ? `-${String(eventSlugName).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9-_]+/g, '-').toLowerCase().slice(0, 40)}`
+    : '';
+  const filename = `cadastros-${safeSlug}${eventPart}-${stamp}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(`\uFEFF${lines.join('\n')}`);
+});
+
 app.get('/api/campaigns/:slug/backup', (req, res) => {
   const campaign = getCampaignBySlug(req.params.slug);
   if (!campaign) return res.status(404).json({ error: 'Campanha não encontrada' });

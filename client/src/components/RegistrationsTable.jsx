@@ -13,6 +13,7 @@ export default function RegistrationsTable({ campaignSlug }) {
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [savingId, setSavingId] = useState(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -38,6 +39,33 @@ export default function RegistrationsTable({ campaignSlug }) {
       .catch((err) => alive && setError(err.message));
     return () => { alive = false; };
   }, [campaignSlug, page, query, eventId]);
+
+  async function downloadSpreadsheet() {
+    setExportBusy(true);
+    try {
+      const { blob, filename } = await api.downloadRegistrationsCsv(campaignSlug, {
+        q: query || undefined,
+        event_id: eventId || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setToast(
+        eventId || query
+          ? 'Planilha baixada (com o filtro atual)'
+          : 'Planilha geral baixada',
+      );
+    } catch (err) {
+      setToast(err.message || 'Falha ao baixar planilha');
+    } finally {
+      setExportBusy(false);
+    }
+  }
 
   async function changeMunicipality(row, nextMuniId) {
     const value = nextMuniId === '' || nextMuniId == null ? null : Number(nextMuniId);
@@ -127,6 +155,14 @@ export default function RegistrationsTable({ campaignSlug }) {
               }}
             />
           </label>
+          <button
+            type="button"
+            className="btn btn-accent btn-sm"
+            disabled={exportBusy || !(data?.total > 0)}
+            onClick={downloadSpreadsheet}
+          >
+            {exportBusy ? 'Gerando…' : 'Baixar planilha geral'}
+          </button>
         </div>
       </div>
 
