@@ -1,0 +1,1138 @@
+[
+  {
+    "name": "Acorizal",
+    "ibge_code": "5100102",
+    "lat": -15.194,
+    "lng": -56.3632,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alta Floresta",
+    "ibge_code": "5100250",
+    "lat": -9.86674,
+    "lng": -56.0867,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alto Araguaia",
+    "ibge_code": "5100300",
+    "lat": -17.3153,
+    "lng": -53.2181,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alto Boa Vista",
+    "ibge_code": "5100359",
+    "lat": -11.6732,
+    "lng": -51.3883,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alto Garças",
+    "ibge_code": "5100409",
+    "lat": -16.9462,
+    "lng": -53.5272,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alto Paraguai",
+    "ibge_code": "5100508",
+    "lat": -14.5137,
+    "lng": -56.4776,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Alto Taquari",
+    "ibge_code": "5100607",
+    "lat": -17.8241,
+    "lng": -53.2792,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Apiacás",
+    "ibge_code": "5100805",
+    "lat": -9.53981,
+    "lng": -57.4587,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Araguaiana",
+    "ibge_code": "5101001",
+    "lat": -15.7291,
+    "lng": -51.8341,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Araguainha",
+    "ibge_code": "5101209",
+    "lat": -16.857,
+    "lng": -53.0318,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Araputanga",
+    "ibge_code": "5101258",
+    "lat": -15.4641,
+    "lng": -58.3425,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Arenápolis",
+    "ibge_code": "5101308",
+    "lat": -14.4472,
+    "lng": -56.8437,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Aripuanã",
+    "ibge_code": "5101407",
+    "lat": -10.1723,
+    "lng": -59.4568,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Barra do Bugres",
+    "ibge_code": "5101704",
+    "lat": -15.0702,
+    "lng": -57.1878,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Barra do Garças",
+    "ibge_code": "5101803",
+    "lat": -15.8804,
+    "lng": -52.264,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Barão de Melgaço",
+    "ibge_code": "5101605",
+    "lat": -16.2067,
+    "lng": -55.9623,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Boa Esperança do Norte",
+    "ibge_code": "5101837",
+    "lat": -13.5067,
+    "lng": -55.1486,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Bom Jesus do Araguaia",
+    "ibge_code": "5101852",
+    "lat": -12.1706,
+    "lng": -51.5032,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Brasnorte",
+    "ibge_code": "5101902",
+    "lat": -12.1474,
+    "lng": -57.9833,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Campinápolis",
+    "ibge_code": "5102603",
+    "lat": -14.5162,
+    "lng": -52.893,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Campo Novo do Parecis",
+    "ibge_code": "5102637",
+    "lat": -13.6587,
+    "lng": -57.8907,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Campo Verde",
+    "ibge_code": "5102678",
+    "lat": -15.545,
+    "lng": -55.1626,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Campos de Júlio",
+    "ibge_code": "5102686",
+    "lat": -13.7242,
+    "lng": -59.2858,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Canabrava do Norte",
+    "ibge_code": "5102694",
+    "lat": -11.0556,
+    "lng": -51.8209,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Canarana",
+    "ibge_code": "5102702",
+    "lat": -13.5515,
+    "lng": -52.2705,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Carlinda",
+    "ibge_code": "5102793",
+    "lat": -9.94912,
+    "lng": -55.8417,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Castanheira",
+    "ibge_code": "5102850",
+    "lat": -11.1251,
+    "lng": -58.6081,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Chapada dos Guimarães",
+    "ibge_code": "5103007",
+    "lat": -15.4643,
+    "lng": -55.7499,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Cláudia",
+    "ibge_code": "5103056",
+    "lat": -11.5075,
+    "lng": -54.8835,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Cocalinho",
+    "ibge_code": "5103106",
+    "lat": -14.3903,
+    "lng": -51.0001,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Colniza",
+    "ibge_code": "5103254",
+    "lat": -9.46121,
+    "lng": -59.2252,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Colíder",
+    "ibge_code": "5103205",
+    "lat": -10.8135,
+    "lng": -55.461,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Comodoro",
+    "ibge_code": "5103304",
+    "lat": -13.6614,
+    "lng": -59.7848,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Confresa",
+    "ibge_code": "5103353",
+    "lat": -10.6437,
+    "lng": -51.5699,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Conquista D'Oeste",
+    "ibge_code": "5103361",
+    "lat": -14.5381,
+    "lng": -59.5444,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Cotriguaçu",
+    "ibge_code": "5103379",
+    "lat": -9.85656,
+    "lng": -58.4192,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Cuiabá",
+    "ibge_code": "5103403",
+    "lat": -15.601,
+    "lng": -56.0974,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Curvelândia",
+    "ibge_code": "5103437",
+    "lat": -15.6084,
+    "lng": -57.9133,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Cáceres",
+    "ibge_code": "5102504",
+    "lat": -16.0764,
+    "lng": -57.6818,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Denise",
+    "ibge_code": "5103452",
+    "lat": -14.7324,
+    "lng": -57.0583,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Diamantino",
+    "ibge_code": "5103502",
+    "lat": -14.4037,
+    "lng": -56.4366,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Dom Aquino",
+    "ibge_code": "5103601",
+    "lat": -15.8099,
+    "lng": -54.9223,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Feliz Natal",
+    "ibge_code": "5103700",
+    "lat": -12.385,
+    "lng": -54.9227,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Figueirópolis D'Oeste",
+    "ibge_code": "5103809",
+    "lat": -15.4439,
+    "lng": -58.7391,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Gaúcha do Norte",
+    "ibge_code": "5103858",
+    "lat": -13.2443,
+    "lng": -53.0809,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "General Carneiro",
+    "ibge_code": "5103908",
+    "lat": -15.7094,
+    "lng": -52.7574,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Glória D'Oeste",
+    "ibge_code": "5103957",
+    "lat": -15.768,
+    "lng": -58.3108,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Guarantã do Norte",
+    "ibge_code": "5104104",
+    "lat": -9.96218,
+    "lng": -54.9121,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Guiratinga",
+    "ibge_code": "5104203",
+    "lat": -16.346,
+    "lng": -53.7575,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Indiavaí",
+    "ibge_code": "5104500",
+    "lat": -15.4921,
+    "lng": -58.5802,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Ipiranga do Norte",
+    "ibge_code": "5104526",
+    "lat": -12.2408,
+    "lng": -56.1531,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Itanhangá",
+    "ibge_code": "5104542",
+    "lat": -12.2259,
+    "lng": -56.6463,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Itaúba",
+    "ibge_code": "5104559",
+    "lat": -11.0614,
+    "lng": -55.2766,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Itiquira",
+    "ibge_code": "5104609",
+    "lat": -17.2147,
+    "lng": -54.1422,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Jaciara",
+    "ibge_code": "5104807",
+    "lat": -15.9548,
+    "lng": -54.9733,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Jangada",
+    "ibge_code": "5104906",
+    "lat": -15.235,
+    "lng": -56.4917,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Jauru",
+    "ibge_code": "5105002",
+    "lat": -15.3342,
+    "lng": -58.8723,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Juara",
+    "ibge_code": "5105101",
+    "lat": -11.2639,
+    "lng": -57.5244,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Juruena",
+    "ibge_code": "5105176",
+    "lat": -10.3178,
+    "lng": -58.3592,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Juscimeira",
+    "ibge_code": "5105200",
+    "lat": -16.0633,
+    "lng": -54.8859,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Juína",
+    "ibge_code": "5105150",
+    "lat": -11.3728,
+    "lng": -58.7483,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Lambari D'Oeste",
+    "ibge_code": "5105234",
+    "lat": -15.3188,
+    "lng": -58.0046,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Lucas do Rio Verde",
+    "ibge_code": "5105259",
+    "lat": -13.0588,
+    "lng": -55.9042,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Luciara",
+    "ibge_code": "5105309",
+    "lat": -11.2219,
+    "lng": -50.6676,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Marcelândia",
+    "ibge_code": "5105580",
+    "lat": -11.0463,
+    "lng": -54.4377,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Matupá",
+    "ibge_code": "5105606",
+    "lat": -10.1821,
+    "lng": -54.9467,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Mirassol d'Oeste",
+    "ibge_code": "5105622",
+    "lat": -15.6759,
+    "lng": -58.0951,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nobres",
+    "ibge_code": "5105903",
+    "lat": -14.7192,
+    "lng": -56.3284,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nortelândia",
+    "ibge_code": "5106000",
+    "lat": -14.454,
+    "lng": -56.7945,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nossa Senhora do Livramento",
+    "ibge_code": "5106109",
+    "lat": -15.772,
+    "lng": -56.3432,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Bandeirantes",
+    "ibge_code": "5106158",
+    "lat": -9.84977,
+    "lng": -57.8139,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Brasilândia",
+    "ibge_code": "5106208",
+    "lat": -14.9612,
+    "lng": -54.9685,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Canaã do Norte",
+    "ibge_code": "5106216",
+    "lat": -10.558,
+    "lng": -55.953,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Guarita",
+    "ibge_code": "5108808",
+    "lat": -10.312,
+    "lng": -55.4061,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Lacerda",
+    "ibge_code": "5106182",
+    "lat": -14.4727,
+    "lng": -59.6001,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Marilândia",
+    "ibge_code": "5108857",
+    "lat": -14.3568,
+    "lng": -56.9696,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Maringá",
+    "ibge_code": "5108907",
+    "lat": -13.0136,
+    "lng": -57.0908,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Monte Verde",
+    "ibge_code": "5108956",
+    "lat": -9.99998,
+    "lng": -57.5261,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Mutum",
+    "ibge_code": "5106224",
+    "lat": -13.8374,
+    "lng": -56.0743,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Nazaré",
+    "ibge_code": "5106174",
+    "lat": -13.9486,
+    "lng": -51.8002,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Olímpia",
+    "ibge_code": "5106232",
+    "lat": -14.7889,
+    "lng": -57.2886,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Santa Helena",
+    "ibge_code": "5106190",
+    "lat": -10.8651,
+    "lng": -55.1872,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Ubiratã",
+    "ibge_code": "5106240",
+    "lat": -12.9834,
+    "lng": -55.2556,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Nova Xavantina",
+    "ibge_code": "5106257",
+    "lat": -14.6771,
+    "lng": -52.3502,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Novo Horizonte do Norte",
+    "ibge_code": "5106273",
+    "lat": -11.4089,
+    "lng": -57.3488,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Novo Mundo",
+    "ibge_code": "5106265",
+    "lat": -9.95616,
+    "lng": -55.2029,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Novo Santo Antônio",
+    "ibge_code": "5106315",
+    "lat": -12.2875,
+    "lng": -50.9686,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Novo São Joaquim",
+    "ibge_code": "5106281",
+    "lat": -14.9054,
+    "lng": -53.0194,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Paranatinga",
+    "ibge_code": "5106307",
+    "lat": -14.4265,
+    "lng": -54.0524,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Paranaíta",
+    "ibge_code": "5106299",
+    "lat": -9.65835,
+    "lng": -56.4786,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Pedra Preta",
+    "ibge_code": "5106372",
+    "lat": -16.6245,
+    "lng": -54.4722,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Peixoto de Azevedo",
+    "ibge_code": "5106422",
+    "lat": -10.2262,
+    "lng": -54.9794,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Planalto da Serra",
+    "ibge_code": "5106455",
+    "lat": -14.6518,
+    "lng": -54.7819,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Poconé",
+    "ibge_code": "5106505",
+    "lat": -16.266,
+    "lng": -56.6261,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Pontal do Araguaia",
+    "ibge_code": "5106653",
+    "lat": -15.9274,
+    "lng": -52.3273,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Ponte Branca",
+    "ibge_code": "5106703",
+    "lat": -16.7584,
+    "lng": -52.8369,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Pontes e Lacerda",
+    "ibge_code": "5106752",
+    "lat": -15.2219,
+    "lng": -59.3435,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Porto Alegre do Norte",
+    "ibge_code": "5106778",
+    "lat": -10.8761,
+    "lng": -51.6357,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Porto Esperidião",
+    "ibge_code": "5106828",
+    "lat": -15.857,
+    "lng": -58.4619,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Porto Estrela",
+    "ibge_code": "5106851",
+    "lat": -15.3235,
+    "lng": -57.2204,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Porto dos Gaúchos",
+    "ibge_code": "5106802",
+    "lat": -11.533,
+    "lng": -57.4132,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Poxoréu",
+    "ibge_code": "5107008",
+    "lat": -15.8299,
+    "lng": -54.4208,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Primavera do Leste",
+    "ibge_code": "5107040",
+    "lat": -15.544,
+    "lng": -54.2811,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Querência",
+    "ibge_code": "5107065",
+    "lat": -12.6093,
+    "lng": -52.1821,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Reserva do Cabaçal",
+    "ibge_code": "5107156",
+    "lat": -15.0743,
+    "lng": -58.4585,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Ribeirão Cascalheira",
+    "ibge_code": "5107180",
+    "lat": -12.9367,
+    "lng": -51.8244,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Ribeirãozinho",
+    "ibge_code": "5107198",
+    "lat": -16.4856,
+    "lng": -52.6924,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Rio Branco",
+    "ibge_code": "5107206",
+    "lat": -15.2483,
+    "lng": -58.1259,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Rondolândia",
+    "ibge_code": "5107578",
+    "lat": -10.8376,
+    "lng": -61.4697,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Rondonópolis",
+    "ibge_code": "5107602",
+    "lat": -16.4673,
+    "lng": -54.6372,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Rosário Oeste",
+    "ibge_code": "5107701",
+    "lat": -14.8259,
+    "lng": -56.4236,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Salto do Céu",
+    "ibge_code": "5107750",
+    "lat": -15.1303,
+    "lng": -58.1317,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santa Carmem",
+    "ibge_code": "5107248",
+    "lat": -11.9125,
+    "lng": -55.2263,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santa Cruz do Xingu",
+    "ibge_code": "5107743",
+    "lat": -10.1532,
+    "lng": -52.3953,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santa Rita do Trivelato",
+    "ibge_code": "5107768",
+    "lat": -13.8146,
+    "lng": -55.2706,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santa Terezinha",
+    "ibge_code": "5107776",
+    "lat": -10.4704,
+    "lng": -50.514,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santo Afonso",
+    "ibge_code": "5107263",
+    "lat": -14.4945,
+    "lng": -57.0091,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santo Antônio do Leste",
+    "ibge_code": "5107792",
+    "lat": -14.805,
+    "lng": -53.6075,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Santo Antônio do Leverger",
+    "ibge_code": "5107800",
+    "lat": -15.8632,
+    "lng": -56.0788,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Sapezal",
+    "ibge_code": "5107875",
+    "lat": -12.9892,
+    "lng": -58.7645,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Serra Nova Dourada",
+    "ibge_code": "5107883",
+    "lat": -12.0896,
+    "lng": -51.4025,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Sinop",
+    "ibge_code": "5107909",
+    "lat": -11.8604,
+    "lng": -55.5091,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Sorriso",
+    "ibge_code": "5107925",
+    "lat": -12.5425,
+    "lng": -55.7211,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São Félix do Araguaia",
+    "ibge_code": "5107859",
+    "lat": -11.615,
+    "lng": -50.6706,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São José do Povo",
+    "ibge_code": "5107297",
+    "lat": -16.4549,
+    "lng": -54.2487,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São José do Rio Claro",
+    "ibge_code": "5107305",
+    "lat": -13.4398,
+    "lng": -56.7218,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São José do Xingu",
+    "ibge_code": "5107354",
+    "lat": -10.7982,
+    "lng": -52.7486,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São José dos Quatro Marcos",
+    "ibge_code": "5107107",
+    "lat": -15.6276,
+    "lng": -58.1772,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "São Pedro da Cipa",
+    "ibge_code": "5107404",
+    "lat": -16.0109,
+    "lng": -54.9176,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Tabaporã",
+    "ibge_code": "5107941",
+    "lat": -11.3007,
+    "lng": -56.8312,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Tangará da Serra",
+    "ibge_code": "5107958",
+    "lat": -14.6229,
+    "lng": -57.4933,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Tapurah",
+    "ibge_code": "5108006",
+    "lat": -12.695,
+    "lng": -56.5178,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Terra Nova do Norte",
+    "ibge_code": "5108055",
+    "lat": -10.517,
+    "lng": -55.231,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Tesouro",
+    "ibge_code": "5108105",
+    "lat": -16.0809,
+    "lng": -53.559,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Torixoréu",
+    "ibge_code": "5108204",
+    "lat": -16.2006,
+    "lng": -52.5571,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "União do Sul",
+    "ibge_code": "5108303",
+    "lat": -11.5308,
+    "lng": -54.3616,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Vale de São Domingos",
+    "ibge_code": "5108352",
+    "lat": -15.286,
+    "lng": -59.0683,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Vera",
+    "ibge_code": "5108501",
+    "lat": -12.3017,
+    "lng": -55.3045,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Vila Bela da Santíssima Trindade",
+    "ibge_code": "5105507",
+    "lat": -15.0068,
+    "lng": -59.9504,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Vila Rica",
+    "ibge_code": "5108600",
+    "lat": -10.0137,
+    "lng": -51.1186,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Várzea Grande",
+    "ibge_code": "5108402",
+    "lat": -15.6458,
+    "lng": -56.1322,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  },
+  {
+    "name": "Água Boa",
+    "ibge_code": "5100201",
+    "lat": -14.051,
+    "lng": -52.1601,
+    "coordinator_name": null,
+    "coordinator_photo": null
+  }
+]
