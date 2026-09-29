@@ -1,0 +1,199 @@
+# Atlas Agency — Deploy confiável
+
+Este app agora sobe com **Docker**. Isso evita o erro de `better-sqlite3`/`vite` e funciona melhor em hospedagens gratuitas.
+
+## Login da equipe
+
+Acesse `/login`:
+1. **Criar perfil:** nome, usuário e senha (ex.: Caio e Bianca, cada um o seu)
+2. **Entrar:** com o usuário já criado
+3. Cadastro de perfil **só adiciona** linhas em `team_users` — não apaga campanha, funil, lideranças nem mobilizadores
+4. Sem `ATLAS_INVITE_CODE`, a equipe pode se cadastrar até `ATLAS_MAX_TEAM_USERS` (padrão **10**)
+5. Com `ATLAS_INVITE_CODE` no Render, novos perfis precisam do código
+
+Variáveis úteis:
+```text
+ATLAS_AUTH_SECRET=um-segredo-longo-aleatorio
+ATLAS_INVITE_CODE=atlas-mt-2026
+ATLAS_MAX_TEAM_USERS=10
+```
+
+Opcional (legado): `ATLAS_TEAM_USER` + `ATLAS_TEAM_PASSWORD` ainda funcionam como login de emergência.
+
+- Painel (`/campanha`, `/admin`) exige login
+- QR de evento (`/evento/...`) e link de mobilizador (`/m/...`) continuam **públicos**
+
+---
+
+## Opção 1 — Koyeb (recomendada)
+
+Mais estável para começar rápido.
+
+1. Crie conta em [https://www.koyeb.com](https://www.koyeb.com) com GitHub
+2. **Create App → GitHub**
+3. Selecione o repo `agencyatlas`
+4. Branch: `cursor/atlas-agency-platform-b8e1` (ou `main` após merge)
+5. Builder: **Dockerfile** (deve detectar automaticamente)
+6. Porta: `3000`
+7. Região: a mais próxima (Washington / Frankfurt)
+8. Instance: **Free / Nano**
+9. Deploy
+
+URL final algo como:
+`https://agencyatlas-xxxx.koyeb.app`
+
+### Depois do deploy
+1. Abra a URL
+2. Vá em `/campanha/fabio-garcia/mobilizacao`
+3. Em Eventos → **URL pública dos QR Codes** = a URL do Koyeb
+4. Clique **Atualizar QR Codes**
+5. Teste no celular
+
+---
+
+## Opção 2 — Render (Node)
+
+1. Web Service → repo `agencyatlas`
+2. **Branch: `cursor/atlas-agency-platform-b8e1`** (não use `main` antigo — lá o build quebra e falta o app atual)
+3. Build: `npm install && npm run build`
+4. Start: `npm start`
+5. Environment: `DATABASE_URL` (Supabase) + `NODE_VERSION=20.18.1`
+
+Se o log mostrar `Checking out commit ... in branch main`, troque em **Settings → Build & Deploy → Branch**.
+
+Runtime **Docker** também funciona (ver abaixo).
+
+---
+
+## Opção 2b — Render com Docker
+
+Se quiser continuar no Render com Docker:
+
+1. New Web Service → repo `agencyatlas`
+2. Runtime: **Docker**
+3. Branch: `cursor/atlas-agency-platform-b8e1`
+4. Dockerfile path: `./Dockerfile`
+5. Create Web Service
+6. Environment: `DATABASE_URL` (Supabase)
+---
+
+## Opção 3 — Fly.io
+
+```bash
+# no seu PC, com o projeto clonado
+fly launch --dockerfile Dockerfile --name atlas-agency
+fly apps open
+```
+
+---
+
+## Build local (para validar)
+
+```bash
+docker build -t atlas-agency .
+docker run --rm -p 3000:3000 atlas-agency
+```
+
+Abra: http://localhost:3000
+
+---
+
+## Importante sobre plano free
+
+- App pode “dormir” sem acesso (cold start de 20–60s)
+- **Dados do SQLite RESETAM** quando o container é recriado (redeploy / sleep do free)
+- Por isso cadastros e eventos podem “sumir” (ex.: Bianca, eventos de ontem)
+
+### Solução recomendada: Supabase (Postgres)
+
+1. Crie um projeto em [https://supabase.com](https://supabase.com)
+2. Vá em **Project Settings → Database**
+3. Copie a **Connection string** (URI) — modo **Session** ou **URI**
+   - Ex.: `postgresql://postgres.[ref]:[SENHA]@aws-0-....supabase.com:5432/postgres`
+4. No Render → Environment, adicione:
+   - `DATABASE_URL` = essa URI
+5. **Prefira a connection string do pooler (Session)** se a Direct falhar:
+   - No Supabase → **Connect → Connection pooling → Session**
+   - Formato típico:
+     `postgresql://postgres.[PROJECT]:[SENHA]@aws-0-....pooler.supabase.com:5432/postgres`
+6. Para **prints do funil de demandas** não sumirem no redeploy, adicione também
+   (Settings → API no Supabase):
+   - `SUPABASE_URL` = Project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` = service_role (secret)
+7. **Manual Deploy**
+
+Com `DATABASE_URL` o Atlas usa Postgres/Supabase automaticamente.
+Cadastros de lideranças/mobilizadores **não somem** no redeploy.
+
+Com `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, prints vão para o **Storage** (1 GB free),
+quota separada do banco (500 MB). Ver `SUPABASE.md`.
+
+Sem `DATABASE_URL`, continua SQLite local (só para desenvolvimento).
+
+### Alternativa: disco persistente no Render
+1. Serviço → **Disks** (plano pago)
+2. Mount path: `/app/server/data`
+3. Redeploy
+
+## Alimentar o sistema
+
+- Admin: `/admin`
+- Mobilização: links, eventos/QR, missões, cadastros
+- Coordenadores: expectativa de voto, meta de conteúdo e alarmes
+- Relatório: briefing + folha de ligação + Atlas Assistente
+
+---
+
+## Integrações (opcional)
+
+### Meta / Instagram Graph API
+
+No painel da campanha (aba Coordenadores) existe o botão **Sincronizar Instagram (Meta)**.
+
+Variáveis de ambiente no Render / Docker:
+
+```bash
+META_ACCESS_TOKEN=EAAB...
+META_IG_USER_ID=17891...
+META_GRAPH_VERSION=v21.0
+```
+
+Sem essas variáveis o sistema funciona em **modo manual**: você informa views, reach e comentários por município na aba Coordenadores.
+
+> O Instagram não entrega geolocalização municipal nativa sem Ads. O sync distribui o engajamento da conta proporcionalmente às metas de views de cada município.
+
+### Bitly Analytics / criação em massa
+
+Na aba **Mobilização → Conteúdos mobilizados**:
+
+```bash
+BITLY_ACCESS_TOKEN=seu-token-bitly
+# opcional — domínio branded da conta Bitly
+BITLY_DOMAIN=bit.ly
+# opcional — group_guid do workspace/org Bitly
+BITLY_GROUP_GUID=
+```
+
+Com o token no Render + **Manual Deploy**:
+- Faixa **Bitly pronto** (valida o token sozinho via `GET /user`)
+- **Criar links em massa** a partir de URLs longas (até 40/vez, com pausa anti rate-limit)
+- Novo link só com URL de destino — Atlas encurta e faz sync de cliques
+- Tags automáticas com nome do coordenador/município
+- Filtro territorial + delta de cliques + export CSV / copiar todos
+- `/api/health` mostra `bitly.configured` / modo live|manual
+
+Sem o token: ainda dá para colar bitlinks já prontos e informar cliques manualmente.
+Quando pegar a API Bitly (pago/create), só cola o `BITLY_ACCESS_TOKEN` — o terreno já está pronto.
+
+### Atlas Assistente (IA)
+
+A aba **Relatório** gera um briefing local automaticamente.
+
+Para enriquecer com OpenAI:
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Sem a chave, a assistente local (regras) continua funcionando.
